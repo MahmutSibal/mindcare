@@ -66,6 +66,22 @@ export default function PatientApp() {
     if (invite) history.replaceState(null, "", window.location.pathname);
   }, [invite]);
 
+  // Sayfa açıkken yeni bir davet bağlantısı açılırsa onu yükle.
+  useEffect(() => {
+    const onHash = () => {
+      if (window.location.hash.includes("r=")) {
+        try {
+          sessionStorage.removeItem("mindcare-invite");
+        } catch {
+          /* depolama yok */
+        }
+        window.location.reload();
+      }
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
   useEffect(() => {
     const bye = () => callRef.current?.hangup();
     window.addEventListener("pagehide", bye);
