@@ -1,0 +1,37 @@
+[package]
+name = "mindcare"
+version = "1.0.0"
+description = "MindCare - Seans ve Danisan Yonetim Sistemi"
+authors = ["MindCare"]
+edition = "2024"
+
+[lib]
+# The `_lib` suffix is needed on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "mindcare_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# SQLCipher derlenerek pakete gömülür (libtomcrypt kripto sağlayıcısı; OpenSSL gerekmez).
+rusqlite = { version = "0.41", features = ["bundled-sqlcipher-vendored-openssl", "backup"] }
+# Anahtar işletim sisteminin güvenli deposunda tutulur (Windows Credential Manager).
+keyring = { version = "3", features = ["windows-native", "apple-native", "linux-native"] }
+rand = "0.8"
+hex = "0.4"
+zeroize = "1"
+uuid = { version = "1", features = ["v4"] }
+thiserror = "2"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

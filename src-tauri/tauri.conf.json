@@ -1,0 +1,61 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "MindCare",
+  "version": "1.0.0",
+  "identifier": "com.mindcare.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "MindCare",
+        "width": 1600,
+        "height": 940,
+        "minWidth": 1280,
+        "minHeight": 760,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' ipc: http://ipc.localhost https://tckgvtuvwyvnxabmdjas.supabase.co wss://tckgvtuvwyvnxabmdjas.supabase.co; font-src 'self' data:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "publisher": "MindCare",
+    "copyright": "© 2026 MindCare",
+    "category": "Medical",
+    "shortDescription": "Seans ve Danışan Yönetim Sistemi",
+    "longDescription": "Terapistler için yerel ve şifreli danışan, seans, klinik not ve randevu yönetimi; güvenli görüntülü görüşme.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "Turkish",
+          "English"
+        ],
+        "displayLanguageSelector": false,
+        "installerIcon": "icons/icon.ico",
+        "startMenuFolder": "MindCare"
+      }
+    }
+  }
+}

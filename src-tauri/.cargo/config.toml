@@ -1,0 +1,8 @@
+# OpenSSL'in derleme araçları (perl/nmake) ASCII olmayan yollarda ("Danısmanım")
+# başarısız oluyor. Derleme çıktısını yalnızca ASCII karakter içeren bir klasöre alıyoruz.
+[build]
+target-dir = "C:/Users/Mahmu/AppData/Local/mindcare-build/target"
+
+[env]
+# Strawberry Perl, OpenSSL'i kaynaktan derlemek için gerekli.
+PERL = "C:/Strawberry/perl/bin/perl.exe"
