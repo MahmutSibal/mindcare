@@ -11,6 +11,20 @@ Terapistler için masaüstü seans ve danışan yönetim sistemi.
   klinik veri sunucuya gönderilmez. Davetler süreli ve tek kullanımlıktır, kanal erişimi RLS ile sınırlıdır.
   Veritabanı şeması ve kurulum adımları: [`supabase/`](supabase/README.md).
 
+## Cloudflare TURN kurulumu
+
+Bazı mobil ve kurumsal ağlarda doğrudan (P2P) bağlantı kurulamaz; o durumda görüntü Cloudflare TURN
+üzerinden şifreli olarak aktarılır. Ayda 1.000 GB ücretsizdir.
+
+1. Cloudflare panelinin **Realtime** bölümünde bir TURN anahtarı oluşturun
+   ([belgeler](https://developers.cloudflare.com/realtime/turn/generate-credentials/)).
+2. Verilen **Key ID** ve **API Token**'ı her terapist bilgisayarında **Ayarlar → Cloudflare TURN** alanlarına girin,
+   **Kaydet ve bağlantıyı test et** ile doğrulayın.
+
+API token yalnızca o bilgisayarın şifreli veritabanında durur. Her görüşme için 4 saat geçerli geçici bir
+kullanıcı adı/parola üretilir (`src-tauri/src/turn.rs`) ve danışana yalnızca o gönderilir.
+Anahtar girilmezse uygulama yalnızca doğrudan bağlantıyla çalışmaya devam eder.
+
 ## Geliştirme
 
 Windows'ta SQLCipher için OpenSSL kaynaktan derlenir; [Strawberry Perl](https://strawberryperl.com) gerekir.

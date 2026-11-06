@@ -177,6 +177,9 @@ export const api = {
   markHomeworkDelivered: (id: string) => invoke<void>("mark_homework_delivered", { id }),
   deleteHomework: (id: string) => invoke<void>("delete_homework", { id }),
 
+  /** Cloudflare TURN ayarlıysa bu görüşme için geçici ICE sunucuları; ayarlı değilse `null`. */
+  generateTurnServers: () => invoke<RTCIceServer[] | null>("generate_turn_servers"),
+
   getSettings: () => invoke<Record<string, string>>("get_settings"),
   setSetting: (key: string, value: string) => invoke<void>("set_setting", { key, value }),
 

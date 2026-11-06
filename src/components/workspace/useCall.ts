@@ -16,6 +16,7 @@ export function useCall() {
   const [camOn, setCamOn] = useState(true);
   const [screen, setScreen] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [turnWarning, setTurnWarning] = useState<string | null>(null);
   const callRef = useRef<Call | null>(null);
   const localRef = useRef<MediaStream | null>(null);
   localRef.current = local;
@@ -44,11 +45,22 @@ export function useCall() {
       const settings = await api.getSettings();
       const ttl = Number(settings.invite_ttl_minutes ?? 30) || 30;
       const inv = await createInvite(settings.patient_app_url || DEFAULT_PATIENT_APP_URL, ttl);
-      const ice = buildIceServers({
+      // Öncelik Cloudflare TURN (her görüşme için geçici kimlik bilgisi); yoksa elle girilmiş
+      // TURN; o da yoksa yalnızca STUN. Cloudflare'e ulaşılamazsa görüşme yine başlar.
+      let ice = buildIceServers({
         url: settings.turn_url ?? "",
         username: settings.turn_username ?? "",
         credential: settings.turn_credential ?? "",
       });
+      setTurnWarning(null);
+      try {
+        const cf = await api.generateTurnServers();
+        if (cf?.length) ice = cf;
+      } catch (e) {
+        setTurnWarning(
+          `TURN sunucusu alınamadı (${e instanceof Error ? e.message : String(e)}). Görüşme yalnızca doğrudan bağlantıyla denenecek; bazı ağlarda bağlanamayabilir.`,
+        );
+      }
       const call = new Call("host", inv.room, media, {
         onState: setState,
         onRemoteStream: setRemote,
@@ -200,7 +212,7 @@ export function useCall() {
   }, []);
 
   return {
-    local, remote, state, stats, invite, micOn, camOn, screen, error, videoShare, videoPaused,
+    local, remote, state, stats, invite, micOn, camOn, screen, error, turnWarning, videoShare, videoPaused,
     inCall: callRef.current !== null || (state !== "idle" && state !== "ended" && state !== "failed"),
     start, hangup, toggleMic, toggleCam, shareScreen, stopScreen, sendMessage, sendBuffered, onMessage, ensureLocal,
     showVideo, stopVideo,

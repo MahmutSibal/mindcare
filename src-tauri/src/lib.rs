@@ -4,6 +4,7 @@ mod db;
 mod error;
 mod keystore;
 mod recovery;
+mod turn;
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -92,6 +93,7 @@ pub fn run() {
             commands::review_homework,
             commands::mark_homework_delivered,
             commands::delete_homework,
+            commands::generate_turn_servers,
             commands::get_settings,
             commands::set_setting,
             commands::backup_database,

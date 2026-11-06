@@ -82,6 +82,9 @@ export default function CallPanel({ call, patient }: { call: CallApi; patient: P
             {call.error && (
               <p className="max-w-md rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{call.error}</p>
             )}
+            {call.turnWarning && (
+              <p className="max-w-md rounded-lg bg-warn/10 px-3 py-2 text-xs text-warn">{call.turnWarning}</p>
+            )}
           </div>
         )}
 

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::error::{AppError, AppResult};
-use crate::{AppState, clinical, db, keystore, recovery};
+use crate::{AppState, clinical, db, keystore, recovery, turn};
 
 fn new_id() -> String {
     uuid::Uuid::new_v4().to_string()
@@ -766,6 +766,25 @@ pub fn delete_homework(state: State<AppState>, id: String) -> AppResult<()> {
         c.execute("DELETE FROM homework WHERE id = ?1", [id])?;
         Ok(())
     })
+}
+
+// ───────────────────────────── TURN ─────────────────────────────
+
+/// Cloudflare TURN ayarlıysa bu görüşme için kısa ömürlü ICE sunucuları üretir; ayarlı değilse `None`.
+#[tauri::command]
+pub async fn generate_turn_servers(state: State<'_, AppState>) -> AppResult<Option<serde_json::Value>> {
+    let (key_id, token) = with_conn(&state, |c| {
+        let get = |k: &str| -> AppResult<String> {
+            Ok(c.query_row("SELECT value FROM settings WHERE key = ?1", [k], |r| r.get::<_, String>(0))
+                .optional()?
+                .unwrap_or_default())
+        };
+        Ok((get("cf_turn_key_id")?, get("cf_turn_api_token")?))
+    })?;
+    if key_id.trim().is_empty() || token.trim().is_empty() {
+        return Ok(None);
+    }
+    turn::generate(&key_id, &token).await.map(Some)
 }
 
 // ───────────────────────────── Ayarlar ─────────────────────────────

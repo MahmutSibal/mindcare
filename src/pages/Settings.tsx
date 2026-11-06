@@ -9,7 +9,10 @@ import PageHeader from "../components/PageHeader";
 import { RecoveryKeyDialog, RestoreWithRecoveryKey } from "../components/RecoveryKey";
 import { Button, Card, Field, inputCls, Modal } from "../components/ui";
 
-const KEYS = ["therapist_name", "therapist_title", "patient_app_url", "invite_ttl_minutes", "turn_url", "turn_username", "turn_credential"] as const;
+const KEYS = [
+  "therapist_name", "therapist_title", "patient_app_url", "invite_ttl_minutes",
+  "cf_turn_key_id", "cf_turn_api_token", "turn_url", "turn_username", "turn_credential",
+] as const;
 type Form = Record<(typeof KEYS)[number], string>;
 
 export default function Settings() {
@@ -32,6 +35,8 @@ export default function Settings() {
         therapist_title: s.therapist_title ?? "",
         patient_app_url: s.patient_app_url ?? DEFAULT_PATIENT_APP_URL,
         invite_ttl_minutes: s.invite_ttl_minutes ?? "30",
+        cf_turn_key_id: s.cf_turn_key_id ?? "",
+        cf_turn_api_token: s.cf_turn_api_token ?? "",
         turn_url: s.turn_url ?? "",
         turn_username: s.turn_username ?? "",
         turn_credential: s.turn_credential ?? "",
@@ -43,11 +48,31 @@ export default function Settings() {
   if (!form) return null;
   const set = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value });
 
-  const persist = async () => {
+  const persist = async (): Promise<boolean> => {
     try {
       for (const k of KEYS) await api.setSetting(k, form[k].trim());
       notifyDataChanged();
       setMsg({ ok: true, text: "Ayarlar kaydedildi." });
+      return true;
+    } catch (e) {
+      setMsg({ ok: false, text: errorText(e) });
+      return false;
+    }
+  };
+
+  const testTurn = async () => {
+    if (!(await persist())) return;
+    setMsg({ ok: true, text: "Cloudflare TURN deneniyor…" });
+    try {
+      const servers = await api.generateTurnServers();
+      const turn = servers?.filter((s) => [s.urls].flat().some((u) => u.startsWith("turn"))) ?? [];
+      setMsg(
+        servers === null
+          ? { ok: false, text: "Cloudflare TURN Key ID ve API token girilmedi." }
+          : turn.length
+            ? { ok: true, text: `Cloudflare TURN çalışıyor: ${[turn[0]!.urls].flat().length} aktarma adresi alındı. Ayarlar kaydedildi.` }
+            : { ok: false, text: "Cloudflare yanıt verdi ama TURN adresi göndermedi." },
+      );
     } catch (e) {
       setMsg({ ok: false, text: errorText(e) });
     }
@@ -85,7 +110,7 @@ export default function Settings() {
   return (
     <div className="h-full overflow-y-auto p-8">
       <PageHeader title="Ayarlar">
-        <Button onClick={persist}><Save size={16} /> Kaydet</Button>
+        <Button onClick={() => void persist()}><Save size={16} /> Kaydet</Button>
       </PageHeader>
       {msg && (
         <p className={`mb-4 rounded-lg px-3 py-2 text-sm ${msg.ok ? "bg-ok/10 text-ok" : "bg-danger/10 text-danger"}`}>{msg.text}</p>
@@ -110,10 +135,29 @@ export default function Settings() {
           </div>
         </Card>
 
-        <Card title="TURN Sunucusu (coturn)">
+        <Card title="Cloudflare TURN (önerilen)">
+          <p className="mb-4 text-xs leading-relaxed text-muted">
+            Bazı mobil ve kurumsal ağlarda doğrudan bağlantı kurulamaz; TURN görüntüyü şifreli olarak aktarır ve içeriğini
+            göremez. Her görüşme için 4 saat geçerli geçici bir parola üretilir; API token yalnızca bu bilgisayarın şifreli
+            veritabanında kalır, danışana gönderilmez. Cloudflare'de ayda 1.000 GB ücretsizdir.
+          </p>
+          <div className="space-y-4">
+            <Field label="TURN Key ID">
+              <input className={inputCls} value={form.cf_turn_key_id} onChange={set("cf_turn_key_id")} autoComplete="off" spellCheck={false} />
+            </Field>
+            <Field label="API Token">
+              <input type="password" className={inputCls} value={form.cf_turn_api_token} onChange={set("cf_turn_api_token")} autoComplete="off" />
+            </Field>
+            <Button variant="subtle" onClick={testTurn} disabled={!form.cf_turn_key_id.trim() || !form.cf_turn_api_token.trim()}>
+              <ShieldCheck size={16} /> Kaydet ve bağlantıyı test et
+            </Button>
+          </div>
+        </Card>
+
+        <Card title="Kendi TURN Sunucunuz (gelişmiş)">
           <p className="mb-4 text-xs text-muted">
-            Doğrudan bağlantı kurulamayan ağlarda (simetrik NAT, kısıtlı güvenlik duvarı) gerekir. Boş bırakılırsa yalnızca STUN kullanılır.
-            Bilgiler şifreli yerel veritabanında tutulur ve görüşme sırasında yalnızca danışana iletilir.
+            Cloudflare yerine kendi coturn sunucunuzu kullanmak isterseniz. Cloudflare ayarlıysa bu alanlar kullanılmaz.
+            Bu parola görüşme sırasında danışana olduğu gibi iletilir; mümkünse Cloudflare'i tercih edin.
           </p>
           <div className="space-y-4">
             <Field label="Adres(ler)" hint="Örn: turn:turn.ornek.com:3478, turns:turn.ornek.com:5349">
