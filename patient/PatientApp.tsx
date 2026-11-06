@@ -3,10 +3,11 @@
 // ve terapistin paylaştığı kısa bildirimler alınır.
 
 import { useEffect, useRef, useState } from "react";
-import { FileText, HeartHandshake, Lock, Mic, MicOff, PhoneOff, Video, VideoOff } from "lucide-react";
+import { FileSignature, FileText, HeartHandshake, Lock, Mic, MicOff, PhoneOff, Video, VideoOff } from "lucide-react";
 import { Call, type CallState, type ChannelMessage, getLocalMedia, joinRoom, type JoinResult } from "../src/lib/rtc";
 import { Button, cx } from "../src/components/ui";
 import TestForm from "./TestForm";
+import HomeworkView, { type HomeworkMessage } from "./HomeworkView";
 
 type Phase = "invalid" | "consent" | "joining" | "rejected" | "call" | "left";
 
@@ -61,6 +62,8 @@ export default function PatientApp() {
   const [camOn, setCamOn] = useState(true);
   const [notice, setNotice] = useState<ChannelMessage | null>(null);
   const [test, setTest] = useState<Extract<ChannelMessage, { type: "test" }> | null>(null);
+  const [homework, setHomework] = useState<HomeworkMessage[]>([]);
+  const [homeworkOpen, setHomeworkOpen] = useState(false);
   const callRef = useRef<Call | null>(null);
 
   // Davet anahtarını adres çubuğundan ve geçmişten kaldır.
@@ -129,6 +132,14 @@ export default function PatientApp() {
             }
             return;
           }
+          if (m.type === "homework") {
+            if (typeof m.id === "string" && typeof m.title === "string") {
+              setHomework((list) => [m, ...list.filter((h) => h.id !== m.id)]);
+              setHomeworkOpen(true);
+              call.sendMessage({ type: "homework_received", id: m.id });
+            }
+            return;
+          }
           if (m.type === "test_cancel") {
             setTest((t) => (t?.requestId === m.requestId ? null : t));
             return;
@@ -183,6 +194,15 @@ export default function PatientApp() {
               <FileText size={18} className="text-accent" /> Terapistiniz bir materyal paylaştı: <b>{notice.title}</b>
             </div>
           )}
+          {homework.length > 0 && !homeworkOpen && (
+            <button
+              onClick={() => setHomeworkOpen(true)}
+              className="absolute right-4 top-4 z-10 flex items-center gap-1.5 rounded-lg bg-accent-strong px-3 py-1.5 text-xs font-medium text-white shadow-lg"
+            >
+              <FileSignature size={14} /> Ödevlerim ({homework.length})
+            </button>
+          )}
+          {homework.length > 0 && homeworkOpen && <HomeworkView items={homework} onClose={() => setHomeworkOpen(false)} />}
           {test && (
             <TestForm
               key={test.requestId}

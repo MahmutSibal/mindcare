@@ -119,7 +119,11 @@ export type ChannelMessage =
   // Terapist → danışan: gönderilen test geri çekildi.
   | { type: "test_cancel"; requestId: string }
   // Danışan → terapist: test cevapları. Puan terapist tarafında hesaplanır.
-  | { type: "test_answers"; requestId: string; answers: Answers };
+  | { type: "test_answers"; requestId: string; answers: Answers }
+  // Terapist → danışan: ödev. Danışan sayfası kalıcı değildir; danışan ödevi indirip saklar.
+  | { type: "homework"; id: string; title: string; description: string | null; due: string | null }
+  // Danışan → terapist: ödev ekrana ulaştı.
+  | { type: "homework_received"; id: string };
 
 type Signal =
   | { kind: "hello" }

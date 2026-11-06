@@ -104,6 +104,27 @@ const MIGRATIONS: &[&str] = &[
     );
     CREATE INDEX idx_test_results_patient ON test_results(patient_id, completed_at DESC);
     "#,
+    // 3 — Ödevler. `delivered_at`: danışanın ekranına ulaştığı an (görüşme dışında
+    // verilen ödevde boş kalır). Sonraki seansta terapist durumu ve notu günceller.
+    r#"
+    CREATE TABLE homework (
+        id TEXT PRIMARY KEY,
+        patient_id TEXT NOT NULL,
+        session_id TEXT,
+        title TEXT NOT NULL,
+        description TEXT,
+        due_date TEXT,
+        status TEXT NOT NULL DEFAULT 'assigned'
+            CHECK (status IN ('assigned','done','partial','not_done')),
+        review_note TEXT,
+        delivered_at DATETIME,
+        reviewed_at DATETIME,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+        FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE SET NULL
+    );
+    CREATE INDEX idx_homework_patient ON homework(patient_id, created_at DESC);
+    "#,
 ];
 
 fn apply_key(conn: &Connection, key: &Zeroizing<String>) -> AppResult<()> {
@@ -345,6 +366,23 @@ mod tests {
         assert!(err.to_string().contains("ait değil"));
         assert!(!prepared.exists());
         assert_eq!(std::fs::read(&db_path).unwrap(), before, "ana veritabanı değişti");
+    }
+
+    #[test]
+    fn homework_status_is_constrained_and_follows_patient() {
+        let p = tmp("hw.db");
+        let mut c = open_encrypted(&p, &key('f')).unwrap();
+        migrate(&mut c).unwrap();
+        c.execute_batch(
+            "INSERT INTO patients (id, full_name) VALUES ('p', 'X');
+             INSERT INTO homework (id, patient_id, title) VALUES ('h', 'p', 'Günlük tut');",
+        ).unwrap();
+        let status: String = c.query_row("SELECT status FROM homework", [], |r| r.get(0)).unwrap();
+        assert_eq!(status, "assigned");
+        assert!(c.execute("UPDATE homework SET status = 'bilinmeyen'", []).is_err());
+        c.execute("DELETE FROM patients WHERE id = 'p'", []).unwrap();
+        let n: i64 = c.query_row("SELECT count(*) FROM homework", [], |r| r.get(0)).unwrap();
+        assert_eq!(n, 0);
     }
 
     #[test]

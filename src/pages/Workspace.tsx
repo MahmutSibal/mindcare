@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { CalendarCheck2, ChevronDown, ChevronRight, ClipboardList, PencilLine, UserPlus, Users } from "lucide-react";
 import { CATEGORY_LABEL, CategoryIcon } from "../components/category";
-import { api, type Material, type Note, type Patient, type Session, type TestResult } from "../lib/api";
+import { api, type Homework, type Material, type Note, type Patient, type Session, type TestResult } from "../lib/api";
 import { age, fmtDate, fmtDateTime, initials, minutes, plainText } from "../lib/format";
-import { useDataVersion } from "../lib/session";
+import { useActiveSession, useDataVersion } from "../lib/session";
+import { HomeworkCard, useHomeworkDeliveryReceipts } from "../components/workspace/Homework";
 import { maxScore, parseAnswers, parseDefinition } from "../lib/tests";
 import { Avatar, Badge, Button, Card, cx, Empty, LinkButton, Modal } from "../components/ui";
 import PatientForm from "../components/PatientForm";
@@ -24,9 +25,12 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [results, setResults] = useState<TestResult[]>([]);
+  const [homework, setHomework] = useState<Homework[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [shared, setShared] = useState<Material | null>(null);
   const call = useCall();
+  const { session } = useActiveSession();
+  useHomeworkDeliveryReceipts(call);
 
   useEffect(() => {
     api.listPatients().then((list) => {
@@ -41,16 +45,18 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
       setPatient(null);
       return;
     }
-    const [p, s, n, r] = await Promise.all([
+    const [p, s, n, r, h] = await Promise.all([
       api.getPatient(patientId),
       api.listSessions(patientId),
       api.listNotes(patientId),
       api.listTestResults(patientId),
+      api.listHomework(patientId),
     ]);
     setPatient(p);
     setSessions(s);
     setNotes(n);
     setResults(r);
+    setHomework(h);
   }, [patientId]);
 
   useEffect(() => {
@@ -80,6 +86,12 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
         <SessionHistory sessions={sessions} onAll={() => onNavigate("sessions")} />
         <PrivateNotesHistory notes={notes} />
         <TestResults results={results} />
+        <HomeworkCard
+          patient={patient}
+          homework={homework}
+          call={call}
+          sessionId={session && session.patient_id === patient?.id ? session.id : null}
+        />
         <MaterialLibrary materials={materials} onShow={showMaterial} onAll={() => onNavigate("materials")} />
       </div>
 

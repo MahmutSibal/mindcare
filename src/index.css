@@ -1,4 +1,8 @@
 @import "tailwindcss";
+/* İki uygulama (masaüstü ve danışan) ortak bileşen kullanır; Vite kökü hangisi olursa olsun
+   iki klasör de taransın, yoksa yalnızca ortak bileşende geçen sınıflar CSS'e girmeyebilir. */
+@source "./";
+@source "../patient";
 
 @theme {
   --color-bg: #12131c;

@@ -5,6 +5,7 @@ import { clock } from "../../lib/format";
 import { notifyDataChanged, useActiveSession } from "../../lib/session";
 import { maxScore, parseDefinition } from "../../lib/tests";
 import { EditorContent, Toolbar, useNotesEditor } from "../NotesEditor";
+import { HomeworkDialog } from "./Homework";
 import { Button, Card, cx, Empty, Modal, SoonTag } from "../ui";
 import { CATEGORY_LABEL, CategoryIcon } from "../category";
 import type { CallApi } from "./useCall";
@@ -188,6 +189,7 @@ const DELIVERY_TIMEOUT_MS = 6000;
 function QuickTools({ call, patient }: { call: CallApi; patient: Patient | null }) {
   const { session } = useActiveSession();
   const [picking, setPicking] = useState(false);
+  const [givingHomework, setGivingHomework] = useState(false);
   const [pending, setPending] = useState<PendingTest | null>(null);
   const [last, setLast] = useState<{ title: string; score: number | null; max: number | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -260,10 +262,8 @@ function QuickTools({ call, patient }: { call: CallApi; patient: Patient | null 
     setPending(null);
   };
 
-  const soon = [
-    { icon: FileSignature, title: "Dijital Ödev Ver", v: "1.2" },
-    { icon: PenTool, title: "Beyaz Tahta Aç", v: "1.3" },
-  ];
+  const soon = [{ icon: PenTool, title: "Beyaz Tahta Aç", v: "1.3" }];
+  const homeworkSession = session && session.patient_id === patient?.id ? session.id : null;
 
   return (
     <Card title="Hızlı Araçlar">
@@ -301,6 +301,18 @@ function QuickTools({ call, patient }: { call: CallApi; patient: Patient | null 
           )}
           {error && <p className="mt-2 text-xs text-danger">{error}</p>}
         </li>
+        <li className="flex items-center gap-3 rounded-lg bg-card px-3 py-2.5">
+          <FileSignature size={20} className={patient ? "text-accent" : "text-muted"} />
+          <div className="min-w-0 flex-1 text-sm">
+            Dijital Ödev Ver
+            <div className="truncate text-xs text-faint">
+              {connected ? "Danışanın ekranına da gönderilir" : "Kaydedilir, görüşmede gönderilebilir"}
+            </div>
+          </div>
+          <Button variant="outline" className="px-3 py-1 text-xs" onClick={() => setGivingHomework(true)} disabled={!patient}>
+            Ver
+          </Button>
+        </li>
         {soon.map(({ icon: I, title, v }) => (
           <li key={title} className="flex items-center gap-3 rounded-lg bg-card px-3 py-2.5 opacity-70" title="Sonraki sürümde">
             <I size={20} className="text-muted" />
@@ -310,6 +322,9 @@ function QuickTools({ call, patient }: { call: CallApi; patient: Patient | null 
         ))}
       </ul>
       {picking && <TestPicker onClose={() => setPicking(false)} onSend={send} />}
+      {givingHomework && patient && (
+        <HomeworkDialog patient={patient} sessionId={homeworkSession} call={call} onClose={() => setGivingHomework(false)} />
+      )}
     </Card>
   );
 }

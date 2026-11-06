@@ -629,6 +629,115 @@ pub fn list_test_results(state: State<AppState>, patient_id: String) -> AppResul
     })
 }
 
+// ───────────────────────────── Ödevler ─────────────────────────────
+
+const HOMEWORK_STATUSES: &[&str] = &["assigned", "done", "partial", "not_done"];
+
+#[derive(Serialize)]
+pub struct Homework {
+    id: String,
+    patient_id: String,
+    session_id: Option<String>,
+    session_number: Option<i64>,
+    title: String,
+    description: Option<String>,
+    due_date: Option<String>,
+    status: String,
+    review_note: Option<String>,
+    delivered_at: Option<String>,
+    reviewed_at: Option<String>,
+    created_at: String,
+}
+
+#[derive(Deserialize)]
+pub struct HomeworkInput {
+    patient_id: String,
+    session_id: Option<String>,
+    title: String,
+    description: Option<String>,
+    due_date: Option<String>,
+}
+
+const HOMEWORK_SELECT: &str = "
+    SELECT h.id, h.patient_id, h.session_id, s.session_number, h.title, h.description, h.due_date,
+           h.status, h.review_note, h.delivered_at, h.reviewed_at, h.created_at
+    FROM homework h LEFT JOIN sessions s ON s.id = h.session_id";
+
+fn map_homework(r: &rusqlite::Row) -> rusqlite::Result<Homework> {
+    Ok(Homework {
+        id: r.get(0)?,
+        patient_id: r.get(1)?,
+        session_id: r.get(2)?,
+        session_number: r.get(3)?,
+        title: r.get(4)?,
+        description: r.get(5)?,
+        due_date: r.get(6)?,
+        status: r.get(7)?,
+        review_note: r.get(8)?,
+        delivered_at: r.get(9)?,
+        reviewed_at: r.get(10)?,
+        created_at: r.get(11)?,
+    })
+}
+
+#[tauri::command]
+pub fn list_homework(state: State<AppState>, patient_id: String) -> AppResult<Vec<Homework>> {
+    with_conn(&state, |c| {
+        let mut st = c.prepare(&format!("{HOMEWORK_SELECT} WHERE h.patient_id = ?1 ORDER BY h.created_at DESC"))?;
+        let rows = st.query_map([patient_id], map_homework)?.collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    })
+}
+
+#[tauri::command]
+pub fn create_homework(state: State<AppState>, input: HomeworkInput) -> AppResult<Homework> {
+    let title = non_empty(&input.title, "Ödev başlığı")?;
+    with_conn(&state, |c| {
+        let id = new_id();
+        c.execute(
+            "INSERT INTO homework (id, patient_id, session_id, title, description, due_date)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![id, input.patient_id, input.session_id, title, opt(&input.description), opt(&input.due_date)],
+        )?;
+        c.query_row(&format!("{HOMEWORK_SELECT} WHERE h.id = ?1"), [&id], map_homework)
+            .map_err(Into::into)
+    })
+}
+
+/// Sonraki seansta ödevin durumu ve terapistin notu.
+#[tauri::command]
+pub fn review_homework(state: State<AppState>, id: String, status: String, review_note: Option<String>) -> AppResult<()> {
+    if !HOMEWORK_STATUSES.contains(&status.as_str()) {
+        return Err(AppError::Invalid("Geçersiz ödev durumu.".into()));
+    }
+    with_conn(&state, |c| {
+        c.execute(
+            "UPDATE homework SET status = ?2, review_note = ?3,
+                reviewed_at = CASE WHEN ?2 = 'assigned' THEN NULL ELSE CURRENT_TIMESTAMP END
+             WHERE id = ?1",
+            params![id, status, opt(&review_note)],
+        )?;
+        Ok(())
+    })
+}
+
+/// Danışan sayfası ödevi aldığını bildirdiğinde çağrılır.
+#[tauri::command]
+pub fn mark_homework_delivered(state: State<AppState>, id: String) -> AppResult<()> {
+    with_conn(&state, |c| {
+        c.execute("UPDATE homework SET delivered_at = CURRENT_TIMESTAMP WHERE id = ?1", [id])?;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn delete_homework(state: State<AppState>, id: String) -> AppResult<()> {
+    with_conn(&state, |c| {
+        c.execute("DELETE FROM homework WHERE id = ?1", [id])?;
+        Ok(())
+    })
+}
+
 // ───────────────────────────── Ayarlar ─────────────────────────────
 
 #[tauri::command]

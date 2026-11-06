@@ -89,6 +89,23 @@ export interface TestResult {
   completed_at: string;
 }
 
+export type HomeworkStatus = "assigned" | "done" | "partial" | "not_done";
+
+export interface Homework {
+  id: string;
+  patient_id: string;
+  session_id: string | null;
+  session_number: number | null;
+  title: string;
+  description: string | null;
+  due_date: string | null;
+  status: HomeworkStatus;
+  review_note: string | null;
+  delivered_at: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+}
+
 export interface AppStatus {
   ready: boolean;
   error: string | null;
@@ -144,6 +161,19 @@ export const api = {
     answers_json: string;
   }) => invoke<TestResult>("save_test_result", { input }),
   listTestResults: (patientId: string) => invoke<TestResult[]>("list_test_results", { patientId }),
+
+  listHomework: (patientId: string) => invoke<Homework[]>("list_homework", { patientId }),
+  createHomework: (input: {
+    patient_id: string;
+    session_id: string | null;
+    title: string;
+    description?: string;
+    due_date?: string;
+  }) => invoke<Homework>("create_homework", { input }),
+  reviewHomework: (id: string, status: HomeworkStatus, reviewNote?: string) =>
+    invoke<void>("review_homework", { id, status, reviewNote: reviewNote ?? null }),
+  markHomeworkDelivered: (id: string) => invoke<void>("mark_homework_delivered", { id }),
+  deleteHomework: (id: string) => invoke<void>("delete_homework", { id }),
 
   getSettings: () => invoke<Record<string, string>>("get_settings"),
   setSetting: (key: string, value: string) => invoke<void>("set_setting", { key, value }),
