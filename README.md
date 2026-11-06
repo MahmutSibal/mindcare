@@ -9,6 +9,7 @@ Terapistler için masaüstü seans ve danışan yönetim sistemi.
 - **Danışan web istemcisi (`patient/`):** Davet bağlantısıyla tarayıcıdan görüşmeye katılım.
 - **Görüntülü görüşme:** WebRTC (P2P, gerekirse TURN). Supabase Realtime yalnızca SDP/ICE sinyalleşmesi için kullanılır;
   klinik veri sunucuya gönderilmez. Davetler süreli ve tek kullanımlıktır, kanal erişimi RLS ile sınırlıdır.
+  Veritabanı şeması ve kurulum adımları: [`supabase/`](supabase/README.md).
 
 ## Geliştirme
 
