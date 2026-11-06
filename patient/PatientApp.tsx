@@ -123,7 +123,10 @@ export default function PatientApp() {
         onRemoteStream: setRemote,
         onMessage: (m) => {
           if (m.type === "test") {
-            if (Array.isArray(m.definition?.questions)) setTest(m);
+            if (Array.isArray(m.definition?.questions)) {
+              setTest(m);
+              call.sendMessage({ type: "test_received", requestId: m.requestId });
+            }
             return;
           }
           if (m.type === "test_cancel") {

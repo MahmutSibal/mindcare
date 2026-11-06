@@ -70,6 +70,7 @@ export function useCall() {
     setScreen(null);
     const cam = localRef.current?.getVideoTracks()[0] ?? null;
     callRef.current?.replaceTrack("video", cam);
+    callRef.current?.setVideoProfile("camera");
   }, [screen]);
 
   const hangup = useCallback(async () => {
@@ -109,13 +110,20 @@ export function useCall() {
   const shareScreen = async () => {
     if (screen) return stopScreen();
     try {
-      const s = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      const s = await navigator.mediaDevices.getDisplayMedia({
+        video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 15, max: 30 } },
+        audio: false,
+      });
       const track = s.getVideoTracks()[0]!;
+      // Kodlayıcıya içeriğin metin/ayrıntı olduğunu söyler: netlik akıcılıktan önce gelir.
+      track.contentHint = "detail";
       track.onended = () => {
         setScreen(null);
         callRef.current?.replaceTrack("video", localRef.current?.getVideoTracks()[0] ?? null);
+        callRef.current?.setVideoProfile("camera");
       };
       callRef.current?.replaceTrack("video", track);
+      callRef.current?.setVideoProfile("screen");
       setScreen(s);
     } catch {
       /* kullanıcı vazgeçti */

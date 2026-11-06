@@ -178,7 +178,12 @@ interface PendingTest {
   test: Test;
   patientId: string;
   sessionId: string | null;
+  /** Danışan sayfası testi aldığını bildirdi mi; `false` = süre doldu, onay gelmedi. */
+  delivered: boolean | null;
 }
+
+/** Danışan sayfası bu süre içinde "ulaştı" demezse terapist uyarılır. */
+const DELIVERY_TIMEOUT_MS = 6000;
 
 function QuickTools({ call, patient }: { call: CallApi; patient: Patient | null }) {
   const { session } = useActiveSession();
@@ -196,7 +201,12 @@ function QuickTools({ call, patient }: { call: CallApi; patient: Patient | null 
     () =>
       onMessage(async (m) => {
         const p = pendingRef.current;
-        if (m.type !== "test_answers" || !p || m.requestId !== p.requestId) return;
+        if (!p || !("requestId" in m) || m.requestId !== p.requestId) return;
+        if (m.type === "test_received") {
+          setPending({ ...p, delivered: true });
+          return;
+        }
+        if (m.type !== "test_answers") return;
         setPending(null);
         try {
           const r = await api.saveTestResult({
@@ -236,9 +246,13 @@ function QuickTools({ call, patient }: { call: CallApi; patient: Patient | null 
       setError("Danışan bağlantısı hazır değil. Görüşme bağlandıktan sonra tekrar deneyin.");
       return;
     }
-    setPending({ requestId, test, patientId: patient.id, sessionId: session?.id ?? null });
+    setPending({ requestId, test, patientId: patient.id, sessionId: session?.id ?? null, delivered: null });
     setLast(null);
     setPicking(false);
+    setTimeout(() => {
+      const p = pendingRef.current;
+      if (p?.requestId === requestId && p.delivered === null) setPending({ ...p, delivered: false });
+    }, DELIVERY_TIMEOUT_MS);
   };
 
   const withdraw = () => {
@@ -261,7 +275,11 @@ function QuickTools({ call, patient }: { call: CallApi; patient: Patient | null 
               Klinik Test Gönder
               <div className="truncate text-xs text-faint">
                 {pending
-                  ? `Danışan dolduruyor: ${pending.test.title}`
+                  ? pending.delivered === null
+                    ? `Gönderiliyor: ${pending.test.title}`
+                    : pending.delivered
+                      ? `Danışan dolduruyor: ${pending.test.title}`
+                      : `Ulaşmadı: ${pending.test.title}`
                   : last
                     ? `Son: ${last.title}${last.score !== null ? ` • ${last.score}${last.max !== null ? ` / ${last.max}` : ""} puan` : ""}`
                     : connected ? "Görüşme sırasında danışana gönderin" : "Görüşme bağlanınca kullanılabilir"}
@@ -275,6 +293,12 @@ function QuickTools({ call, patient }: { call: CallApi; patient: Patient | null 
               </Button>
             )}
           </div>
+          {pending?.delivered === false && (
+            <p className="mt-2 text-xs text-warn">
+              Test danışanın ekranına ulaşmadı. Danışanın sayfası eski bir sürüm olabilir: sayfayı yenileyip yeniden
+              katılmasını isteyin, sonra testi tekrar gönderin.
+            </p>
+          )}
           {error && <p className="mt-2 text-xs text-danger">{error}</p>}
         </li>
         {soon.map(({ icon: I, title, v }) => (

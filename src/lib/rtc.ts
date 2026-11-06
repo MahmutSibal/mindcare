@@ -114,6 +114,8 @@ export type ChannelMessage =
   | { type: "material"; title: string; category: string }
   // Terapist → danışan: doldurulacak test.
   | { type: "test"; requestId: string; title: string; instructions: string | null; definition: TestDefinition }
+  // Danışan → terapist: test ulaştı ve ekranda. Gelmezse danışan sayfası eski sürümdür.
+  | { type: "test_received"; requestId: string }
   // Terapist → danışan: gönderilen test geri çekildi.
   | { type: "test_cancel"; requestId: string }
   // Danışan → terapist: test cevapları. Puan terapist tarafında hesaplanır.
@@ -188,6 +190,22 @@ export class Call {
   replaceTrack(kind: "audio" | "video", track: MediaStreamTrack | null) {
     const sender = this.pc?.getSenders().find((s) => s.track?.kind === kind || (!s.track && kind === "video"));
     sender?.replaceTrack(track).catch(() => {});
+  }
+
+  /**
+   * Giden görüntünün kodlama ayarları. Ekran paylaşımında yazı net kalsın diye çözünürlük
+   * korunur ve bit hızı yükseltilir (kare hızı düşebilir); kamerada denge tercih edilir.
+   */
+  async setVideoProfile(profile: "camera" | "screen"): Promise<void> {
+    const sender = this.pc?.getSenders().find((s) => s.track?.kind === "video");
+    if (!sender) return;
+    const p = sender.getParameters();
+    const enc = p.encodings?.[0];
+    if (!enc) return; // Henüz müzakere edilmemiş; kodlama listesi eklenemez.
+    enc.maxBitrate = profile === "screen" ? 2_500_000 : 1_500_000;
+    enc.maxFramerate = profile === "screen" ? 15 : 30;
+    p.degradationPreference = profile === "screen" ? "maintain-resolution" : "balanced";
+    await sender.setParameters(p).catch(() => {});
   }
 
   /** Mesajı veri kanalından gönderir; kanal açık değilse `false` döner. */
