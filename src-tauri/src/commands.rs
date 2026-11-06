@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::error::{AppError, AppResult};
-use crate::{AppState, db, keystore, recovery};
+use crate::{AppState, clinical, db, keystore, recovery};
 
 fn new_id() -> String {
     uuid::Uuid::new_v4().to_string()
@@ -471,6 +471,161 @@ pub fn delete_material(state: State<AppState>, id: String) -> AppResult<()> {
     with_conn(&state, |c| {
         c.execute("DELETE FROM materials WHERE id = ?1", [id])?;
         Ok(())
+    })
+}
+
+// ───────────────────────────── Testler ─────────────────────────────
+
+#[derive(Serialize)]
+pub struct Test {
+    id: String,
+    title: String,
+    instructions: Option<String>,
+    definition_json: String,
+    created_at: String,
+    updated_at: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct TestInput {
+    title: String,
+    instructions: Option<String>,
+    definition_json: String,
+}
+
+#[tauri::command]
+pub fn list_tests(state: State<AppState>) -> AppResult<Vec<Test>> {
+    with_conn(&state, |c| {
+        let mut st = c.prepare(
+            "SELECT id, title, instructions, definition_json, created_at, updated_at
+             FROM tests ORDER BY title COLLATE NOCASE",
+        )?;
+        let rows = st
+            .query_map([], |r| {
+                Ok(Test {
+                    id: r.get(0)?,
+                    title: r.get(1)?,
+                    instructions: r.get(2)?,
+                    definition_json: r.get(3)?,
+                    created_at: r.get(4)?,
+                    updated_at: r.get(5)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    })
+}
+
+/// Yeni test oluşturur (`id` yoksa) veya mevcut testi günceller.
+#[tauri::command]
+pub fn save_test(state: State<AppState>, id: Option<String>, input: TestInput) -> AppResult<String> {
+    let title = non_empty(&input.title, "Test adı")?;
+    clinical::parse_definition(&input.definition_json)?;
+    with_conn(&state, |c| match id {
+        Some(id) => {
+            let n = c.execute(
+                "UPDATE tests SET title = ?2, instructions = ?3, definition_json = ?4,
+                    updated_at = CURRENT_TIMESTAMP WHERE id = ?1",
+                params![id, title, opt(&input.instructions), input.definition_json],
+            )?;
+            if n == 0 {
+                return Err(AppError::Invalid("Test bulunamadı.".into()));
+            }
+            Ok(id)
+        }
+        None => {
+            let id = new_id();
+            c.execute(
+                "INSERT INTO tests (id, title, instructions, definition_json) VALUES (?1, ?2, ?3, ?4)",
+                params![id, title, opt(&input.instructions), input.definition_json],
+            )?;
+            Ok(id)
+        }
+    })
+}
+
+#[tauri::command]
+pub fn delete_test(state: State<AppState>, id: String) -> AppResult<()> {
+    // Geçmiş sonuçlar test tanımının kopyasını taşıdığı için silinmez.
+    with_conn(&state, |c| {
+        c.execute("DELETE FROM tests WHERE id = ?1", [id])?;
+        Ok(())
+    })
+}
+
+#[derive(Serialize)]
+pub struct TestResult {
+    id: String,
+    patient_id: String,
+    session_id: Option<String>,
+    session_number: Option<i64>,
+    test_id: Option<String>,
+    test_title: String,
+    definition_json: String,
+    answers_json: String,
+    total_score: Option<i64>,
+    completed_at: String,
+}
+
+#[derive(Deserialize)]
+pub struct TestResultInput {
+    patient_id: String,
+    session_id: Option<String>,
+    test_id: Option<String>,
+    test_title: String,
+    definition_json: String,
+    answers_json: String,
+}
+
+/// Danışanın gönderdiği cevapları kaydeder. Cevaplar test tanımına göre denetlenir ve
+/// puan burada yeniden hesaplanır; danışan tarafından gelen puana güvenilmez.
+#[tauri::command]
+pub fn save_test_result(state: State<AppState>, input: TestResultInput) -> AppResult<TestResult> {
+    let def = clinical::parse_definition(&input.definition_json)?;
+    let answers: clinical::Answers =
+        serde_json::from_str(&input.answers_json).map_err(|_| AppError::Invalid("Cevaplar okunamadı.".into()))?;
+    let total = clinical::score(&def, &answers)?;
+    // Yalnızca tanımlı alanlar saklanır; danışandan gelen fazlalık yok sayılır.
+    let answers_json = serde_json::to_string(&answers).map_err(|_| AppError::Invalid("Cevaplar yazılamadı.".into()))?;
+    let title = non_empty(&input.test_title, "Test adı")?;
+    with_conn(&state, |c| {
+        let id = new_id();
+        c.execute(
+            "INSERT INTO test_results (id, patient_id, session_id, test_id, test_title, definition_json, answers_json, total_score)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![id, input.patient_id, input.session_id, input.test_id, title, input.definition_json, answers_json, total],
+        )?;
+        c.query_row(&format!("{TEST_RESULT_SELECT} WHERE r.id = ?1"), [&id], map_test_result)
+            .map_err(Into::into)
+    })
+}
+
+const TEST_RESULT_SELECT: &str = "
+    SELECT r.id, r.patient_id, r.session_id, s.session_number, r.test_id, r.test_title,
+           r.definition_json, r.answers_json, r.total_score, r.completed_at
+    FROM test_results r LEFT JOIN sessions s ON s.id = r.session_id";
+
+fn map_test_result(r: &rusqlite::Row) -> rusqlite::Result<TestResult> {
+    Ok(TestResult {
+        id: r.get(0)?,
+        patient_id: r.get(1)?,
+        session_id: r.get(2)?,
+        session_number: r.get(3)?,
+        test_id: r.get(4)?,
+        test_title: r.get(5)?,
+        definition_json: r.get(6)?,
+        answers_json: r.get(7)?,
+        total_score: r.get(8)?,
+        completed_at: r.get(9)?,
+    })
+}
+
+#[tauri::command]
+pub fn list_test_results(state: State<AppState>, patient_id: String) -> AppResult<Vec<TestResult>> {
+    with_conn(&state, |c| {
+        let mut st = c.prepare(&format!("{TEST_RESULT_SELECT} WHERE r.patient_id = ?1 ORDER BY r.completed_at DESC"))?;
+        let rows = st.query_map([patient_id], map_test_result)?.collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
     })
 }
 

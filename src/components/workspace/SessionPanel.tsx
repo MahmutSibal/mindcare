@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ClipboardCheck, Clock3, FileSignature, MonitorX, Pause, Play, PenTool, Square } from "lucide-react";
-import { api, errorText, type Material, type Patient } from "../../lib/api";
+import { ClipboardCheck, Clock3, FileSignature, MonitorX, Pause, Play, PenTool, Send, Square, Undo2 } from "lucide-react";
+import { api, errorText, type Material, type Patient, type Test } from "../../lib/api";
 import { clock } from "../../lib/format";
 import { notifyDataChanged, useActiveSession } from "../../lib/session";
+import { maxScore, parseDefinition } from "../../lib/tests";
 import { EditorContent, Toolbar, useNotesEditor } from "../NotesEditor";
-import { Button, Card, cx, SoonTag } from "../ui";
+import { Button, Card, cx, Empty, Modal, SoonTag } from "../ui";
 import { CATEGORY_LABEL, CategoryIcon } from "../category";
 import type { CallApi } from "./useCall";
 
@@ -18,7 +19,7 @@ export default function SessionPanel({ call, patient, shared, onClearShared }: {
     <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pl-0.5">
       <SessionTimer patient={patient} call={call} />
       <LiveNotesEditor />
-      <QuickTools />
+      <QuickTools call={call} patient={patient} />
       <PatientScreenPreview call={call} shared={shared} onClearShared={onClearShared} />
     </div>
   );
@@ -172,27 +173,149 @@ function NotesForSession({ sessionId }: { sessionId: string | null }) {
 
 // ───────────────────────────── Hızlı araçlar ─────────────────────────────
 
-function QuickTools() {
-  const tools = [
-    { icon: ClipboardCheck, title: "Klinik Test Gönder", sub: "(PHQ-9, GAD-7)", v: "1.2" },
+interface PendingTest {
+  requestId: string;
+  test: Test;
+  patientId: string;
+  sessionId: string | null;
+}
+
+function QuickTools({ call, patient }: { call: CallApi; patient: Patient | null }) {
+  const { session } = useActiveSession();
+  const [picking, setPicking] = useState(false);
+  const [pending, setPending] = useState<PendingTest | null>(null);
+  const [last, setLast] = useState<{ title: string; score: number | null; max: number | null } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
+  const connected = call.state === "connected";
+
+  // Danışandan gelen test cevaplarını kaydet. Puan Rust tarafında yeniden hesaplanır.
+  const { onMessage } = call;
+  useEffect(
+    () =>
+      onMessage(async (m) => {
+        const p = pendingRef.current;
+        if (m.type !== "test_answers" || !p || m.requestId !== p.requestId) return;
+        setPending(null);
+        try {
+          const r = await api.saveTestResult({
+            patient_id: p.patientId,
+            session_id: p.sessionId,
+            test_id: p.test.id,
+            test_title: p.test.title,
+            definition_json: p.test.definition_json,
+            answers_json: JSON.stringify(m.answers),
+          });
+          setLast({ title: r.test_title, score: r.total_score, max: maxScore(parseDefinition(r.definition_json)) });
+          notifyDataChanged();
+        } catch (e) {
+          setError(`Test sonucu kaydedilemedi: ${errorText(e)}`);
+        }
+      }),
+    [onMessage],
+  );
+
+  // Görüşme bitince bekleyen test düşer.
+  useEffect(() => {
+    if (!call.inCall) setPending(null);
+  }, [call.inCall]);
+
+  const send = (test: Test) => {
+    if (!patient) return;
+    setError(null);
+    const requestId = crypto.randomUUID();
+    const ok = call.sendMessage({
+      type: "test",
+      requestId,
+      title: test.title,
+      instructions: test.instructions,
+      definition: parseDefinition(test.definition_json),
+    });
+    if (!ok) {
+      setError("Danışan bağlantısı hazır değil. Görüşme bağlandıktan sonra tekrar deneyin.");
+      return;
+    }
+    setPending({ requestId, test, patientId: patient.id, sessionId: session?.id ?? null });
+    setLast(null);
+    setPicking(false);
+  };
+
+  const withdraw = () => {
+    if (pending) call.sendMessage({ type: "test_cancel", requestId: pending.requestId });
+    setPending(null);
+  };
+
+  const soon = [
     { icon: FileSignature, title: "Dijital Ödev Ver", v: "1.2" },
     { icon: PenTool, title: "Beyaz Tahta Aç", v: "1.3" },
   ];
+
   return (
     <Card title="Hızlı Araçlar">
       <ul className="space-y-2">
-        {tools.map(({ icon: I, title, sub, v }) => (
+        <li className="rounded-lg bg-card px-3 py-2.5">
+          <div className="flex items-center gap-3">
+            <ClipboardCheck size={20} className={connected ? "text-accent" : "text-muted"} />
+            <div className="min-w-0 flex-1 text-sm">
+              Klinik Test Gönder
+              <div className="truncate text-xs text-faint">
+                {pending
+                  ? `Danışan dolduruyor: ${pending.test.title}`
+                  : last
+                    ? `Son: ${last.title}${last.score !== null ? ` • ${last.score}${last.max !== null ? ` / ${last.max}` : ""} puan` : ""}`
+                    : connected ? "Görüşme sırasında danışana gönderin" : "Görüşme bağlanınca kullanılabilir"}
+              </div>
+            </div>
+            {pending ? (
+              <Button variant="ghost" className="px-2 py-1 text-xs" onClick={withdraw}><Undo2 size={14} /> Geri çek</Button>
+            ) : (
+              <Button variant="outline" className="px-3 py-1 text-xs" onClick={() => setPicking(true)} disabled={!connected || !patient}>
+                Seç
+              </Button>
+            )}
+          </div>
+          {error && <p className="mt-2 text-xs text-danger">{error}</p>}
+        </li>
+        {soon.map(({ icon: I, title, v }) => (
           <li key={title} className="flex items-center gap-3 rounded-lg bg-card px-3 py-2.5 opacity-70" title="Sonraki sürümde">
             <I size={20} className="text-muted" />
-            <div className="flex-1 text-sm">
-              {title}
-              {sub && <div className="text-xs text-faint">{sub}</div>}
-            </div>
+            <div className="flex-1 text-sm">{title}</div>
             <SoonTag version={v} />
           </li>
         ))}
       </ul>
+      {picking && <TestPicker onClose={() => setPicking(false)} onSend={send} />}
     </Card>
+  );
+}
+
+function TestPicker({ onClose, onSend }: { onClose: () => void; onSend: (t: Test) => void }) {
+  const [tests, setTests] = useState<Test[] | null>(null);
+  useEffect(() => {
+    api.listTests().then(setTests);
+  }, []);
+  return (
+    <Modal title="Danışana test gönder" onClose={onClose}>
+      {tests === null ? null : tests.length === 0 ? (
+        <Empty text="Henüz test yok. Sol menüdeki Testler sayfasından oluşturabilirsiniz." />
+      ) : (
+        <ul className="space-y-2">
+          {tests.map((t) => {
+            const def = parseDefinition(t.definition_json);
+            return (
+              <li key={t.id} className="flex items-center gap-3 rounded-lg bg-card p-3">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">{t.title}</div>
+                  <div className="text-xs text-muted">{def.questions.length} soru</div>
+                </div>
+                <Button className="px-3 py-1.5 text-xs" onClick={() => onSend(t)}><Send size={14} /> Gönder</Button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Modal>
   );
 }
 

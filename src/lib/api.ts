@@ -67,6 +67,28 @@ export interface Material {
   created_at: string;
 }
 
+export interface Test {
+  id: string;
+  title: string;
+  instructions: string | null;
+  definition_json: string;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface TestResult {
+  id: string;
+  patient_id: string;
+  session_id: string | null;
+  session_number: number | null;
+  test_id: string | null;
+  test_title: string;
+  definition_json: string;
+  answers_json: string;
+  total_score: number | null;
+  completed_at: string;
+}
+
 export interface AppStatus {
   ready: boolean;
   error: string | null;
@@ -108,6 +130,20 @@ export const api = {
   createMaterial: (input: { title: string; category: MaterialCategory; file_path: string; description?: string }) =>
     invoke<string>("create_material", { input }),
   deleteMaterial: (id: string) => invoke<void>("delete_material", { id }),
+
+  listTests: () => invoke<Test[]>("list_tests"),
+  saveTest: (id: string | null, input: { title: string; instructions?: string; definition_json: string }) =>
+    invoke<string>("save_test", { id, input }),
+  deleteTest: (id: string) => invoke<void>("delete_test", { id }),
+  saveTestResult: (input: {
+    patient_id: string;
+    session_id: string | null;
+    test_id: string | null;
+    test_title: string;
+    definition_json: string;
+    answers_json: string;
+  }) => invoke<TestResult>("save_test_result", { input }),
+  listTestResults: (patientId: string) => invoke<TestResult[]>("list_test_results", { patientId }),
 
   getSettings: () => invoke<Record<string, string>>("get_settings"),
   setSetting: (key: string, value: string) => invoke<void>("set_setting", { key, value }),

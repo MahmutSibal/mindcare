@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { FileText, HeartHandshake, Lock, Mic, MicOff, PhoneOff, Video, VideoOff } from "lucide-react";
 import { Call, type CallState, type ChannelMessage, getLocalMedia, joinRoom, type JoinResult } from "../src/lib/rtc";
 import { Button, cx } from "../src/components/ui";
+import TestForm from "./TestForm";
 
 type Phase = "invalid" | "consent" | "joining" | "rejected" | "call" | "left";
 
@@ -59,6 +60,7 @@ export default function PatientApp() {
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
   const [notice, setNotice] = useState<ChannelMessage | null>(null);
+  const [test, setTest] = useState<Extract<ChannelMessage, { type: "test" }> | null>(null);
   const callRef = useRef<Call | null>(null);
 
   // Davet anahtarını adres çubuğundan ve geçmişten kaldır.
@@ -120,6 +122,14 @@ export default function PatientApp() {
         },
         onRemoteStream: setRemote,
         onMessage: (m) => {
+          if (m.type === "test") {
+            if (Array.isArray(m.definition?.questions)) setTest(m);
+            return;
+          }
+          if (m.type === "test_cancel") {
+            setTest((t) => (t?.requestId === m.requestId ? null : t));
+            return;
+          }
           setNotice(m);
           setTimeout(() => setNotice(null), 8000);
         },
@@ -169,6 +179,16 @@ export default function PatientApp() {
             <div className="absolute left-1/2 top-4 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-line bg-panel px-4 py-3 text-sm shadow-xl">
               <FileText size={18} className="text-accent" /> Terapistiniz bir materyal paylaştı: <b>{notice.title}</b>
             </div>
+          )}
+          {test && (
+            <TestForm
+              key={test.requestId}
+              test={test}
+              onSubmit={(answers) =>
+                callRef.current?.sendMessage({ type: "test_answers", requestId: test.requestId, answers }) ?? false
+              }
+              onDone={() => setTest(null)}
+            />
           )}
         </div>
         <div className="flex items-center justify-center gap-5 border-t border-line bg-panel py-4">
@@ -221,7 +241,8 @@ export default function PatientApp() {
             </Button>
             <p className="mt-4 text-xs leading-relaxed text-faint">
               Bu bağlantı size özeldir ve tek kullanımlıktır; başkalarıyla paylaşmayın. Bağlantı bilgileri yalnızca görüşmeyi
-              kurmak için kullanılır, sağlık bilgileriniz bu sayfa üzerinden aktarılmaz.
+              kurmak için kullanılır. Terapistinizin gönderdiği test cevapları şifreli görüşme bağlantısıyla doğrudan
+              terapistinize iletilir; bu sayfada veya bir sunucuda saklanmaz.
             </p>
           </>
         )}

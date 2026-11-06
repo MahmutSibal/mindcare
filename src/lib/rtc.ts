@@ -14,6 +14,7 @@
 
 import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
 import { DEFAULT_STUN, SUPABASE_KEY, SUPABASE_URL } from "./config";
+import type { Answers, TestDefinition } from "./tests";
 
 let client: SupabaseClient | null = null;
 
@@ -106,7 +107,17 @@ export interface CallHandlers {
   onIceConfig?: (servers: RTCIceServer[]) => void;
 }
 
-export type ChannelMessage = { type: "text"; text: string } | { type: "material"; title: string; category: string };
+// Veri kanalı mesajları. Kanal iki uç arasında DTLS ile şifrelidir ve sunucudan geçmez
+// (TURN kullanılsa bile aktarıcı içeriği okuyamaz).
+export type ChannelMessage =
+  | { type: "text"; text: string }
+  | { type: "material"; title: string; category: string }
+  // Terapist → danışan: doldurulacak test.
+  | { type: "test"; requestId: string; title: string; instructions: string | null; definition: TestDefinition }
+  // Terapist → danışan: gönderilen test geri çekildi.
+  | { type: "test_cancel"; requestId: string }
+  // Danışan → terapist: test cevapları. Puan terapist tarafında hesaplanır.
+  | { type: "test_answers"; requestId: string; answers: Answers };
 
 type Signal =
   | { kind: "hello" }
@@ -179,8 +190,11 @@ export class Call {
     sender?.replaceTrack(track).catch(() => {});
   }
 
-  sendMessage(m: ChannelMessage) {
-    if (this.dc?.readyState === "open") this.dc.send(JSON.stringify(m));
+  /** Mesajı veri kanalından gönderir; kanal açık değilse `false` döner. */
+  sendMessage(m: ChannelMessage): boolean {
+    if (this.dc?.readyState !== "open") return false;
+    this.dc.send(JSON.stringify(m));
+    return true;
   }
 
   async hangup(): Promise<void> {

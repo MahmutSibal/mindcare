@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  CalendarDays, FolderOpen, HeartHandshake, Home, LockKeyhole, NotebookTabs, Settings as SettingsIcon, Users,
+  CalendarDays, ClipboardList, FolderOpen, HeartHandshake, Home, LockKeyhole, NotebookTabs, Settings as SettingsIcon, Users,
 } from "lucide-react";
 import { api, errorText, RECOVERY_CONFIRMED_KEY, type AppStatus } from "./lib/api";
 import { notifyDataChanged, SessionProvider, useActiveSession, useDataVersion } from "./lib/session";
@@ -11,9 +11,10 @@ import Patients from "./pages/Patients";
 import Appointments from "./pages/Appointments";
 import Sessions from "./pages/Sessions";
 import Materials from "./pages/Materials";
+import Tests from "./pages/Tests";
 import Settings from "./pages/Settings";
 
-export type Page = "home" | "patients" | "appointments" | "sessions" | "materials" | "settings";
+export type Page = "home" | "patients" | "appointments" | "sessions" | "materials" | "tests" | "settings";
 
 const NAV: { id: Page; label: string; icon: typeof Home }[] = [
   { id: "home", label: "Ana Sayfa", icon: Home },
@@ -21,6 +22,7 @@ const NAV: { id: Page; label: string; icon: typeof Home }[] = [
   { id: "appointments", label: "Randevular", icon: CalendarDays },
   { id: "sessions", label: "Seanslar", icon: NotebookTabs },
   { id: "materials", label: "Materyaller", icon: FolderOpen },
+  { id: "tests", label: "Testler", icon: ClipboardList },
   { id: "settings", label: "Ayarlar", icon: SettingsIcon },
 ];
 
@@ -114,6 +116,7 @@ function Shell() {
         {page === "appointments" && <Appointments />}
         {page === "sessions" && <Sessions onOpenPatient={openPatient} />}
         {page === "materials" && <Materials />}
+        {page === "tests" && <Tests />}
         {page === "settings" && <Settings />}
       </main>
 

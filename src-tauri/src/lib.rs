@@ -1,3 +1,4 @@
+mod clinical;
 mod commands;
 mod db;
 mod error;
@@ -80,6 +81,11 @@ pub fn run() {
             commands::list_materials,
             commands::create_material,
             commands::delete_material,
+            commands::list_tests,
+            commands::save_test,
+            commands::delete_test,
+            commands::save_test_result,
+            commands::list_test_results,
             commands::get_settings,
             commands::set_setting,
             commands::backup_database,

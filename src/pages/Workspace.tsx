@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { CalendarCheck2, ChevronDown, ChevronRight, PencilLine, UserPlus, Users } from "lucide-react";
+import { CalendarCheck2, ChevronDown, ChevronRight, ClipboardList, PencilLine, UserPlus, Users } from "lucide-react";
 import { CATEGORY_LABEL, CategoryIcon } from "../components/category";
-import { api, type Material, type Note, type Patient, type Session } from "../lib/api";
+import { api, type Material, type Note, type Patient, type Session, type TestResult } from "../lib/api";
 import { age, fmtDate, fmtDateTime, initials, minutes, plainText } from "../lib/format";
 import { useDataVersion } from "../lib/session";
+import { maxScore, parseAnswers, parseDefinition } from "../lib/tests";
 import { Avatar, Badge, Button, Card, cx, Empty, LinkButton, Modal } from "../components/ui";
 import PatientForm from "../components/PatientForm";
 import { NoteViewer } from "../components/NotesEditor";
@@ -22,6 +23,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
+  const [results, setResults] = useState<TestResult[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [shared, setShared] = useState<Material | null>(null);
   const call = useCall();
@@ -39,10 +41,16 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
       setPatient(null);
       return;
     }
-    const [p, s, n] = await Promise.all([api.getPatient(patientId), api.listSessions(patientId), api.listNotes(patientId)]);
+    const [p, s, n, r] = await Promise.all([
+      api.getPatient(patientId),
+      api.listSessions(patientId),
+      api.listNotes(patientId),
+      api.listTestResults(patientId),
+    ]);
     setPatient(p);
     setSessions(s);
     setNotes(n);
+    setResults(r);
   }, [patientId]);
 
   useEffect(() => {
@@ -71,6 +79,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
         />
         <SessionHistory sessions={sessions} onAll={() => onNavigate("sessions")} />
         <PrivateNotesHistory notes={notes} />
+        <TestResults results={results} />
         <MaterialLibrary materials={materials} onShow={showMaterial} onAll={() => onNavigate("materials")} />
       </div>
 
@@ -231,6 +240,82 @@ function PrivateNotesHistory({ notes }: { notes: Note[] }) {
         </Modal>
       )}
     </Card>
+  );
+}
+
+// ───────────────────────────── Test sonuçları ─────────────────────────────
+
+function TestResults({ results }: { results: TestResult[] }) {
+  const [open, setOpen] = useState<TestResult | null>(null);
+  const [all, setAll] = useState(false);
+  const list = all ? results : results.slice(0, 3);
+  return (
+    <Card
+      title="Test Sonuçları"
+      action={results.length > 3 && <LinkButton onClick={() => setAll(!all)}>{all ? "Daralt" : "Tümünü Gör"} <ChevronRight size={14} /></LinkButton>}
+    >
+      {results.length === 0 ? (
+        <Empty text="Henüz test sonucu yok." />
+      ) : (
+        <ul className="space-y-1">
+          {list.map((r) => {
+            const max = maxScore(parseDefinition(r.definition_json));
+            return (
+              <li key={r.id}>
+                <button
+                  onClick={() => setOpen(r)}
+                  className="grid w-full grid-cols-[18px_1fr_auto] items-center gap-2 rounded-md px-1 py-1.5 text-left text-[13px] hover:bg-card"
+                >
+                  <ClipboardList size={15} className="text-accent" />
+                  <span className="truncate">
+                    {r.test_title} <span className="text-faint">• {fmtDate(r.completed_at, true)}</span>
+                  </span>
+                  {r.total_score !== null && (
+                    <span className="font-medium tabular-nums">{r.total_score}{max !== null && <span className="text-faint">/{max}</span>}</span>
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {open && <TestResultView result={open} onClose={() => setOpen(null)} />}
+    </Card>
+  );
+}
+
+function TestResultView({ result, onClose }: { result: TestResult; onClose: () => void }) {
+  const def = parseDefinition(result.definition_json);
+  const answers = parseAnswers(result.answers_json);
+  const max = maxScore(def);
+  return (
+    <Modal title={result.test_title} onClose={onClose} width="max-w-2xl">
+      <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
+        <span>{fmtDateTime(result.completed_at, true)}</span>
+        {result.session_number !== null && <span>{result.session_number}. Seans</span>}
+        {result.total_score !== null && (
+          <span className="ml-auto text-base font-semibold text-ink">
+            Toplam: {result.total_score}{max !== null && <span className="font-normal text-muted"> / {max}</span>}
+          </span>
+        )}
+      </div>
+      <ol className="space-y-2">
+        {def.questions.map((q, i) => {
+          const a = answers[q.id];
+          const chosen = q.kind === "scale" && a?.option != null ? def.options[a.option] : undefined;
+          return (
+            <li key={q.id} className="rounded-lg bg-card/60 p-3 text-sm">
+              <div className="text-muted">{i + 1}. {q.text}</div>
+              <div className="mt-1 text-ink">
+                {q.kind === "scale"
+                  ? chosen ? <>{chosen.label} <span className="text-faint">({chosen.score})</span></> : <span className="text-faint">—</span>
+                  : a?.text?.trim() ? <span className="whitespace-pre-wrap">{a.text}</span> : <span className="text-faint">Boş bırakıldı</span>}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </Modal>
   );
 }
 

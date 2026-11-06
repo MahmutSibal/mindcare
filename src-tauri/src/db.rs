@@ -76,6 +76,34 @@ const MIGRATIONS: &[&str] = &[
         value TEXT NOT NULL
     );
     "#,
+    // 2 — Terapistin oluşturduğu testler ve danışan sonuçları.
+    // Sonuç, gönderildiği andaki test tanımını da saklar; test sonradan düzenlense
+    // veya silinse bile geçmiş sonuçlar okunabilir kalır.
+    r#"
+    CREATE TABLE tests (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        instructions TEXT,
+        definition_json TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME
+    );
+
+    CREATE TABLE test_results (
+        id TEXT PRIMARY KEY,
+        patient_id TEXT NOT NULL,
+        session_id TEXT,
+        test_id TEXT,
+        test_title TEXT NOT NULL,
+        definition_json TEXT NOT NULL,
+        answers_json TEXT NOT NULL,
+        total_score INTEGER,
+        completed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+        FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE SET NULL
+    );
+    CREATE INDEX idx_test_results_patient ON test_results(patient_id, completed_at DESC);
+    "#,
 ];
 
 fn apply_key(conn: &Connection, key: &Zeroizing<String>) -> AppResult<()> {

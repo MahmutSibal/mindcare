@@ -19,6 +19,14 @@ export function useCall() {
   const callRef = useRef<Call | null>(null);
   const localRef = useRef<MediaStream | null>(null);
   localRef.current = local;
+  // Danışandan gelen veri kanalı mesajlarını dinleyen bileşenler (ör. test cevapları).
+  const listeners = useRef(new Set<(m: ChannelMessage) => void>());
+  const onMessage = useCallback((fn: (m: ChannelMessage) => void) => {
+    listeners.current.add(fn);
+    return () => {
+      listeners.current.delete(fn);
+    };
+  }, []);
 
   const ensureLocal = useCallback(async () => {
     if (localRef.current) return localRef.current;
@@ -45,6 +53,7 @@ export function useCall() {
         onState: setState,
         onRemoteStream: setRemote,
         onStats: setStats,
+        onMessage: (m) => listeners.current.forEach((fn) => fn(m)),
       }, ice);
       callRef.current = call;
       setInvite(inv);
@@ -113,7 +122,8 @@ export function useCall() {
     }
   };
 
-  const sendMessage = (m: ChannelMessage) => callRef.current?.sendMessage(m);
+  /** Danışana mesaj gönderir; görüşme yoksa veya kanal açık değilse `false` döner. */
+  const sendMessage = (m: ChannelMessage): boolean => callRef.current?.sendMessage(m) ?? false;
 
   // Bileşen kaldırılırsa (uygulama kapanırken) bağlantıyı ve cihazları kapat.
   useEffect(() => () => {
@@ -124,7 +134,7 @@ export function useCall() {
   return {
     local, remote, state, stats, invite, micOn, camOn, screen, error,
     inCall: callRef.current !== null || (state !== "idle" && state !== "ended" && state !== "failed"),
-    start, hangup, toggleMic, toggleCam, shareScreen, stopScreen, sendMessage, ensureLocal,
+    start, hangup, toggleMic, toggleCam, shareScreen, stopScreen, sendMessage, onMessage, ensureLocal,
     clearError: () => setError(null),
   };
 }
