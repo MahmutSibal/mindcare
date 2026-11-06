@@ -160,6 +160,63 @@ pub fn restore_from(conn: &mut Connection, src: &Path, key: &Zeroizing<String>) 
     Ok(())
 }
 
+/// Başka bir anahtarla (kurtarma anahtarı) şifrelenmiş yedeği `prepared` geçici dosyasına hazırlar.
+/// Yedek bu anahtarla açılabilmeli ve geçerli bir MindCare yedeği olmalıdır; kopya migration'dan
+/// geçirilip yeniden açılarak doğrulanır. Ana veritabanına dokunulmaz.
+pub fn prepare_restore(src: &Path, prepared: &Path, key: &Zeroizing<String>) -> AppResult<()> {
+    let src_conn = open_encrypted(src, key)
+        .map_err(|_| AppError::Key("Bu kurtarma anahtarı seçilen yedeğe ait değil.".into()))?;
+    let v: i64 = src_conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+    if v == 0 || v > MIGRATIONS.len() as i64 {
+        return Err(AppError::Invalid("Seçilen dosya geçerli bir MindCare yedeği değil.".into()));
+    }
+    remove_with_sidecars(prepared)?;
+    backup_to(&src_conn, prepared, key)?;
+    drop(src_conn);
+    let mut c = open_encrypted(prepared, key)?;
+    migrate(&mut c)?;
+    Ok(())
+}
+
+/// Hazırlanan dosyayı ana veritabanının yerine koyar. Ana veritabanının bağlantısı önceden
+/// kapatılmış olmalıdır. Yer değiştirme başarısız olursa eski dosya yerine geri konur.
+pub fn swap_in(prepared: &Path, db_path: &Path) -> AppResult<()> {
+    let old = with_suffix(db_path, ".old");
+    remove_with_sidecars(&old)?;
+    if db_path.exists() {
+        std::fs::rename(db_path, &old)?;
+    }
+    for ext in ["-wal", "-shm"] {
+        let _ = std::fs::remove_file(with_suffix(db_path, ext));
+    }
+    if let Err(e) = std::fs::rename(prepared, db_path) {
+        if old.exists() {
+            let _ = std::fs::rename(&old, db_path);
+        }
+        return Err(e.into());
+    }
+    remove_with_sidecars(prepared)?;
+    remove_with_sidecars(&old)?;
+    Ok(())
+}
+
+/// Bir veritabanı dosyasını WAL/SHM yan dosyalarıyla birlikte siler (yoksa sessizce geçer).
+pub fn remove_with_sidecars(path: &Path) -> AppResult<()> {
+    for ext in ["", "-wal", "-shm"] {
+        let p = with_suffix(path, ext);
+        if p.exists() {
+            std::fs::remove_file(p)?;
+        }
+    }
+    Ok(())
+}
+
+pub fn with_suffix(path: &Path, suffix: &str) -> std::path::PathBuf {
+    let mut s = path.as_os_str().to_owned();
+    s.push(suffix);
+    s.into()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -205,6 +262,61 @@ mod tests {
         restore_from(&mut c, &b, &k).unwrap();
         let n: i64 = c.query_row("SELECT count(*) FROM patients", [], |r| r.get(0)).unwrap();
         assert_eq!(n, 1);
+    }
+
+    /// Yeni bilgisayar senaryosu: yeni kurulum kendi anahtarıyla boş bir veritabanı açmıştır;
+    /// eski bilgisayarın yedeği, eski anahtarın kurtarma biçimiyle geri yüklenir.
+    #[test]
+    fn restore_on_new_computer_with_recovery_key() {
+        let (old_db, backup, new_db) = (tmp("old.db"), tmp("old-backup.mcbak"), tmp("new.db"));
+        let prepared = with_suffix(&new_db, ".restore");
+        let (old_key, new_key) = (key('1'), key('2'));
+        {
+            let mut c = open_encrypted(&old_db, &old_key).unwrap();
+            migrate(&mut c).unwrap();
+            c.execute("INSERT INTO patients (id, full_name) VALUES ('1', 'Eski Danışan')", []).unwrap();
+            backup_to(&c, &backup, &old_key).unwrap();
+        }
+        {
+            let mut c = open_encrypted(&new_db, &new_key).unwrap();
+            migrate(&mut c).unwrap();
+            c.execute("INSERT INTO patients (id, full_name) VALUES ('2', 'Yeni Kurulum')", []).unwrap();
+        }
+
+        // Kullanıcının elle yazdığı kurtarma anahtarı eski anahtara çözülür.
+        let typed = crate::recovery::encode(&old_key).unwrap().to_lowercase();
+        let recovered = crate::recovery::decode(&typed).unwrap();
+
+        prepare_restore(&backup, &prepared, &recovered).unwrap();
+        swap_in(&prepared, &new_db).unwrap();
+
+        assert!(!prepared.exists(), "geçici dosya kaldı");
+        assert!(!with_suffix(&new_db, ".old").exists(), "eski dosya kaldı");
+        assert!(open_encrypted(&new_db, &new_key).is_err(), "eski yerel anahtar hâlâ açıyor");
+        let c = open_encrypted(&new_db, &recovered).unwrap();
+        let names: Vec<String> = c
+            .prepare("SELECT full_name FROM patients").unwrap()
+            .query_map([], |r| r.get(0)).unwrap()
+            .collect::<Result<_, _>>().unwrap();
+        assert_eq!(names, vec!["Eski Danışan".to_string()]);
+    }
+
+    #[test]
+    fn wrong_recovery_key_leaves_database_untouched() {
+        let (db_path, backup) = (tmp("keep.db"), tmp("keep-backup.mcbak"));
+        let prepared = with_suffix(&db_path, ".restore");
+        let k = key('3');
+        {
+            let mut c = open_encrypted(&db_path, &k).unwrap();
+            migrate(&mut c).unwrap();
+            c.execute("INSERT INTO patients (id, full_name) VALUES ('1', 'Korunan')", []).unwrap();
+            backup_to(&c, &backup, &k).unwrap();
+        }
+        let before = std::fs::read(&db_path).unwrap();
+        let err = prepare_restore(&backup, &prepared, &key('4')).unwrap_err();
+        assert!(err.to_string().contains("ait değil"));
+        assert!(!prepared.exists());
+        assert_eq!(std::fs::read(&db_path).unwrap(), before, "ana veritabanı değişti");
     }
 
     #[test]

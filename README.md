@@ -4,6 +4,8 @@ Terapistler için masaüstü seans ve danışan yönetim sistemi.
 
 - **Masaüstü (terapist):** Tauri 2 + React + TypeScript + Tailwind. Danışan, seans, klinik not, randevu ve materyal kayıtları
   yalnızca cihazda, SQLCipher ile şifreli SQLite veritabanında tutulur. Anahtar Windows Credential Manager'dadır.
+  Anahtarın elle yazılabilir biçimi (**kurtarma anahtarı**, 55 karakter, sağlamalı) ilk açılışta terapiste gösterilir
+  ve doğrulatılır; bilgisayar değişirse yedekler bu anahtarla geri yüklenir (`src-tauri/src/recovery.rs`).
 - **Danışan web istemcisi (`patient/`):** Davet bağlantısıyla tarayıcıdan görüşmeye katılım.
 - **Görüntülü görüşme:** WebRTC (P2P, gerekirse TURN). Supabase Realtime yalnızca SDP/ICE sinyalleşmesi için kullanılır;
   klinik veri sunucuya gönderilmez. Davetler süreli ve tek kullanımlıktır, kanal erişimi RLS ile sınırlıdır.

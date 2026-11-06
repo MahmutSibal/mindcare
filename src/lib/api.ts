@@ -114,7 +114,16 @@ export const api = {
 
   backupDatabase: (dest: string) => invoke<void>("backup_database", { dest }),
   restoreDatabase: (src: string) => invoke<void>("restore_database", { src }),
+
+  getRecoveryKey: () => invoke<string>("get_recovery_key"),
+  confirmRecoveryKey: (input: string) => invoke<void>("confirm_recovery_key", { input }),
+  unlockWithRecoveryKey: (recoveryKey: string) => invoke<void>("unlock_with_recovery_key", { recoveryKey }),
+  restoreWithRecoveryKey: (src: string, recoveryKey: string) =>
+    invoke<void>("restore_with_recovery_key", { src, recoveryKey }),
 };
+
+/** Ayarlar tablosunda kurtarma anahtarının doğrulandığı zamanı tutan anahtar. */
+export const RECOVERY_CONFIRMED_KEY = "recovery_key_confirmed_at";
 
 export function errorText(e: unknown): string {
   if (typeof e === "string") return e;

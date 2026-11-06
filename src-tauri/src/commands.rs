@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::error::{AppError, AppResult};
-use crate::{AppState, db, keystore};
+use crate::{AppState, db, keystore, recovery};
 
 fn new_id() -> String {
     uuid::Uuid::new_v4().to_string()
@@ -519,4 +519,92 @@ pub fn restore_database(state: State<AppState>, src: String) -> AppResult<()> {
     }
     let key = keystore::load_key()?.ok_or_else(|| AppError::Key("Anahtar bulunamadı.".into()))?;
     with_conn(&state, |c| db::restore_from(c, &src, &key))
+}
+
+// ───────────────────────────── Kurtarma anahtarı ─────────────────────────────
+
+const RECOVERY_CONFIRMED: &str = "recovery_key_confirmed_at";
+
+/// Bu bilgisayarın veritabanı anahtarını kurtarma anahtarı biçiminde döndürür.
+#[tauri::command]
+pub fn get_recovery_key(state: State<AppState>) -> AppResult<String> {
+    with_conn(&state, |_| Ok(()))?;
+    let key = keystore::load_key()?.ok_or_else(|| AppError::Key("Anahtar bulunamadı.".into()))?;
+    Ok(recovery::encode(&key)?.to_string())
+}
+
+/// Terapistin kurtarma anahtarını doğru kaydettiğini, anahtarı yeniden yazdırarak doğrular.
+#[tauri::command]
+pub fn confirm_recovery_key(state: State<AppState>, input: String) -> AppResult<()> {
+    let typed = recovery::decode(&input)?;
+    let key = keystore::load_key()?.ok_or_else(|| AppError::Key("Anahtar bulunamadı.".into()))?;
+    if *typed != *key {
+        return Err(AppError::Invalid("Girdiğiniz anahtar bu bilgisayarın kurtarma anahtarıyla eşleşmiyor.".into()));
+    }
+    with_conn(&state, |c| {
+        c.execute(
+            "INSERT INTO settings (key, value) VALUES (?1, datetime('now'))
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            [RECOVERY_CONFIRMED],
+        )?;
+        Ok(())
+    })
+}
+
+/// Veritabanı duruyor ama anahtarı güvenli depoda yoksa (ör. Windows yeniden kuruldu):
+/// kurtarma anahtarıyla veritabanını açar ve anahtarı güvenli depoya geri yazar.
+#[tauri::command]
+pub fn unlock_with_recovery_key(state: State<AppState>, recovery_key: String) -> AppResult<()> {
+    let key = recovery::decode(&recovery_key)?;
+    let mut guard = state.conn.lock().map_err(|_| AppError::Invalid("Kilit hatası".into()))?;
+    if guard.is_some() {
+        return Err(AppError::Invalid("Veritabanı zaten açık.".into()));
+    }
+    let mut conn = db::open_encrypted(&state.db_path, &key)
+        .map_err(|_| AppError::Key("Bu kurtarma anahtarı bu bilgisayardaki veritabanına ait değil.".into()))?;
+    db::migrate(&mut conn)?;
+    keystore::store_key(&key)?;
+    *guard = Some(conn);
+    *state.init_error.lock().unwrap() = None;
+    Ok(())
+}
+
+/// Başka bir bilgisayarda alınmış yedeği, o bilgisayarın kurtarma anahtarıyla geri yükler.
+/// Yedek önce geçici dosyada doğrulanır; ancak ondan sonra mevcut veritabanı ve anahtar değiştirilir.
+#[tauri::command]
+pub fn restore_with_recovery_key(state: State<AppState>, src: String, recovery_key: String) -> AppResult<()> {
+    let key = recovery::decode(&recovery_key)?;
+    let src = PathBuf::from(src);
+    if src == state.db_path {
+        return Err(AppError::Invalid("Ana veritabanı kendisinden geri yüklenemez.".into()));
+    }
+    let prepared = db::with_suffix(&state.db_path, ".restore");
+    if let Err(e) = db::prepare_restore(&src, &prepared, &key) {
+        let _ = db::remove_with_sidecars(&prepared);
+        return Err(e);
+    }
+
+    let mut guard = state.conn.lock().map_err(|_| AppError::Invalid("Kilit hatası".into()))?;
+    let previous_key = keystore::load_key().ok().flatten();
+    // Bir şey ters giderse eski anahtar ve veritabanı yerinde kalır.
+    let roll_back = |guard: &mut Option<Connection>| {
+        let _ = db::remove_with_sidecars(&prepared);
+        if let Some(k) = &previous_key {
+            let _ = keystore::store_key(k);
+            *guard = db::open_encrypted(&state.db_path, k).ok();
+        }
+    };
+
+    guard.take(); // Ana veritabanı bağlantısını kapat.
+    if let Err(e) = keystore::store_key(&key) {
+        roll_back(&mut guard);
+        return Err(e);
+    }
+    if let Err(e) = db::swap_in(&prepared, &state.db_path) {
+        roll_back(&mut guard);
+        return Err(e);
+    }
+    *guard = Some(db::open_encrypted(&state.db_path, &key)?);
+    *state.init_error.lock().unwrap() = None;
+    Ok(())
 }

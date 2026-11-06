@@ -1,7 +1,6 @@
-# OpenSSL'in derleme araçları (perl/nmake) ASCII olmayan yollarda ("Danısmanım")
-# başarısız oluyor. Derleme çıktısını yalnızca ASCII karakter içeren bir klasöre alıyoruz.
-[build]
-target-dir = "C:/Users/Mahmu/AppData/Local/mindcare-build/target"
+# OpenSSL'in derleme araçları (perl/nmake) ASCII olmayan yollarda başarısız oluyor.
+# Projeyi yalnızca ASCII karakter içeren bir klasörde tutun (ör. C:\Users\<ad>\pskoloji\mindcare-desktop).
+# Makineye özel target-dir burada tanımlanmaz; gerekirse CARGO_TARGET_DIR ortam değişkeni kullanılır.
 
 [env]
 # Strawberry Perl, OpenSSL'i kaynaktan derlemek için gerekli.

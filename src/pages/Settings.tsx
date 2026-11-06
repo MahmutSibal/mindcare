@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { DatabaseBackup, HardDriveDownload, KeyRound, Save, ShieldCheck } from "lucide-react";
-import { api, errorText, type AppStatus } from "../lib/api";
+import { AlertTriangle, DatabaseBackup, HardDriveDownload, KeyRound, Save, ShieldCheck } from "lucide-react";
+import { api, errorText, RECOVERY_CONFIRMED_KEY, type AppStatus } from "../lib/api";
 import { DEFAULT_PATIENT_APP_URL } from "../lib/config";
+import { fmtDate } from "../lib/format";
 import { notifyDataChanged } from "../lib/session";
 import PageHeader from "../components/PageHeader";
+import { RecoveryKeyDialog, RestoreWithRecoveryKey } from "../components/RecoveryKey";
 import { Button, Card, Field, inputCls, Modal } from "../components/ui";
 
 const KEYS = ["therapist_name", "therapist_title", "patient_app_url", "invite_ttl_minutes", "turn_url", "turn_username", "turn_credential"] as const;
@@ -15,8 +17,15 @@ export default function Settings() {
   const [status, setStatus] = useState<AppStatus | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [confirmRestore, setConfirmRestore] = useState<string | null>(null);
+  const [recoveryConfirmedAt, setRecoveryConfirmedAt] = useState<string | null>(null);
+  const [showRecovery, setShowRecovery] = useState(false);
+  const [restoreOther, setRestoreOther] = useState(false);
+
+  const loadRecoveryStatus = () =>
+    api.getSettings().then((s) => setRecoveryConfirmedAt(s[RECOVERY_CONFIRMED_KEY] ?? null));
 
   useEffect(() => {
+    loadRecoveryStatus();
     api.getSettings().then((s) =>
       setForm({
         therapist_name: s.therapist_name ?? "",
@@ -127,10 +136,27 @@ export default function Settings() {
             <Button variant="subtle" onClick={backup}><DatabaseBackup size={16} /> Şifreli Yedek Al</Button>
             <Button variant="subtle" onClick={pickRestore}><HardDriveDownload size={16} /> Geri Yükle</Button>
           </div>
-          <p className="mt-4 rounded-lg border border-warn/30 bg-warn/10 p-3 text-xs leading-relaxed text-warn">
-            Yedekler bu bilgisayardaki anahtarla şifrelenir. Windows hesabı veya anahtar kaybolursa veriler ve yedekler
-            geri getirilemez. Kurtarma anahtarı sonraki sürümde eklenecek.
-          </p>
+          {recoveryConfirmedAt ? (
+            <p className="mt-4 flex items-start gap-2 rounded-lg border border-ok/30 bg-ok/10 p-3 text-xs leading-relaxed text-ok">
+              <ShieldCheck size={16} className="shrink-0" />
+              Kurtarma anahtarı {fmtDate(recoveryConfirmedAt, true)} tarihinde doğrulandı. Bilgisayar değişirse yedekler
+              bu anahtarla geri yüklenebilir.
+            </p>
+          ) : (
+            <p className="mt-4 flex items-start gap-2 rounded-lg border border-warn/30 bg-warn/10 p-3 text-xs leading-relaxed text-warn">
+              <AlertTriangle size={16} className="shrink-0" />
+              Kurtarma anahtarı henüz kaydedilmedi. Bilgisayar bozulur veya Windows yeniden kurulursa veriler ve yedekler
+              geri getirilemez.
+            </p>
+          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button variant={recoveryConfirmedAt ? "subtle" : "primary"} onClick={() => setShowRecovery(true)}>
+              <KeyRound size={16} /> {recoveryConfirmedAt ? "Kurtarma anahtarını göster" : "Kurtarma anahtarını kaydet"}
+            </Button>
+            <Button variant="ghost" onClick={() => setRestoreOther(true)}>
+              Başka bilgisayarın yedeğini yükle
+            </Button>
+          </div>
         </Card>
       </div>
 
@@ -146,6 +172,18 @@ export default function Settings() {
           </div>
         </Modal>
       )}
+
+      {showRecovery && (
+        <RecoveryKeyDialog
+          onClose={() => setShowRecovery(false)}
+          onConfirmed={() => {
+            setShowRecovery(false);
+            loadRecoveryStatus();
+            setMsg({ ok: true, text: "Kurtarma anahtarı doğrulandı." });
+          }}
+        />
+      )}
+      {restoreOther && <RestoreWithRecoveryKey onClose={() => setRestoreOther(false)} />}
     </div>
   );
 }

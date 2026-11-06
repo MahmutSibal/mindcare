@@ -37,12 +37,19 @@ pub fn create_key() -> Result<Zeroizing<String>, AppError> {
     let mut raw = Zeroizing::new([0u8; 32]);
     rand::rngs::OsRng.fill_bytes(raw.as_mut());
     let key = Zeroizing::new(hex::encode(raw.as_ref()));
+    store_key(&key)?;
+    Ok(key)
+}
+
+/// Verilen anahtarı (64 karakter hex) güvenli depoya yazar; varsa eskisinin yerine geçer.
+/// Kurtarma anahtarıyla geri yüklemede kullanılır.
+pub fn store_key(key: &Zeroizing<String>) -> Result<(), AppError> {
     entry()?
-        .set_password(&key)
+        .set_password(key)
         .map_err(|e| AppError::Key(e.to_string()))?;
     // Yazılanın gerçekten okunabildiğini doğrula.
     match load_key()? {
-        Some(k) if *k == *key => Ok(key),
+        Some(k) if *k == **key => Ok(()),
         _ => Err(AppError::Key("Anahtar güvenli depoya yazılamadı.".into())),
     }
 }

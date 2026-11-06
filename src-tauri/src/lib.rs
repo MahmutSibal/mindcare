@@ -2,6 +2,7 @@ mod commands;
 mod db;
 mod error;
 mod keystore;
+mod recovery;
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -83,6 +84,10 @@ pub fn run() {
             commands::set_setting,
             commands::backup_database,
             commands::restore_database,
+            commands::get_recovery_key,
+            commands::confirm_recovery_key,
+            commands::unlock_with_recovery_key,
+            commands::restore_with_recovery_key,
         ])
         .run(tauri::generate_context!())
         .expect("MindCare başlatılamadı");
