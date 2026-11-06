@@ -73,7 +73,63 @@ export function useCall() {
     callRef.current?.setVideoProfile("camera");
   }, [screen]);
 
+  // ── Materyal videosu: bilgisayarda oynatılır, görüntüsü kameranın, sesi (terapistin
+  //    mikrofonuyla karıştırılarak) mikrofonun yerine danışana gider. Dosya gönderilmez.
+  const [videoShare, setVideoShare] = useState<VideoShare | null>(null);
+  const [videoPaused, setVideoPaused] = useState(false);
+  const videoRef = useRef<VideoShare | null>(null);
+  videoRef.current = videoShare;
+
+  const stopVideo = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.el.pause();
+    v.el.removeAttribute("src");
+    v.ctx.close().catch(() => {});
+    URL.revokeObjectURL(v.url);
+    videoRef.current = null;
+    setVideoShare(null);
+    callRef.current?.replaceTrack("video", localRef.current?.getVideoTracks()[0] ?? null);
+    callRef.current?.replaceTrack("audio", localRef.current?.getAudioTracks()[0] ?? null);
+  }, []);
+
+  const showVideo = async (bytes: ArrayBuffer, mime: string, title: string) => {
+    if (screen) stopScreen();
+    stopVideo();
+    const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+    const el = document.createElement("video");
+    el.src = url;
+    el.playsInline = true;
+    const ctx = new AudioContext();
+    const fail = (msg: string) => {
+      ctx.close().catch(() => {});
+      URL.revokeObjectURL(url);
+      return new Error(msg);
+    };
+    const mixed = ctx.createMediaStreamDestination();
+    const source = ctx.createMediaElementSource(el);
+    source.connect(ctx.destination); // terapist de duysun
+    source.connect(mixed);
+    const mic = localRef.current?.getAudioTracks()[0];
+    if (mic) ctx.createMediaStreamSource(new MediaStream([mic])).connect(mixed);
+    try {
+      await el.play();
+    } catch {
+      throw fail("Video oynatılamadı. Dosya biçimi desteklenmiyor olabilir; MP4 veya WebM kullanın.");
+    }
+    const vtrack = (el as HTMLVideoElement & { captureStream(): MediaStream }).captureStream().getVideoTracks()[0];
+    if (!vtrack) throw fail("Videodan görüntü alınamadı.");
+    el.onplay = () => setVideoPaused(false);
+    el.onpause = () => setVideoPaused(true);
+    callRef.current?.replaceTrack("video", vtrack);
+    callRef.current?.replaceTrack("audio", mixed.stream.getAudioTracks()[0] ?? null);
+    callRef.current?.setVideoProfile("camera");
+    setVideoPaused(false);
+    setVideoShare({ el, stream: new MediaStream([vtrack]), ctx, url, title });
+  };
+
   const hangup = useCallback(async () => {
+    stopVideo();
     const call = callRef.current;
     callRef.current = null;
     await call?.hangup();
@@ -85,7 +141,7 @@ export function useCall() {
     setInvite(null);
     setStats(null);
     setState("idle");
-  }, [screen]);
+  }, [screen, stopVideo]);
 
   const toggleMic = () => {
     const next = !micOn;
@@ -109,6 +165,7 @@ export function useCall() {
 
   const shareScreen = async () => {
     if (screen) return stopScreen();
+    stopVideo();
     try {
       const s = await navigator.mediaDevices.getDisplayMedia({
         video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 15, max: 30 } },
@@ -132,6 +189,9 @@ export function useCall() {
 
   /** Danışana mesaj gönderir; görüşme yoksa veya kanal açık değilse `false` döner. */
   const sendMessage = (m: ChannelMessage): boolean => callRef.current?.sendMessage(m) ?? false;
+  /** Büyük aktarımlar için kanal tamponunu bekleyerek gönderir. */
+  const sendBuffered = (m: ChannelMessage): Promise<boolean> =>
+    callRef.current?.sendBuffered(m) ?? Promise.resolve(false);
 
   // Bileşen kaldırılırsa (uygulama kapanırken) bağlantıyı ve cihazları kapat.
   useEffect(() => () => {
@@ -140,11 +200,22 @@ export function useCall() {
   }, []);
 
   return {
-    local, remote, state, stats, invite, micOn, camOn, screen, error,
+    local, remote, state, stats, invite, micOn, camOn, screen, error, videoShare, videoPaused,
     inCall: callRef.current !== null || (state !== "idle" && state !== "ended" && state !== "failed"),
-    start, hangup, toggleMic, toggleCam, shareScreen, stopScreen, sendMessage, onMessage, ensureLocal,
+    start, hangup, toggleMic, toggleCam, shareScreen, stopScreen, sendMessage, sendBuffered, onMessage, ensureLocal,
+    showVideo, stopVideo,
     clearError: () => setError(null),
   };
 }
 
 export type CallApi = ReturnType<typeof useCall>;
+
+/** Danışana yayınlanan materyal videosu. */
+export interface VideoShare {
+  el: HTMLVideoElement;
+  /** Önizleme için yalnızca görüntü izi. */
+  stream: MediaStream;
+  ctx: AudioContext;
+  url: string;
+  title: string;
+}

@@ -123,7 +123,15 @@ export type ChannelMessage =
   // Terapist → danışan: ödev. Danışan sayfası kalıcı değildir; danışan ödevi indirip saklar.
   | { type: "homework"; id: string; title: string; description: string | null; due: string | null }
   // Danışan → terapist: ödev ekrana ulaştı.
-  | { type: "homework_received"; id: string };
+  | { type: "homework_received"; id: string }
+  // Terapist → danışan: materyal gösterimi. Alıntıda metin doğrudan gelir; görsel ve
+  // belgede ardından `material_chunk` parçaları (base64) ve `material_end` gelir.
+  | { type: "material_show"; id: string; title: string; kind: "image" | "document" | "quote"; mime: string; size: number; text?: string }
+  | { type: "material_chunk"; id: string; data: string }
+  | { type: "material_end"; id: string }
+  | { type: "material_hide"; id: string }
+  // Danışan → terapist: materyal eksiksiz ulaştı ve gösteriliyor.
+  | { type: "material_received"; id: string };
 
 type Signal =
   | { kind: "hello" }
@@ -216,6 +224,30 @@ export class Call {
   sendMessage(m: ChannelMessage): boolean {
     if (this.dc?.readyState !== "open") return false;
     this.dc.send(JSON.stringify(m));
+    return true;
+  }
+
+  /**
+   * Büyük aktarımlar için: kanal tamponu dolunca boşalmasını bekleyerek gönderir.
+   * Kanal kapanırsa veya yeniden kurulursa `false` döner.
+   */
+  async sendBuffered(m: ChannelMessage): Promise<boolean> {
+    const dc = this.dc;
+    if (dc?.readyState !== "open") return false;
+    if (dc.bufferedAmount > 4 * 1024 * 1024) {
+      dc.bufferedAmountLowThreshold = 1024 * 1024;
+      await new Promise<void>((resolve) => {
+        const done = () => {
+          dc.removeEventListener("bufferedamountlow", done);
+          dc.removeEventListener("close", done);
+          resolve();
+        };
+        dc.addEventListener("bufferedamountlow", done);
+        dc.addEventListener("close", done);
+      });
+    }
+    if (dc !== this.dc || dc.readyState !== "open") return false;
+    dc.send(JSON.stringify(m));
     return true;
   }
 

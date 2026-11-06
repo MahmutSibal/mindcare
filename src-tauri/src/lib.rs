@@ -81,6 +81,7 @@ pub fn run() {
             commands::list_materials,
             commands::create_material,
             commands::delete_material,
+            commands::read_material,
             commands::list_tests,
             commands::save_test,
             commands::delete_test,

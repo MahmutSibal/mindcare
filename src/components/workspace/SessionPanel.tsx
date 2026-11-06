@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ClipboardCheck, Clock3, FileSignature, MonitorX, Pause, Play, PenTool, Send, Square, Undo2 } from "lucide-react";
-import { api, errorText, type Material, type Patient, type Test } from "../../lib/api";
+import { api, errorText, type Patient, type Test } from "../../lib/api";
+import type { SharedMaterial } from "./materialShare";
 import { clock } from "../../lib/format";
 import { notifyDataChanged, useActiveSession } from "../../lib/session";
 import { maxScore, parseDefinition } from "../../lib/tests";
@@ -13,7 +14,7 @@ import type { CallApi } from "./useCall";
 export default function SessionPanel({ call, patient, shared, onClearShared }: {
   call: CallApi;
   patient: Patient | null;
-  shared: Material | null;
+  shared: SharedMaterial | null;
   onClearShared: () => void;
 }) {
   return (
@@ -360,25 +361,57 @@ function TestPicker({ onClose, onSend }: { onClose: () => void; onSend: (t: Test
 
 // ───────────────────────────── Paylaşım önizlemesi ─────────────────────────────
 
-function PatientScreenPreview({ call, shared, onClearShared }: { call: CallApi; shared: Material | null; onClearShared: () => void }) {
+const SHARE_STATUS: Record<SharedMaterial["status"], string> = {
+  sending: "Gönderiliyor",
+  sent: "Gönderildi, danışanın onayı bekleniyor",
+  shown: "Danışanın ekranında",
+  failed: "Gönderilemedi",
+  video: "Danışana yayınlanıyor",
+};
+
+function PatientScreenPreview({ call, shared, onClearShared }: { call: CallApi; shared: SharedMaterial | null; onClearShared: () => void }) {
   const ref = useRef<HTMLVideoElement>(null);
+  const live = call.screen ?? (shared?.status === "video" ? call.videoShare?.stream ?? null : null);
   useEffect(() => {
-    if (ref.current) ref.current.srcObject = call.screen;
-  }, [call.screen]);
+    if (ref.current) ref.current.srcObject = live;
+  }, [live]);
 
   return (
     <Card title="Paylaşılan Ekran Önizleme">
       <div className="relative aspect-video overflow-hidden rounded-lg border border-line bg-bg">
-        {call.screen ? (
+        {live ? (
           <video ref={ref} autoPlay muted playsInline className="h-full w-full object-contain" />
+        ) : shared?.previewUrl ? (
+          <img src={shared.previewUrl} alt={shared.material.title} className="h-full w-full object-contain" />
+        ) : shared?.text ? (
+          <div className="flex h-full items-center justify-center overflow-y-auto p-4 text-center text-sm italic leading-relaxed">“{shared.text}”</div>
         ) : shared ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
-            <span className="text-accent"><CategoryIcon c={shared.category} size={34} /></span>
-            <div className="text-sm">{shared.title}</div>
-            <div className="text-xs text-muted">{CATEGORY_LABEL[shared.category]} • danışana başlık bildirildi</div>
+            <span className="text-accent"><CategoryIcon c={shared.material.category} size={34} /></span>
+            <div className="text-sm">{shared.material.title}</div>
+            <div className="text-xs text-muted">{CATEGORY_LABEL[shared.material.category]}</div>
           </div>
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-faint">Danışanla paylaşılan bir şey yok</div>
+        )}
+        {shared && !call.screen && (
+          <div className="absolute left-2 top-2 rounded-md bg-black/60 px-2 py-1 text-[11px] text-white">
+            {SHARE_STATUS[shared.status]}
+            {shared.status === "sending" && ` • %${Math.round(shared.progress * 100)}`}
+          </div>
+        )}
+        {shared?.status === "sending" && (
+          <div className="absolute inset-x-0 bottom-0 h-1 bg-card">
+            <div className="h-full bg-accent transition-all" style={{ width: `${shared.progress * 100}%` }} />
+          </div>
+        )}
+        {shared?.status === "video" && call.videoShare && !call.screen && (
+          <button
+            onClick={() => (call.videoPaused ? call.videoShare!.el.play() : call.videoShare!.el.pause())}
+            className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-lg bg-card px-3 py-1.5 text-xs font-medium hover:bg-line"
+          >
+            {call.videoPaused ? <><Play size={14} /> Oynat</> : <><Pause size={14} /> Duraklat</>}
+          </button>
         )}
         {(call.screen || shared) && (
           <button

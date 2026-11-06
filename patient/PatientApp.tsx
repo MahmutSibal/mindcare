@@ -2,12 +2,13 @@
 // Terapistin yerel veritabanına hiçbir erişimi yoktur; yalnızca görüşme medyası
 // ve terapistin paylaştığı kısa bildirimler alınır.
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FileSignature, FileText, HeartHandshake, Lock, Mic, MicOff, PhoneOff, Video, VideoOff } from "lucide-react";
 import { Call, type CallState, type ChannelMessage, getLocalMedia, joinRoom, type JoinResult } from "../src/lib/rtc";
 import { Button, cx } from "../src/components/ui";
 import TestForm from "./TestForm";
 import HomeworkView, { type HomeworkMessage } from "./HomeworkView";
+import MaterialView, { useIncomingMaterial } from "./MaterialView";
 
 type Phase = "invalid" | "consent" | "joining" | "rejected" | "call" | "left";
 
@@ -65,6 +66,9 @@ export default function PatientApp() {
   const [homework, setHomework] = useState<HomeworkMessage[]>([]);
   const [homeworkOpen, setHomeworkOpen] = useState(false);
   const callRef = useRef<Call | null>(null);
+  const material = useIncomingMaterial(
+    useCallback((id: string) => callRef.current?.sendMessage({ type: "material_received", id }), []),
+  );
 
   // Davet anahtarını adres çubuğundan ve geçmişten kaldır.
   useEffect(() => {
@@ -125,6 +129,7 @@ export default function PatientApp() {
         },
         onRemoteStream: setRemote,
         onMessage: (m) => {
+          if (material.handle(m)) return;
           if (m.type === "test") {
             if (Array.isArray(m.definition?.questions)) {
               setTest(m);
@@ -194,6 +199,7 @@ export default function PatientApp() {
               <FileText size={18} className="text-accent" /> Terapistiniz bir materyal paylaştı: <b>{notice.title}</b>
             </div>
           )}
+          {material.current && <MaterialView item={material.current} onClose={material.clear} />}
           {homework.length > 0 && !homeworkOpen && (
             <button
               onClick={() => setHomeworkOpen(true)}

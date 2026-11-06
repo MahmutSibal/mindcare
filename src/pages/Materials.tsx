@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
-import { ExternalLink, FilePlus2, Trash2 } from "lucide-react";
+import { ExternalLink, FilePlus2, Quote, Trash2 } from "lucide-react";
 import { api, errorText, type Material, type MaterialCategory } from "../lib/api";
 import { fmtDate } from "../lib/format";
 import { notifyDataChanged, useDataVersion } from "../lib/session";
@@ -57,8 +57,15 @@ export default function Materials() {
   return (
     <div className="h-full overflow-y-auto p-8">
       <PageHeader title="Materyaller" subtitle="Seanslarda kullandığınız dosyalar. Dosyalar yerinde kalır; burada yalnızca kayıtları tutulur.">
+        <Button variant="subtle" onClick={() => setDraft({ title: "", category: "quote", file_path: "", description: "" })}>
+          <Quote size={16} /> Alıntı Yaz
+        </Button>
         <Button onClick={pick}><FilePlus2 size={16} /> Materyal Ekle</Button>
       </PageHeader>
+      <p className="-mt-2 mb-4 text-xs text-faint">
+        Görüşmede "Göster" ile: görsel ve belgeler (en fazla 25 MB) danışana gönderilir, videolar bu bilgisayarda oynatılıp
+        sesiyle yayınlanır (MP4 veya WebM önerilir), alıntılar metin olarak görünür.
+      </p>
       {error && <p className="mb-4 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
       {list.length === 0 ? (
         <Empty text="Henüz materyal eklenmedi." />
@@ -76,9 +83,11 @@ export default function Materials() {
                 </div>
               </div>
               {m.description && <p className="mt-3 line-clamp-2 text-sm text-muted">{m.description}</p>}
-              <p className="mt-2 truncate text-xs text-faint" title={m.file_path}>{m.file_path}</p>
+              {m.file_path && <p className="mt-2 truncate text-xs text-faint" title={m.file_path}>{m.file_path}</p>}
               <div className="mt-3 flex justify-end gap-1">
-                <Button variant="ghost" className="px-2 py-1.5 text-xs" onClick={() => openFile(m)}><ExternalLink size={14} /> Aç</Button>
+                {m.file_path && (
+                  <Button variant="ghost" className="px-2 py-1.5 text-xs" onClick={() => openFile(m)}><ExternalLink size={14} /> Aç</Button>
+                )}
                 <Button variant="ghost" className="px-2 py-1.5 text-xs hover:text-danger" onClick={async () => { await api.deleteMaterial(m.id); notifyDataChanged(); }}>
                   <Trash2 size={14} /> Kaldır
                 </Button>
@@ -89,20 +98,31 @@ export default function Materials() {
       )}
 
       {draft && (
-        <Modal title="Materyal Ekle" onClose={() => setDraft(null)}>
+        <Modal title={draft.file_path ? "Materyal Ekle" : "Alıntı Yaz"} onClose={() => setDraft(null)}>
           <form onSubmit={save} className="space-y-4">
             <Field label="Başlık">
               <input className={inputCls} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} required autoFocus />
             </Field>
-            <Field label="Kategori">
-              <select className={inputCls} value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value as MaterialCategory })}>
-                {(Object.keys(CATEGORY_LABEL) as MaterialCategory[]).map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>)}
-              </select>
+            {draft.file_path && (
+              <Field label="Kategori">
+                <select className={inputCls} value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value as MaterialCategory })}>
+                  {(Object.keys(CATEGORY_LABEL) as MaterialCategory[]).map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>)}
+                </select>
+              </Field>
+            )}
+            <Field
+              label={draft.category === "quote" ? "Alıntı metni" : "Açıklama"}
+              hint={draft.category === "quote" ? "Danışanın ekranında bu metin gösterilir." : undefined}
+            >
+              <textarea
+                className={inputCls}
+                rows={draft.category === "quote" ? 5 : 3}
+                value={draft.description}
+                onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+                required={!draft.file_path}
+              />
             </Field>
-            <Field label="Açıklama">
-              <textarea className={inputCls} rows={3} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
-            </Field>
-            <p className="truncate text-xs text-faint">{draft.file_path}</p>
+            {draft.file_path && <p className="truncate text-xs text-faint">{draft.file_path}</p>}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="ghost" onClick={() => setDraft(null)}>Vazgeç</Button>
               <Button type="submit">Ekle</Button>

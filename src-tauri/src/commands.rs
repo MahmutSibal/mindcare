@@ -455,7 +455,15 @@ pub fn list_materials(state: State<AppState>) -> AppResult<Vec<Material>> {
 #[tauri::command]
 pub fn create_material(state: State<AppState>, input: MaterialInput) -> AppResult<String> {
     let title = non_empty(&input.title, "Başlık")?;
-    let path = non_empty(&input.file_path, "Dosya")?;
+    // Alıntı dosyasız da olabilir; metni açıklama alanındadır.
+    let path = if input.category == "quote" && input.file_path.trim().is_empty() {
+        if opt(&input.description).is_none() {
+            return Err(AppError::Invalid("Alıntı metni boş olamaz.".into()));
+        }
+        String::new()
+    } else {
+        non_empty(&input.file_path, "Dosya")?
+    };
     with_conn(&state, |c| {
         let id = new_id();
         c.execute(
@@ -464,6 +472,28 @@ pub fn create_material(state: State<AppState>, input: MaterialInput) -> AppResul
         )?;
         Ok(id)
     })
+}
+
+/// Danışana gösterilecek materyal dosyasının içeriği (ham bayt). Yol arayüzden alınmaz;
+/// yalnızca materyal kütüphanesinde kayıtlı dosya okunabilir.
+pub const MAX_MATERIAL_BYTES: u64 = 1024 * 1024 * 1024;
+
+#[tauri::command]
+pub fn read_material(state: State<AppState>, id: String) -> AppResult<tauri::ipc::Response> {
+    let path: String = with_conn(&state, |c| {
+        c.query_row("SELECT file_path FROM materials WHERE id = ?1", [&id], |r| r.get(0))
+            .optional()?
+            .ok_or_else(|| AppError::Invalid("Materyal bulunamadı.".into()))
+    })?;
+    if path.is_empty() {
+        return Err(AppError::Invalid("Bu materyalin dosyası yok.".into()));
+    }
+    let meta = std::fs::metadata(&path)
+        .map_err(|_| AppError::Invalid("Materyal dosyası bulunamadı. Taşınmış veya silinmiş olabilir.".into()))?;
+    if meta.len() > MAX_MATERIAL_BYTES {
+        return Err(AppError::Invalid("Materyal dosyası 1 GB'tan büyük.".into()));
+    }
+    Ok(tauri::ipc::Response::new(std::fs::read(&path)?))
 }
 
 #[tauri::command]

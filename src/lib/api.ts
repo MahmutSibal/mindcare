@@ -147,6 +147,8 @@ export const api = {
   createMaterial: (input: { title: string; category: MaterialCategory; file_path: string; description?: string }) =>
     invoke<string>("create_material", { input }),
   deleteMaterial: (id: string) => invoke<void>("delete_material", { id }),
+  /** Kütüphanedeki materyal dosyasının ham içeriği. */
+  readMaterial: (id: string) => invoke<ArrayBuffer>("read_material", { id }),
 
   listTests: () => invoke<Test[]>("list_tests"),
   saveTest: (id: string | null, input: { title: string; instructions?: string; definition_json: string }) =>

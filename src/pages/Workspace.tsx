@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CalendarCheck2, ChevronDown, ChevronRight, ClipboardList, PencilLine, UserPlus, Users } from "lucide-react";
 import { CATEGORY_LABEL, CategoryIcon } from "../components/category";
 import { api, type Homework, type Material, type Note, type Patient, type Session, type TestResult } from "../lib/api";
 import { age, fmtDate, fmtDateTime, initials, minutes, plainText } from "../lib/format";
 import { useActiveSession, useDataVersion } from "../lib/session";
 import { HomeworkCard, useHomeworkDeliveryReceipts } from "../components/workspace/Homework";
+import { hideMaterial, showMaterial as shareMaterial, type SharedMaterial } from "../components/workspace/materialShare";
+import { errorText } from "../lib/api";
 import { maxScore, parseAnswers, parseDefinition } from "../lib/tests";
 import { Avatar, Badge, Button, Card, cx, Empty, LinkButton, Modal } from "../components/ui";
 import PatientForm from "../components/PatientForm";
@@ -27,10 +29,31 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
   const [results, setResults] = useState<TestResult[]>([]);
   const [homework, setHomework] = useState<Homework[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
-  const [shared, setShared] = useState<Material | null>(null);
+  const [shared, setShared] = useState<SharedMaterial | null>(null);
+  const [shareError, setShareError] = useState<string | null>(null);
   const call = useCall();
   const { session } = useActiveSession();
   useHomeworkDeliveryReceipts(call);
+
+  // Danışan materyali eksiksiz aldığında onay gönderir.
+  const { onMessage } = call;
+  useEffect(
+    () =>
+      onMessage((m) => {
+        if (m.type === "material_received") {
+          setShared((s) => (s && s.shareId === m.id ? { ...s, status: "shown" } : s));
+        }
+      }),
+    [onMessage],
+  );
+
+  // Görüşme bitince gösterim de biter; video yayını başka yoldan durursa (ör. ekran paylaşımı) kart temizlenir.
+  useEffect(() => {
+    if (!call.inCall) setShared(null);
+  }, [call.inCall]);
+  useEffect(() => {
+    if (!call.videoShare) setShared((s) => (s?.status === "video" ? null : s));
+  }, [call.videoShare]);
 
   useEffect(() => {
     api.listPatients().then((list) => {
@@ -63,9 +86,29 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
     loadPatient().catch(() => setPatient(null));
   }, [loadPatient, version]);
 
-  const showMaterial = (m: Material) => {
-    setShared(m);
-    call.sendMessage({ type: "material", title: m.title, category: m.category });
+  // Yalnızca en son başlatılan gösterim durumu güncelleyebilir; durdurulan veya yerine
+  // yenisi gelen bir aktarımın geç gelen güncellemeleri yok sayılır.
+  const activeShare = useRef<object | null>(null);
+
+  const showMaterial = async (m: Material) => {
+    setShareError(null);
+    if (shared) hideMaterial(call, shared);
+    setShared(null);
+    const token = {};
+    activeShare.current = token;
+    try {
+      await shareMaterial(call, m, (s) => activeShare.current === token && setShared(s));
+    } catch (e) {
+      if (activeShare.current !== token) return;
+      setShared(null);
+      setShareError(errorText(e));
+    }
+  };
+
+  const clearShared = () => {
+    activeShare.current = null;
+    if (shared) hideMaterial(call, shared);
+    setShared(null);
   };
 
   if (patients.length === 0) {
@@ -92,14 +135,20 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
           call={call}
           sessionId={session && session.patient_id === patient?.id ? session.id : null}
         />
-        <MaterialLibrary materials={materials} onShow={showMaterial} onAll={() => onNavigate("materials")} />
+        <MaterialLibrary
+          materials={materials}
+          onShow={showMaterial}
+          onAll={() => onNavigate("materials")}
+          connected={call.state === "connected"}
+          error={shareError}
+        />
       </div>
 
       {/* Orta panel — görüntülü görüşme */}
       <CallPanel call={call} patient={patient} />
 
       {/* Sağ panel — seans */}
-      <SessionPanel call={call} patient={patient} shared={shared} onClearShared={() => setShared(null)} />
+      <SessionPanel call={call} patient={patient} shared={shared} onClearShared={clearShared} />
     </div>
   );
 }
@@ -333,7 +382,13 @@ function TestResultView({ result, onClose }: { result: TestResult; onClose: () =
 
 // ───────────────────────────── Materyaller ─────────────────────────────
 
-function MaterialLibrary({ materials, onShow, onAll }: { materials: Material[]; onShow: (m: Material) => void; onAll: () => void }) {
+function MaterialLibrary({ materials, onShow, onAll, connected, error }: {
+  materials: Material[];
+  onShow: (m: Material) => void;
+  onAll: () => void;
+  connected: boolean;
+  error: string | null;
+}) {
   const [tab, setTab] = useState<"all" | "video" | "document">("all");
   const list = materials.filter((m) => tab === "all" || (tab === "video" ? m.category === "video" : m.category !== "video"));
   return (
@@ -365,11 +420,20 @@ function MaterialLibrary({ materials, onShow, onAll }: { materials: Material[]; 
                 <div className="truncate text-sm">{m.title}</div>
                 <div className="text-xs text-muted">{CATEGORY_LABEL[m.category]}</div>
               </div>
-              <Button variant="outline" className="px-3 py-1 text-xs" onClick={() => onShow(m)}>Göster</Button>
+              <Button
+                variant="outline"
+                className="px-3 py-1 text-xs"
+                onClick={() => onShow(m)}
+                disabled={!connected}
+                title={connected ? "Danışanın ekranında göster" : "Görüşme bağlanınca kullanılabilir"}
+              >
+                Göster
+              </Button>
             </li>
           ))}
         </ul>
       )}
+      {error && <p className="mt-2 text-xs text-danger">{error}</p>}
     </Card>
   );
 }
