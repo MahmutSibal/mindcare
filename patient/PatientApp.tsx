@@ -3,7 +3,7 @@
 // ve terapistin paylaştığı kısa bildirimler alınır.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FileSignature, FileText, HeartHandshake, Lock, Mic, MicOff, PhoneOff, Video, VideoOff } from "lucide-react";
+import { FileSignature, FileText, HeartHandshake, Lock, Maximize2, Mic, MicOff, PhoneOff, Smartphone, Video, VideoOff } from "lucide-react";
 import { Call, type CallState, type CallStats, type ChannelMessage, getLocalMedia, joinRoom, type JoinResult } from "../src/lib/rtc";
 import { Button, cx } from "../src/components/ui";
 import TestForm from "./TestForm";
@@ -44,12 +44,59 @@ const REJECT_TEXT: Partial<Record<JoinResult, string>> = {
   host: "Bu bağlantı terapist hesabıyla açılmış. Lütfen danışan cihazından açın.",
 };
 
-function VideoEl({ stream, muted, mirrored }: { stream: MediaStream | null; muted?: boolean; mirrored?: boolean }) {
-  const ref = useRef<HTMLVideoElement>(null);
+function VideoEl({ stream, muted, mirrored, fit = "cover", videoRef, onClick }: {
+  stream: MediaStream | null;
+  muted?: boolean;
+  mirrored?: boolean;
+  /** "contain": kırpmadan sığdır (ekran paylaşımı), "cover": ekranı doldur (kamera). */
+  fit?: "cover" | "contain";
+  videoRef?: React.RefObject<HTMLVideoElement | null>;
+  onClick?: () => void;
+}) {
+  const own = useRef<HTMLVideoElement>(null);
+  const ref = videoRef ?? own;
   useEffect(() => {
     if (ref.current) ref.current.srcObject = stream;
-  }, [stream]);
-  return <video ref={ref} autoPlay playsInline muted={muted} className={cx("h-full w-full object-cover", mirrored && "-scale-x-100")} />;
+  }, [stream, ref]);
+  return (
+    <video
+      ref={ref}
+      autoPlay
+      playsInline
+      muted={muted}
+      onClick={onClick}
+      className={cx("h-full w-full", fit === "contain" ? "object-contain" : "object-cover", mirrored && "-scale-x-100")}
+    />
+  );
+}
+
+/** Ekran dikey mi; paylaşılan yatay ekranı büyütmek için telefonu yan çevirme ipucu. */
+function usePortrait(): boolean {
+  const q = () => window.matchMedia?.("(orientation: portrait)").matches ?? false;
+  const [portrait, setPortrait] = useState(q);
+  useEffect(() => {
+    const m = window.matchMedia?.("(orientation: portrait)");
+    if (!m) return;
+    const on = () => setPortrait(m.matches);
+    m.addEventListener("change", on);
+    return () => m.removeEventListener("change", on);
+  }, []);
+  return portrait;
+}
+
+/** Paylaşılan ekranı tam ekran açar. iPhone'da sistemin video oynatıcısı (yakınlaştırma destekli). */
+async function enterFullscreen(video: HTMLVideoElement | null, container: HTMLElement | null) {
+  const v = video as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null;
+  try {
+    if (container?.requestFullscreen) {
+      await container.requestFullscreen();
+      await (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.("landscape").catch(() => {});
+    } else {
+      v?.webkitEnterFullscreen?.();
+    }
+  } catch {
+    v?.webkitEnterFullscreen?.();
+  }
 }
 
 export default function PatientApp() {
@@ -63,6 +110,13 @@ export default function PatientApp() {
   const [camOn, setCamOn] = useState(true);
   const [notice, setNotice] = useState<ChannelMessage | null>(null);
   const [stats, setStats] = useState<CallStats | null>(null);
+  // Terapist ekran/video paylaşıyorsa görüntü sığdırılır; danışan dokunarak değiştirebilir.
+  const [contentShare, setContentShare] = useState(false);
+  const [fitOverride, setFitOverride] = useState<"cover" | "contain" | null>(null);
+  const portrait = usePortrait();
+  const remoteVideo = useRef<HTMLVideoElement>(null);
+  const stage = useRef<HTMLDivElement>(null);
+  const fit = fitOverride ?? (contentShare ? "contain" : "cover");
   const [test, setTest] = useState<Extract<ChannelMessage, { type: "test" }> | null>(null);
   const [homework, setHomework] = useState<HomeworkMessage[]>([]);
   const [homeworkOpen, setHomeworkOpen] = useState(false);
@@ -132,6 +186,11 @@ export default function PatientApp() {
         onStats: setStats,
         onMessage: (m) => {
           if (material.handle(m)) return;
+          if (m.type === "content_share") {
+            setContentShare(!!m.active);
+            setFitOverride(null);
+            return;
+          }
           if (m.type === "test") {
             if (Array.isArray(m.definition?.questions)) {
               setTest(m);
@@ -181,9 +240,14 @@ export default function PatientApp() {
   if (phase === "call") {
     return (
       <div className="relative flex h-full flex-col bg-bg">
-        <div className="relative min-h-0 flex-1">
+        <div ref={stage} className="relative min-h-0 flex-1 bg-black">
           {remote ? (
-            <VideoEl stream={remote} />
+            <VideoEl
+              stream={remote}
+              fit={fit}
+              videoRef={remoteVideo}
+              onClick={() => setFitOverride(fit === "contain" ? "cover" : "contain")}
+            />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 text-muted">
               <HeartHandshake size={44} className="text-accent" />
@@ -194,6 +258,21 @@ export default function PatientApp() {
             {camOn ? <VideoEl stream={local} muted mirrored /> : <div className="flex h-full items-center justify-center text-faint"><VideoOff /></div>}
           </div>
           <ConnectionBadge state={state} stats={stats} />
+          {remote && contentShare && (
+            <div className="absolute inset-x-0 bottom-36 z-10 flex flex-col items-center gap-2 px-4 sm:bottom-6">
+              {portrait && (
+                <span className="flex items-center gap-1.5 rounded-lg bg-black/60 px-3 py-1.5 text-xs text-white">
+                  <Smartphone size={13} className="rotate-90" /> Daha büyük görmek için telefonu yan çevirin
+                </span>
+              )}
+              <button
+                onClick={() => enterFullscreen(remoteVideo.current, stage.current)}
+                className="flex items-center gap-1.5 rounded-lg bg-accent-strong px-3 py-1.5 text-xs font-medium text-white shadow-lg"
+              >
+                <Maximize2 size={13} /> Tam ekran
+              </button>
+            </div>
+          )}
           {notice?.type === "material" && (
             <div className="absolute left-1/2 top-4 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-line bg-panel px-4 py-3 text-sm shadow-xl">
               <FileText size={18} className="text-accent" /> Terapistiniz bir materyal paylaştı: <b>{notice.title}</b>

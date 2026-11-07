@@ -205,6 +205,17 @@ export function useCall() {
   const sendBuffered = (m: ChannelMessage): Promise<boolean> =>
     callRef.current?.sendBuffered(m) ?? Promise.resolve(false);
 
+  // Danışana, görüntüde ekran/video paylaşımı olup olmadığını bildir (sığdırma için). Bağlantı
+  // yeniden kurulunca da tekrar gönderilir; veri kanalı o an henüz açık değilse kısa süre sonra denenir.
+  const contentShared = !!screen || !!videoShare;
+  useEffect(() => {
+    if (state !== "connected") return;
+    const send = () => callRef.current?.sendMessage({ type: "content_share", active: contentShared }) ?? false;
+    if (send()) return;
+    const t = setTimeout(send, 1500);
+    return () => clearTimeout(t);
+  }, [contentShared, state]);
+
   // Bileşen kaldırılırsa (uygulama kapanırken) bağlantıyı ve cihazları kapat.
   useEffect(() => () => {
     callRef.current?.hangup();

@@ -144,7 +144,10 @@ export type ChannelMessage =
   | { type: "material_end"; id: string }
   | { type: "material_hide"; id: string }
   // Danışan → terapist: materyal eksiksiz ulaştı ve gösteriliyor.
-  | { type: "material_received"; id: string };
+  | { type: "material_received"; id: string }
+  // Terapist → danışan: görüntüde ekran paylaşımı veya materyal videosu var mı. Danışan sayfası
+  // bu durumda görüntüyü kırpmadan sığdırır (yatay ekran dikey telefonda yarım görünmesin).
+  | { type: "content_share"; active: boolean };
 
 export type Signal =
   | { kind: "hello" }
