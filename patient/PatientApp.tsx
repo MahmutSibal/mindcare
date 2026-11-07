@@ -11,6 +11,7 @@ import { Button, cx } from "../src/components/ui";
 import TestForm from "./TestForm";
 import HomeworkView, { type HomeworkMessage } from "./HomeworkView";
 import MaterialView, { useIncomingMaterial } from "./MaterialView";
+import WaitingRoom from "./WaitingRoom";
 
 type Phase = "invalid" | "consent" | "joining" | "rejected" | "call" | "left";
 
@@ -294,10 +295,7 @@ export default function PatientApp() {
               onClick={() => setFitOverride(fit === "contain" ? "cover" : "contain")}
             />
           ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-3 text-muted">
-              <HeartHandshake size={44} className="text-accent" />
-              <p>{state === "reconnecting" ? "Bağlantı yeniden kuruluyor…" : "Terapistiniz bekleniyor…"}</p>
-            </div>
+            <WaitingRoom reconnecting={state === "reconnecting"} />
           )}
           <div className="absolute bottom-4 right-4 aspect-[3/4] w-28 overflow-hidden rounded-xl border border-line bg-card shadow-xl sm:aspect-[4/3] sm:w-48">
             {camOn ? <VideoEl key={facing} stream={local} muted mirrored={facing === "user"} /> : <div className="flex h-full items-center justify-center text-faint"><VideoOff /></div>}
