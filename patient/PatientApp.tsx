@@ -3,7 +3,9 @@
 // ve terapistin paylaştığı kısa bildirimler alınır.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FileSignature, FileText, HeartHandshake, Lock, Maximize2, Mic, MicOff, PhoneOff, Smartphone, Video, VideoOff } from "lucide-react";
+import {
+  FileSignature, FileText, HeartHandshake, Lock, Maximize2, Mic, MicOff, PhoneOff, Smartphone, SwitchCamera, Video, VideoOff,
+} from "lucide-react";
 import { Call, type CallState, type CallStats, type ChannelMessage, getLocalMedia, joinRoom, type JoinResult } from "../src/lib/rtc";
 import { Button, cx } from "../src/components/ui";
 import TestForm from "./TestForm";
@@ -237,6 +239,49 @@ export default function PatientApp() {
     kind === "audio" ? setMicOn(next) : setCamOn(next);
   };
 
+  // Ön/arka kamera. Bazı telefonlar iki kamerayı aynı anda açamaz: önce eskisi kapatılır.
+  // Yeni iz aynı yerel akışa konur; böylece bağlantı yeniden kurulsa da seçili kamera kalır.
+  const [facing, setFacing] = useState<"user" | "environment">("user");
+  const [canFlip, setCanFlip] = useState(false);
+  const [flipping, setFlipping] = useState(false);
+  useEffect(() => {
+    if (!local) return;
+    navigator.mediaDevices
+      ?.enumerateDevices()
+      .then((d) => setCanFlip(d.filter((x) => x.kind === "videoinput").length > 1))
+      .catch(() => {});
+  }, [local]);
+
+  const flipCamera = async () => {
+    if (!local || flipping) return;
+    setFlipping(true);
+    setError(null);
+    const open = async (mode: "user" | "environment", exact: boolean) =>
+      (await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: exact ? { exact: mode } : mode, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } },
+      })).getVideoTracks()[0];
+    const next: "user" | "environment" = facing === "user" ? "environment" : "user";
+    const old = local.getVideoTracks()[0];
+    old?.stop();
+    let track: MediaStreamTrack | undefined;
+    let now = next;
+    try {
+      track = await open(next, true);
+    } catch {
+      setError(next === "environment" ? "Arka kamera açılamadı." : "Ön kamera açılamadı.");
+      now = facing;
+      track = await open(facing, false).catch(() => undefined);
+    }
+    if (old) local.removeTrack(old);
+    if (track) {
+      track.enabled = camOn;
+      local.addTrack(track);
+    }
+    callRef.current?.replaceTrack("video", track ?? null);
+    setFacing(now);
+    setFlipping(false);
+  };
+
   if (phase === "call") {
     return (
       <div className="relative flex h-full flex-col bg-bg">
@@ -255,7 +300,7 @@ export default function PatientApp() {
             </div>
           )}
           <div className="absolute bottom-4 right-4 aspect-[3/4] w-28 overflow-hidden rounded-xl border border-line bg-card shadow-xl sm:aspect-[4/3] sm:w-48">
-            {camOn ? <VideoEl stream={local} muted mirrored /> : <div className="flex h-full items-center justify-center text-faint"><VideoOff /></div>}
+            {camOn ? <VideoEl key={facing} stream={local} muted mirrored={facing === "user"} /> : <div className="flex h-full items-center justify-center text-faint"><VideoOff /></div>}
           </div>
           <ConnectionBadge state={state} stats={stats} />
           {remote && contentShare && (
@@ -302,6 +347,14 @@ export default function PatientApp() {
         <div className="flex items-center justify-center gap-5 border-t border-line bg-panel py-4">
           <Round on={micOn} onClick={() => toggle("audio")} icon={micOn ? Mic : MicOff} label={micOn ? "Mikrofonu kapat" : "Mikrofonu aç"} />
           <Round on={camOn} onClick={() => toggle("video")} icon={camOn ? Video : VideoOff} label={camOn ? "Kamerayı kapat" : "Kamerayı aç"} />
+          {canFlip && (
+            <Round
+              on={!flipping}
+              onClick={flipCamera}
+              icon={SwitchCamera}
+              label={facing === "user" ? "Arka kameraya geç" : "Ön kameraya geç"}
+            />
+          )}
           <button onClick={leave} className="flex h-12 w-12 items-center justify-center rounded-full bg-danger text-white hover:bg-danger/80" aria-label="Görüşmeden ayrıl">
             <PhoneOff size={20} />
           </button>
@@ -330,7 +383,7 @@ export default function PatientApp() {
             </p>
             <div className="mt-5 aspect-video overflow-hidden rounded-xl border border-line bg-bg">
               {local ? (
-                camOn ? <VideoEl stream={local} muted mirrored /> : <div className="flex h-full items-center justify-center text-faint"><VideoOff /></div>
+                camOn ? <VideoEl key={facing} stream={local} muted mirrored={facing === "user"} /> : <div className="flex h-full items-center justify-center text-faint"><VideoOff /></div>
               ) : (
                 <div className="flex h-full items-center justify-center">
                   <Button variant="subtle" onClick={prepareMedia}><Video size={16} /> Kamera ve mikrofonu aç</Button>
@@ -341,6 +394,7 @@ export default function PatientApp() {
               <div className="mt-3 flex justify-center gap-3">
                 <Round on={micOn} onClick={() => toggle("audio")} icon={micOn ? Mic : MicOff} label="Mikrofon" small />
                 <Round on={camOn} onClick={() => toggle("video")} icon={camOn ? Video : VideoOff} label="Kamera" small />
+                {canFlip && <Round on={!flipping} onClick={flipCamera} icon={SwitchCamera} label="Kamerayı çevir" small />}
               </div>
             )}
             {error && <p className="mt-3 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
