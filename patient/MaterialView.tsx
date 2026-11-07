@@ -6,6 +6,7 @@ import { Download, ExternalLink, FileText, Quote, X } from "lucide-react";
 import type { ChannelMessage } from "../src/lib/rtc";
 import { fmtBytes, fromBase64, isPdf, isSafeImage, MAX_FILE_SHARE_BYTES } from "../src/lib/share";
 import { Button } from "../src/components/ui";
+import { saveFile } from "./saveFile";
 
 type Show = Extract<ChannelMessage, { type: "material_show" }>;
 
@@ -101,6 +102,12 @@ function safeName(title: string, mime: string): string {
 }
 
 export default function MaterialView({ item, onClose }: { item: IncomingMaterial; onClose: () => void }) {
+  // Görüşme sayfasından ayrılmadan kaydet (bkz. saveFile).
+  const save = async () => {
+    if (!item.url) return;
+    const blob = await (await fetch(item.url)).blob();
+    await saveFile(blob, safeName(item.title, item.mime));
+  };
   const closeBtn = (
     <button onClick={onClose} className="rounded-md p-1.5 text-muted hover:bg-card hover:text-ink" aria-label="Kapat">
       <X size={18} />
@@ -124,9 +131,9 @@ export default function MaterialView({ item, onClose }: { item: IncomingMaterial
       <div className="absolute inset-0 z-20 flex flex-col bg-black/95">
         <div className="flex items-center gap-2 px-3 py-2">
           <span className="flex-1 truncate text-sm text-white">{item.title}</span>
-          <a href={item.url} download={safeName(item.title, item.mime)} className="rounded-md p-1.5 text-muted hover:bg-card hover:text-ink" aria-label="İndir">
+          <button onClick={() => void save()} className="rounded-md p-1.5 text-muted hover:bg-card hover:text-ink" aria-label="İndir">
             <Download size={18} />
-          </a>
+          </button>
           {closeBtn}
         </div>
         <img src={item.url} alt={item.title} className="min-h-0 flex-1 object-contain" />
@@ -162,13 +169,9 @@ export default function MaterialView({ item, onClose }: { item: IncomingMaterial
             <ExternalLink size={14} /> Aç
           </Button>
         )}
-        <a
-          href={item.url}
-          download={safeName(item.title, item.mime)}
-          className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-accent/60 px-3.5 py-1.5 text-xs font-medium text-accent hover:bg-accent-soft"
-        >
+        <Button variant="outline" className="flex-1 py-1.5 text-xs" onClick={() => void save()}>
           <Download size={14} /> İndir
-        </a>
+        </Button>
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Check, Copy, Download, FileSignature, X } from "lucide-react";
 import type { ChannelMessage } from "../src/lib/rtc";
 import { Button } from "../src/components/ui";
+import { saveFile } from "./saveFile";
 
 export type HomeworkMessage = Extract<ChannelMessage, { type: "homework" }>;
 
@@ -28,14 +29,8 @@ function asText(h: HomeworkMessage): string {
 
 function download(h: HomeworkMessage) {
   const blob = new Blob([asText(h)], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `odev-${h.title.toLocaleLowerCase("tr-TR").replace(/[^a-z0-9çğıöşü]+/g, "-").replace(/^-|-$/g, "") || "mindcare"}.txt`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const name = `odev-${h.title.toLocaleLowerCase("tr-TR").replace(/[^a-z0-9çğıöşü]+/g, "-").replace(/^-|-$/g, "") || "mindcare"}.txt`;
+  void saveFile(blob, name);
 }
 
 export default function HomeworkView({ items, onClose }: { items: HomeworkMessage[]; onClose: () => void }) {
