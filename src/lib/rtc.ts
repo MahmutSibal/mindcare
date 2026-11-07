@@ -12,7 +12,7 @@
 //      danışan answer döner → ICE adayları karşılıklı iletilir.
 //   5. Görüşme bitince terapist `end_call_room` çağırır; kanal erişimi kapanır.
 
-import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { DEFAULT_STUN, SUPABASE_KEY, SUPABASE_URL } from "./config";
 import type { Answers, TestDefinition } from "./tests";
 
@@ -133,13 +133,51 @@ export type ChannelMessage =
   // Danışan → terapist: materyal eksiksiz ulaştı ve gösteriliyor.
   | { type: "material_received"; id: string };
 
-type Signal =
+export type Signal =
   | { kind: "hello" }
   | { kind: "config"; iceServers: RTCIceServer[] }
-  | { kind: "offer"; sdp: RTCSessionDescriptionInit }
+  // `restart`: mevcut bağlantıda yeni ağ yolu arama (ICE restart); danışan bağlantıyı yıkmadan yanıtlar.
+  | { kind: "offer"; sdp: RTCSessionDescriptionInit; restart?: boolean }
   | { kind: "answer"; sdp: RTCSessionDescriptionInit }
   | { kind: "ice"; candidate: RTCIceCandidateInit }
   | { kind: "bye" };
+
+/** Sinyalleşme taşıyıcısı. Canlıda Supabase Realtime; testlerde aynı sayfa içi bir köprü. */
+export interface SignalTransport {
+  send(s: Signal): void;
+  close(): Promise<void>;
+}
+export type TransportFactory = (room: string, onSignal: (s: Signal) => void) => Promise<SignalTransport>;
+
+/** Supabase Realtime özel kanalı üzerinden sinyalleşme (varsayılan). */
+export const supabaseTransport: TransportFactory = async (room, onSignal) => {
+  await ensureSignedIn();
+  const ch = supabase().channel(`room:${room}`, {
+    config: { private: true, broadcast: { self: false, ack: true } },
+  });
+  ch.on("broadcast", { event: "signal" }, ({ payload }) => onSignal(payload as Signal));
+  await new Promise<void>((resolve, reject) => {
+    ch.subscribe((status, err) => {
+      if (status === "SUBSCRIBED") resolve();
+      else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        reject(new Error(`Sinyalleşme kanalına bağlanılamadı${err ? `: ${err.message}` : ""}`));
+      }
+    });
+  });
+  return {
+    send: (s) => void ch.send({ type: "broadcast", event: "signal", payload: s }),
+    close: async () => {
+      await supabase().removeChannel(ch);
+    },
+  };
+};
+
+/** Kopma bu kadar sürerse terapist tarafı yeni ağ yolu arar (ICE restart). */
+const RESTART_AFTER_MS = 3000;
+/** Yeni ağ yolu araması bu aralıkla tekrarlanır. */
+const RESTART_RETRY_MS = 8000;
+/** Bağlantı bu kadar süre dönmezse danışan bağlantının baştan kurulmasını ister. */
+const GUEST_REBUILD_AFTER_MS = 15000;
 
 export interface TurnConfig {
   url: string;
@@ -160,11 +198,14 @@ export function buildIceServers(turn?: TurnConfig | null): RTCIceServer[] {
 }
 
 export class Call {
-  private channel: RealtimeChannel | null = null;
+  private transport: SignalTransport | null = null;
   private pc: RTCPeerConnection | null = null;
   private dc: RTCDataChannel | null = null;
   private pendingIce: RTCIceCandidateInit[] = [];
   private statsTimer: ReturnType<typeof setInterval> | null = null;
+  private recoveryTimer: ReturnType<typeof setTimeout> | null = null;
+  private rebuildTimer: ReturnType<typeof setTimeout> | null = null;
+  private videoProfile: "camera" | "screen" = "camera";
   private lastLoss = { lost: 0, received: 0 };
   private iceServers: RTCIceServer[];
   private closed = false;
@@ -175,27 +216,25 @@ export class Call {
     private localStream: MediaStream,
     private h: CallHandlers,
     iceServers?: RTCIceServer[],
+    private transportFactory: TransportFactory = supabaseTransport,
   ) {
     this.iceServers = iceServers ?? buildIceServers();
   }
 
   async start(): Promise<void> {
-    await ensureSignedIn();
     this.h.onState(this.role === "host" ? "waiting" : "connecting");
-    const ch = supabase().channel(`room:${this.room}`, {
-      config: { private: true, broadcast: { self: false, ack: true } },
-    });
-    ch.on("broadcast", { event: "signal" }, ({ payload }) => this.onSignal(payload as Signal));
-    await new Promise<void>((resolve, reject) => {
-      ch.subscribe((status, err) => {
-        if (status === "SUBSCRIBED") resolve();
-        else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          reject(new Error(`Sinyalleşme kanalına bağlanılamadı${err ? `: ${err.message}` : ""}`));
-        }
-      });
-    });
-    this.channel = ch;
+    this.transport = await this.transportFactory(this.room, (s) => this.onSignal(s));
     if (this.role === "guest") this.send({ kind: "hello" });
+  }
+
+  /** Teşhis ve test için: bağlantının o anki durumu. */
+  get connectionState(): RTCPeerConnectionState | "none" {
+    return this.pc?.connectionState ?? "none";
+  }
+
+  /** Test için: terapist tarafında yeni ağ yolu aramasını hemen başlatır. */
+  async forceIceRestart(): Promise<void> {
+    await this.restartIce();
   }
 
   /** Kamera/mikrofon akışı değiştiğinde (ör. kamera kapatılıp açıldığında) iz güncellenir. */
@@ -209,6 +248,7 @@ export class Call {
    * korunur ve bit hızı yükseltilir (kare hızı düşebilir); kamerada denge tercih edilir.
    */
   async setVideoProfile(profile: "camera" | "screen"): Promise<void> {
+    this.videoProfile = profile;
     const sender = this.pc?.getSenders().find((s) => s.track?.kind === "video");
     if (!sender) return;
     const p = sender.getParameters();
@@ -256,16 +296,86 @@ export class Call {
     this.closed = true;
     this.send({ kind: "bye" });
     this.teardownPeer();
-    if (this.channel) await supabase().removeChannel(this.channel);
-    this.channel = null;
-    if (this.role === "host") await endRoom(this.room).catch(() => {});
+    await this.transport?.close();
+    this.transport = null;
+    if (this.role === "host" && this.transportFactory === supabaseTransport) await endRoom(this.room).catch(() => {});
     this.h.onState("ended");
   }
 
   // ── iç işlemler ──
 
   private send(s: Signal) {
-    this.channel?.send({ type: "broadcast", event: "signal", payload: s });
+    this.transport?.send(s);
+  }
+
+  private clearRecovery() {
+    if (this.recoveryTimer) clearTimeout(this.recoveryTimer);
+    if (this.rebuildTimer) clearTimeout(this.rebuildTimer);
+    this.recoveryTimer = null;
+    this.rebuildTimer = null;
+  }
+
+  /**
+   * Terapist tarafı: mevcut bağlantıyı koruyarak yeni ağ yolu arar (ICE restart). Veri kanalı ve
+   * medya izleri yerinde kalır; danışan aynı bağlantı üzerinde yanıtlar. Bağlantı dönene kadar
+   * belirli aralıklarla tekrarlanır.
+   */
+  private async restartIce() {
+    const pc = this.pc;
+    if (this.role !== "host" || !pc || this.closed) return;
+    if (pc.signalingState === "stable") {
+      await pc.setLocalDescription(await pc.createOffer({ iceRestart: true }));
+      this.send({ kind: "offer", sdp: pc.localDescription!.toJSON(), restart: true });
+    }
+    if (this.recoveryTimer) clearTimeout(this.recoveryTimer);
+    this.recoveryTimer = setTimeout(() => {
+      if (this.pc === pc && pc.connectionState !== "connected") this.restartIce().catch(() => {});
+    }, RESTART_RETRY_MS);
+  }
+
+  /** Bağlantı kurulunca gönderim önceliklerini ayarlar: ses önce, görüntü profiline göre. */
+  private async applySenderPreferences() {
+    const audio = this.pc?.getSenders().find((s) => s.track?.kind === "audio");
+    if (audio) {
+      const p = audio.getParameters();
+      const enc = p.encodings?.[0];
+      if (enc) {
+        // Bant daraldığında konuşma görüntüden önce gelsin.
+        enc.priority = "high";
+        enc.networkPriority = "high";
+        await audio.setParameters(p).catch(() => {});
+      }
+    }
+    await this.setVideoProfile(this.videoProfile);
+  }
+
+  private onConnectionState(pc: RTCPeerConnection) {
+    if (this.pc !== pc || this.closed) return;
+    const st = pc.connectionState;
+    if (st === "connected") {
+      this.clearRecovery();
+      this.h.onState("connected");
+      this.applySenderPreferences().catch(() => {});
+      return;
+    }
+    if (st !== "disconnected" && st !== "failed") return;
+    this.h.onState("reconnecting");
+    if (this.role === "host") {
+      // Kısa kopmalar kendiliğinden düzelir; düzelmezse yeni ağ yolu ara.
+      if (st === "failed") this.restartIce().catch(() => {});
+      else if (!this.recoveryTimer) {
+        this.recoveryTimer = setTimeout(() => {
+          this.recoveryTimer = null;
+          if (this.pc === pc && pc.connectionState !== "connected") this.restartIce().catch(() => {});
+        }, RESTART_AFTER_MS);
+      }
+    } else if (!this.rebuildTimer) {
+      // Danışan: terapistin yeni yol araması işe yaramazsa bağlantının baştan kurulmasını iste.
+      this.rebuildTimer = setTimeout(() => {
+        this.rebuildTimer = null;
+        if (this.pc === pc && pc.connectionState !== "connected") this.send({ kind: "hello" });
+      }, GUEST_REBUILD_AFTER_MS);
+    }
   }
 
   private async onSignal(s: Signal) {
@@ -291,6 +401,14 @@ export class Call {
           break;
         case "offer":
           if (this.role !== "guest") return;
+          if (s.restart && this.pc && this.pc.signalingState === "stable") {
+            // Yeni ağ yolu: bağlantıyı yıkmadan yanıtla (veri kanalı ve medya korunur).
+            await this.pc.setRemoteDescription(s.sdp);
+            await this.flushIce();
+            await this.pc.setLocalDescription(await this.pc.createAnswer());
+            this.send({ kind: "answer", sdp: this.pc.localDescription!.toJSON() });
+            break;
+          }
           this.teardownPeer();
           await this.createPeer();
           await this.pc!.setRemoteDescription(s.sdp);
@@ -337,15 +455,7 @@ export class Call {
       this.dc = e.channel;
       this.wireDataChannel(e.channel);
     };
-    pc.onconnectionstatechange = () => {
-      const st = pc.connectionState;
-      if (st === "connected") this.h.onState("connected");
-      else if (st === "disconnected") this.h.onState("reconnecting");
-      else if (st === "failed") {
-        if (this.role === "host") pc.restartIce();
-        this.h.onState("reconnecting");
-      }
-    };
+    pc.onconnectionstatechange = () => this.onConnectionState(pc);
     this.lastLoss = { lost: 0, received: 0 };
     this.statsTimer = setInterval(() => this.collectStats(), 2000);
   }
@@ -361,6 +471,7 @@ export class Call {
   }
 
   private teardownPeer() {
+    this.clearRecovery();
     if (this.statsTimer) clearInterval(this.statsTimer);
     this.statsTimer = null;
     this.dc?.close();
@@ -405,8 +516,9 @@ export class Call {
 export async function getLocalMedia(): Promise<MediaStream> {
   try {
     return await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: { echoCancellation: true, noiseSuppression: true },
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } },
+      // Konuşma netliği için yankı/gürültü bastırma ve otomatik ses seviyesi; tek kanal yeterli.
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
     });
   } catch (e: any) {
     if (e?.name === "NotAllowedError") throw new Error("Kamera ve mikrofon izni reddedildi.");

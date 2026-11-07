@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FileSignature, FileText, HeartHandshake, Lock, Mic, MicOff, PhoneOff, Video, VideoOff } from "lucide-react";
-import { Call, type CallState, type ChannelMessage, getLocalMedia, joinRoom, type JoinResult } from "../src/lib/rtc";
+import { Call, type CallState, type CallStats, type ChannelMessage, getLocalMedia, joinRoom, type JoinResult } from "../src/lib/rtc";
 import { Button, cx } from "../src/components/ui";
 import TestForm from "./TestForm";
 import HomeworkView, { type HomeworkMessage } from "./HomeworkView";
@@ -62,6 +62,7 @@ export default function PatientApp() {
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
   const [notice, setNotice] = useState<ChannelMessage | null>(null);
+  const [stats, setStats] = useState<CallStats | null>(null);
   const [test, setTest] = useState<Extract<ChannelMessage, { type: "test" }> | null>(null);
   const [homework, setHomework] = useState<HomeworkMessage[]>([]);
   const [homeworkOpen, setHomeworkOpen] = useState(false);
@@ -128,6 +129,7 @@ export default function PatientApp() {
           }
         },
         onRemoteStream: setRemote,
+        onStats: setStats,
         onMessage: (m) => {
           if (material.handle(m)) return;
           if (m.type === "test") {
@@ -191,9 +193,7 @@ export default function PatientApp() {
           <div className="absolute bottom-4 right-4 aspect-[3/4] w-28 overflow-hidden rounded-xl border border-line bg-card shadow-xl sm:aspect-[4/3] sm:w-48">
             {camOn ? <VideoEl stream={local} muted mirrored /> : <div className="flex h-full items-center justify-center text-faint"><VideoOff /></div>}
           </div>
-          <div className="absolute left-4 top-4 flex items-center gap-2 rounded-lg bg-black/50 px-3 py-1.5 text-xs text-white backdrop-blur">
-            <Lock size={12} /> {state === "connected" ? "Şifreli görüşme" : "Bağlanıyor"}
-          </div>
+          <ConnectionBadge state={state} stats={stats} />
           {notice?.type === "material" && (
             <div className="absolute left-1/2 top-4 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-line bg-panel px-4 py-3 text-sm shadow-xl">
               <FileText size={18} className="text-accent" /> Terapistiniz bir materyal paylaştı: <b>{notice.title}</b>
@@ -276,6 +276,22 @@ export default function PatientApp() {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Danışanın kendi bağlantı durumu: zayıf bağlantı ve yeniden bağlanma açıkça gösterilir. */
+function ConnectionBadge({ state, stats }: { state: CallState; stats: CallStats | null }) {
+  const weak = state === "connected" && stats !== null &&
+    ((stats.packetLossPct ?? 0) > 8 || (stats.rttMs ?? 0) > 400);
+  const [text, tone] =
+    state === "reconnecting" ? ["Bağlantı koptu, yeniden bağlanılıyor…", "bg-warn/90 text-black"]
+    : state !== "connected" ? ["Bağlanıyor", "bg-black/50 text-white"]
+    : weak ? ["Bağlantınız zayıf; görüntü donabilir", "bg-warn/90 text-black"]
+    : ["Şifreli görüşme", "bg-black/50 text-white"];
+  return (
+    <div className={cx("absolute left-4 top-4 flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs backdrop-blur", tone)} role="status">
+      <Lock size={12} /> {text}
     </div>
   );
 }
