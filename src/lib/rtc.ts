@@ -93,10 +93,23 @@ export async function endRoom(room: string): Promise<void> {
 
 export type CallState = "idle" | "waiting" | "connecting" | "connected" | "reconnecting" | "ended" | "failed";
 
+export interface VideoStats {
+  width: number | null;
+  height: number | null;
+  fps: number | null;
+  kbps: number | null;
+}
+
 export interface CallStats {
   route: "p2p" | "turn" | "unknown";
   rttMs: number | null;
   packetLossPct: number | null;
+  /** Gönderilen görüntü ve tarayıcının kaliteyi neden kıstığı ("bandwidth", "cpu", "none"). */
+  outgoing?: VideoStats & { limitation: string | null; codec: string | null };
+  /** Karşıdan gelen görüntü. */
+  incoming?: VideoStats;
+  /** Tarayıcının tahmini giden bant genişliği. */
+  availableKbps?: number | null;
 }
 
 export interface CallHandlers {
@@ -207,6 +220,7 @@ export class Call {
   private rebuildTimer: ReturnType<typeof setTimeout> | null = null;
   private videoProfile: "camera" | "screen" = "camera";
   private lastLoss = { lost: 0, received: 0 };
+  private lastBytes = { sent: 0, received: 0, at: 0 };
   private iceServers: RTCIceServer[];
   private closed = false;
 
@@ -457,6 +471,7 @@ export class Call {
     };
     pc.onconnectionstatechange = () => this.onConnectionState(pc);
     this.lastLoss = { lost: 0, received: 0 };
+    this.lastBytes = { sent: 0, received: 0, at: 0 };
     this.statsTimer = setInterval(() => this.collectStats(), 2000);
   }
 
@@ -487,8 +502,11 @@ export class Call {
     const report = await this.pc.getStats();
     let route: CallStats["route"] = "unknown";
     let rtt: number | null = null;
+    let available: number | null = null;
     let lost = 0;
     let received = 0;
+    let out: any = null;
+    let inc: any = null;
     const byId = new Map<string, any>();
     report.forEach((r: any) => byId.set(r.id, r));
     report.forEach((r: any) => {
@@ -497,17 +515,50 @@ export class Call {
         const remote = byId.get(r.remoteCandidateId);
         route = local?.candidateType === "relay" || remote?.candidateType === "relay" ? "turn" : "p2p";
         if (typeof r.currentRoundTripTime === "number") rtt = Math.round(r.currentRoundTripTime * 1000);
+        if (typeof r.availableOutgoingBitrate === "number") available = Math.round(r.availableOutgoingBitrate / 1000);
       }
       if (r.type === "inbound-rtp" && !r.isRemote) {
         lost += r.packetsLost ?? 0;
         received += r.packetsReceived ?? 0;
+        if (r.kind === "video") inc = r;
       }
+      if (r.type === "outbound-rtp" && r.kind === "video" && (!out || (r.frameWidth ?? 0) > (out.frameWidth ?? 0))) out = r;
     });
     const dLost = lost - this.lastLoss.lost;
     const dRecv = received - this.lastLoss.received;
     this.lastLoss = { lost, received };
     const loss = dLost + dRecv > 0 ? Math.max(0, (dLost / (dLost + dRecv)) * 100) : null;
-    this.h.onStats({ route, rttMs: rtt, packetLossPct: loss });
+
+    // Bit hızı: iki ölçüm arasındaki bayt farkından.
+    const now = performance.now();
+    const sent = out?.bytesSent ?? 0;
+    const recv = inc?.bytesReceived ?? 0;
+    const dt = this.lastBytes.at ? (now - this.lastBytes.at) / 1000 : 0;
+    const kbps = (d: number) => (dt > 0 && d >= 0 ? Math.round((d * 8) / 1000 / dt) : null);
+    const outKbps = kbps(sent - this.lastBytes.sent);
+    const inKbps = kbps(recv - this.lastBytes.received);
+    this.lastBytes = { sent, received: recv, at: now };
+
+    this.h.onStats({
+      route,
+      rttMs: rtt,
+      packetLossPct: loss,
+      availableKbps: available,
+      outgoing: out ? {
+        width: out.frameWidth ?? null,
+        height: out.frameHeight ?? null,
+        fps: out.framesPerSecond != null ? Math.round(out.framesPerSecond) : null,
+        kbps: outKbps,
+        limitation: out.qualityLimitationReason ?? null,
+        codec: byId.get(out.codecId)?.mimeType?.replace("video/", "") ?? null,
+      } : undefined,
+      incoming: inc ? {
+        width: inc.frameWidth ?? null,
+        height: inc.frameHeight ?? null,
+        fps: inc.framesPerSecond != null ? Math.round(inc.framesPerSecond) : null,
+        kbps: inKbps,
+      } : undefined,
+    });
   }
 }
 

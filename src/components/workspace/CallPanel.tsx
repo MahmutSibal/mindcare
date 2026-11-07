@@ -3,6 +3,7 @@ import {
   Check, Copy, Info, Lock, Mic, MicOff, MonitorUp, PhoneOff, Signal, Video, VideoOff, Wifi, WifiOff, Waves,
 } from "lucide-react";
 import type { Patient } from "../../lib/api";
+import type { CallStats, VideoStats } from "../../lib/rtc";
 import { initials } from "../../lib/format";
 import { useActiveSession } from "../../lib/session";
 import { Avatar, Button, cx, Modal } from "../ui";
@@ -167,6 +168,42 @@ function Control({ on, onClick, icon: Icon, label, disabled, highlight }: {
 
 // ───────────────────────────── Bağlantı durumu ─────────────────────────────
 
+/** Tarayıcı giden görüntü kalitesini kısıyorsa nedeni; kısmıyorsa boş. */
+function limitationText(reason: string | null | undefined): string | null {
+  if (reason === "bandwidth") return "Görüntü kısıldı: bağlantı hızı yetersiz";
+  if (reason === "cpu") return "Görüntü kısıldı: bilgisayar yetişemiyor";
+  return null;
+}
+
+function QualityTable({ s }: { s: CallStats }) {
+  const res = (v?: VideoStats) => (v?.width && v.height ? `${v.width}×${v.height}` : "—");
+  const num = (n: number | null | undefined, unit: string) => (n != null ? `${n} ${unit}` : "—");
+  const rows: [string, string, string][] = [
+    ["Çözünürlük", res(s.outgoing), res(s.incoming)],
+    ["Kare hızı", num(s.outgoing?.fps, "fps"), num(s.incoming?.fps, "fps")],
+    ["Bit hızı", num(s.outgoing?.kbps, "kbps"), num(s.incoming?.kbps, "kbps")],
+  ];
+  return (
+    <div className="mb-5">
+      <table className="w-full text-sm">
+        <thead className="text-left text-xs text-faint">
+          <tr><th className="pb-2 font-normal">Görüntü</th><th className="pb-2 font-normal">Giden (siz)</th><th className="pb-2 font-normal">Gelen (danışan)</th></tr>
+        </thead>
+        <tbody className="divide-y divide-line">
+          {rows.map(([k, a, b]) => (
+            <tr key={k}><td className="py-1.5 text-muted">{k}</td><td className="py-1.5 tabular-nums">{a}</td><td className="py-1.5 tabular-nums">{b}</td></tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="mt-3 text-xs text-muted">
+        Yol: {s.route === "turn" ? "TURN aktarması" : s.route === "p2p" ? "doğrudan (P2P)" : "—"} • Tahmini giden bant:{" "}
+        {num(s.availableKbps, "kbps")} • Kodek: {s.outgoing?.codec ?? "—"} • Kısıtlama:{" "}
+        {s.outgoing?.limitation === "none" ? "yok" : limitationText(s.outgoing?.limitation) ?? (s.outgoing?.limitation || "—")}
+      </p>
+    </div>
+  );
+}
+
 function ConnectionStatusHeader({ call }: { call: CallApi }) {
   const [info, setInfo] = useState(false);
   const st = call.state;
@@ -208,6 +245,11 @@ function ConnectionStatusHeader({ call }: { call: CallApi }) {
             <Waves size={15} className="text-muted" />
             Paket Kaybı: %{s?.packetLossPct != null ? s.packetLossPct.toFixed(1).replace(".", ",") : "—"}
           </span>
+          {limitationText(s?.outgoing?.limitation) && (
+            <button onClick={() => setInfo(true)} className="rounded-lg border border-warn/40 bg-warn/10 px-2 py-1 text-xs text-warn" title="Ayrıntılar">
+              {limitationText(s?.outgoing?.limitation)}
+            </button>
+          )}
         </>
       )}
       <button onClick={() => setInfo(true)} className="ml-auto rounded-full p-1 text-muted hover:bg-card hover:text-ink" title="Bağlantı bilgisi">
@@ -215,6 +257,7 @@ function ConnectionStatusHeader({ call }: { call: CallApi }) {
       </button>
       {info && (
         <Modal title="Bağlantı ve gizlilik" onClose={() => setInfo(false)}>
+          {st === "connected" && s && <QualityTable s={s} />}
           <ul className="space-y-3 text-sm text-muted">
             <li>Ses ve görüntü WebRTC ile DTLS-SRTP şifrelenerek aktarılır.</li>
             <li>Uygun ağlarda medya doğrudan iki cihaz arasında (P2P) akar. Doğrudan bağlantı kurulamazsa TURN sunucusu paketleri iletir; şifreli içeriği okuyamaz.</li>
