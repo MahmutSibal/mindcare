@@ -567,19 +567,39 @@ export class Call {
 
 // ───────────────────────────── Medya ─────────────────────────────
 
+type VoiceConstraints = MediaTrackConstraints & { voiceIsolation?: boolean };
+
+/**
+ * Mikrofon ayarları: yankı/gürültü bastırma ve otomatik ses seviyesi; destekleyen cihazlarda
+ * ayrıca ses yalıtımı (klavye ve arka plan seslerini konuşmadan ayırır).
+ */
+function voiceConstraints(): VoiceConstraints {
+  const audio: VoiceConstraints = { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 };
+  const supported = navigator.mediaDevices.getSupportedConstraints() as Record<string, boolean | undefined>;
+  if (supported.voiceIsolation) audio.voiceIsolation = true;
+  return audio;
+}
+
+/** Mikrofonda o an etkin olan ses işleme (bilgi penceresi için). */
+export function audioProcessing(stream: MediaStream | null): { noiseSuppression: boolean; echoCancellation: boolean; voiceIsolation: boolean } | null {
+  const track = stream?.getAudioTracks()[0];
+  if (!track) return null;
+  const s = track.getSettings() as MediaTrackSettings & { voiceIsolation?: boolean };
+  return { noiseSuppression: !!s.noiseSuppression, echoCancellation: !!s.echoCancellation, voiceIsolation: !!s.voiceIsolation };
+}
+
 export async function getLocalMedia(): Promise<MediaStream> {
   try {
     return await navigator.mediaDevices.getUserMedia({
       video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } },
-      // Konuşma netliği için yankı/gürültü bastırma ve otomatik ses seviyesi; tek kanal yeterli.
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
+      audio: voiceConstraints(),
     });
   } catch (e: any) {
     if (e?.name === "NotAllowedError") throw new Error("Kamera ve mikrofon izni reddedildi.");
     if (e?.name === "NotFoundError") {
       // Kamera yoksa yalnızca ses dene.
       try {
-        return await navigator.mediaDevices.getUserMedia({ audio: true });
+        return await navigator.mediaDevices.getUserMedia({ audio: voiceConstraints() });
       } catch {
         throw new Error("Kamera veya mikrofon bulunamadı.");
       }

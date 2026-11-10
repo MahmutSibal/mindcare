@@ -140,6 +140,29 @@ export function useCall() {
     setVideoShare({ el, stream: new MediaStream([vtrack]), ctx, url, title });
   };
 
+  /**
+   * Yeni davet bağlantısı: danışan geç kaldıysa veya başka cihazdan katılacaksa. Eski oda kapatılır
+   * (eski bağlantı geçersiz olur), kamera/mikrofon ve seans süresi olduğu gibi kalır.
+   */
+  const [renewing, setRenewing] = useState(false);
+  const renewInvite = useCallback(async () => {
+    if (renewing) return;
+    setRenewing(true);
+    try {
+      stopVideo();
+      screen?.getTracks().forEach((t) => t.stop());
+      setScreen(null);
+      const old = callRef.current;
+      callRef.current = null;
+      await old?.hangup();
+      setRemote(null);
+      setStats(null);
+      await start();
+    } finally {
+      setRenewing(false);
+    }
+  }, [renewing, screen, start, stopVideo]);
+
   const hangup = useCallback(async () => {
     stopVideo();
     const call = callRef.current;
@@ -226,7 +249,7 @@ export function useCall() {
     local, remote, state, stats, invite, micOn, camOn, screen, error, turnWarning, videoShare, videoPaused,
     inCall: callRef.current !== null || (state !== "idle" && state !== "ended" && state !== "failed"),
     start, hangup, toggleMic, toggleCam, shareScreen, stopScreen, sendMessage, sendBuffered, onMessage, ensureLocal,
-    showVideo, stopVideo,
+    showVideo, stopVideo, renewInvite, renewing,
     clearError: () => setError(null),
   };
 }

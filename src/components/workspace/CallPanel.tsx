@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Check, Copy, Info, Lock, Mic, MicOff, MonitorUp, PhoneOff, Signal, Video, VideoOff, Wifi, WifiOff, Waves,
+  Check, Copy, Info, Lock, Mic, MicOff, MonitorUp, PhoneOff, RefreshCw, Signal, Video, VideoOff, Wifi, WifiOff, Waves,
 } from "lucide-react";
 import type { Patient } from "../../lib/api";
-import type { CallStats, VideoStats } from "../../lib/rtc";
+import { audioProcessing, type CallStats, type VideoStats } from "../../lib/rtc";
 import { initials } from "../../lib/format";
 import { useActiveSession } from "../../lib/session";
 import { Avatar, Button, cx, Modal } from "../ui";
@@ -175,6 +175,19 @@ function limitationText(reason: string | null | undefined): string | null {
   return null;
 }
 
+/** Mikrofonda etkin ses işleme: gürültü bastırma ve (destekleniyorsa) ses yalıtımı. */
+function MicProcessing({ stream }: { stream: MediaStream | null }) {
+  const a = audioProcessing(stream);
+  if (!a) return null;
+  const on = (v: boolean) => (v ? "açık" : "kapalı");
+  return (
+    <p className="mb-4 rounded-lg bg-card/60 px-3 py-2 text-xs text-muted">
+      Mikrofon: gürültü bastırma {on(a.noiseSuppression)} • yankı önleme {on(a.echoCancellation)} • ses yalıtımı{" "}
+      {a.voiceIsolation ? "açık" : "bu cihazda desteklenmiyor"}. Klavye sesi için kulaklıklı mikrofon en iyi sonucu verir.
+    </p>
+  );
+}
+
 function QualityTable({ s }: { s: CallStats }) {
   const res = (v?: VideoStats) => (v?.width && v.height ? `${v.width}×${v.height}` : "—");
   const num = (n: number | null | undefined, unit: string) => (n != null ? `${n} ${unit}` : "—");
@@ -258,6 +271,7 @@ function ConnectionStatusHeader({ call }: { call: CallApi }) {
       {info && (
         <Modal title="Bağlantı ve gizlilik" onClose={() => setInfo(false)}>
           {st === "connected" && s && <QualityTable s={s} />}
+          <MicProcessing stream={call.local} />
           <ul className="space-y-3 text-sm text-muted">
             <li>Ses ve görüntü WebRTC ile DTLS-SRTP şifrelenerek aktarılır.</li>
             <li>Uygun ağlarda medya doğrudan iki cihaz arasında (P2P) akar. Doğrudan bağlantı kurulamazsa TURN sunucusu paketleri iletir; şifreli içeriği okuyamaz.</li>
@@ -272,13 +286,20 @@ function ConnectionStatusHeader({ call }: { call: CallApi }) {
 
 function WaitingForPatient({ call, name }: { call: CallApi; name: string }) {
   const [copied, setCopied] = useState(false);
-  if (!call.invite) return <p className="text-sm text-muted">Hazırlanıyor…</p>;
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 15_000);
+    return () => clearInterval(t);
+  }, []);
+  if (!call.invite || call.renewing) return <p className="text-sm text-muted">Hazırlanıyor…</p>;
   const copy = async () => {
     await navigator.clipboard.writeText(call.invite!.link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
   const exp = call.invite.expiresAt.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
+  const minutesLeft = Math.ceil((call.invite.expiresAt.getTime() - now) / 60_000);
+  const expired = minutesLeft <= 0 && call.state === "waiting";
   return (
     <div className="w-full max-w-lg space-y-3">
       <p className="text-sm text-muted">
@@ -290,7 +311,20 @@ function WaitingForPatient({ call, name }: { call: CallApi; name: string }) {
           {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? "Kopyalandı" : "Kopyala"}
         </Button>
       </div>
-      <p className="text-xs text-faint">Tek kullanımlık • {exp}'e kadar geçerli</p>
+      {expired ? (
+        <p className="rounded-lg bg-warn/10 px-3 py-2 text-xs text-warn">
+          Bu bağlantının süresi doldu; danışan artık bununla katılamaz. Yeni bir bağlantı oluşturup gönderin.
+        </p>
+      ) : (
+        <p className="text-xs text-faint">
+          Tek kullanımlık • {exp}'e kadar geçerli{call.state === "waiting" && minutesLeft <= 10 ? ` (${minutesLeft} dk kaldı)` : ""}
+        </p>
+      )}
+      {call.state === "waiting" && (
+        <Button variant={expired ? "primary" : "ghost"} className="px-3 py-1.5 text-xs" onClick={call.renewInvite}>
+          <RefreshCw size={14} /> Yeni bağlantı oluştur
+        </Button>
+      )}
     </div>
   );
 }
