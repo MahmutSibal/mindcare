@@ -195,6 +195,8 @@ function QualityTable({ s }: { s: CallStats }) {
     ["Çözünürlük", res(s.outgoing), res(s.incoming)],
     ["Kare hızı", num(s.outgoing?.fps, "fps"), num(s.incoming?.fps, "fps")],
     ["Bit hızı", num(s.outgoing?.kbps, "kbps"), num(s.incoming?.kbps, "kbps")],
+    ["Tampon gecikmesi", "—", `görüntü ${num(s.incoming?.bufferMs, "ms")} • ses ${num(s.audioBufferMs, "ms")}`],
+    ["Atlanan kare", "—", s.incoming?.dropped != null ? String(s.incoming.dropped) : "—"],
   ];
   return (
     <div className="mb-5">

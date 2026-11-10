@@ -107,7 +107,9 @@ export interface CallStats {
   /** Gönderilen görüntü ve tarayıcının kaliteyi neden kıstığı ("bandwidth", "cpu", "none"). */
   outgoing?: VideoStats & { limitation: string | null; codec: string | null };
   /** Karşıdan gelen görüntü. */
-  incoming?: VideoStats;
+  incoming?: VideoStats & { bufferMs: number | null; dropped: number | null };
+  /** Gelen sesin oynatma tamponu gecikmesi. */
+  audioBufferMs?: number | null;
   /** Tarayıcının tahmini giden bant genişliği. */
   availableKbps?: number | null;
 }
@@ -213,26 +215,6 @@ export function buildIceServers(turn?: TurnConfig | null): RTCIceServer[] {
   return servers;
 }
 
-/**
- * Görüntüde H.264'ü öne alır: bilgisayar ve telefonlarda donanım hızlandırmalı olduğu için
- * işlemci yükü düşer ve "işlemci yetişemiyor" kaynaklı kalite düşüşü azalır. H.264 yoksa
- * tarayıcının kendi sırası (VP8 vb.) geçerli kalır.
- */
-function preferHardwareCodec(pc: RTCPeerConnection) {
-  const codecs = RTCRtpReceiver.getCapabilities?.("video")?.codecs;
-  if (!codecs?.some((c) => /h264/i.test(c.mimeType))) return;
-  const rank = (c: { mimeType: string }) => (/h264/i.test(c.mimeType) ? 0 : 1);
-  const ordered = [...codecs].sort((a, b) => rank(a) - rank(b));
-  for (const t of pc.getTransceivers()) {
-    if (t.sender.track?.kind !== "video") continue;
-    try {
-      t.setCodecPreferences(ordered);
-    } catch {
-      /* desteklenmiyorsa tarayıcının sırası kalır */
-    }
-  }
-}
-
 export class Call {
   private transport: SignalTransport | null = null;
   private pc: RTCPeerConnection | null = null;
@@ -294,7 +276,8 @@ export class Call {
     // Tavan değerler: bağlantı elvermezse tarayıcı kendiliğinden daha düşüğe iner.
     enc.maxBitrate = profile === "screen" ? 3_000_000 : 2_500_000;
     enc.maxFramerate = profile === "screen" ? 15 : 30;
-    p.degradationPreference = profile === "screen" ? "maintain-resolution" : "balanced";
+    // Kamera: bağlantı daralınca kare hızı korunur, çözünürlük düşer (takılma yerine yumuşak görüntü).
+    p.degradationPreference = profile === "screen" ? "maintain-resolution" : "maintain-framerate";
     await sender.setParameters(p).catch(() => {});
   }
 
@@ -488,9 +471,19 @@ export class Call {
     const pc = new RTCPeerConnection({ iceServers: this.iceServers, bundlePolicy: "max-bundle" });
     this.pc = pc;
     for (const t of this.localStream.getTracks()) pc.addTrack(t, this.localStream);
-    preferHardwareCodec(pc);
+    // H.264 zorlaması kaldırıldı: dar bağlantıda donanım kodlayıcı hedef bit hızını aşıp
+    // ses/görüntüyü geciktirdi (10 Kas 2026 denemesi). Tarayıcının kendi kodek sırası kullanılır.
     pc.onicecandidate = (e) => e.candidate && this.send({ kind: "ice", candidate: e.candidate.toJSON() });
-    pc.ontrack = (e) => this.h.onRemoteStream(e.streams[0] ?? new MediaStream([e.track]));
+    pc.ontrack = (e) => {
+      // Canlı konuşma: oynatma tamponu olabilecek en küçük değerde tutulur (tarayıcı ağdaki
+      // dalgalanmaya göre gerekeni yine ekler); varsayılan, gecikmeyi büyütebiliyor.
+      try {
+        (e.receiver as RTCRtpReceiver & { jitterBufferTarget?: number | null }).jitterBufferTarget = 0;
+      } catch {
+        /* desteklenmiyorsa varsayılan kalır */
+      }
+      this.h.onRemoteStream(e.streams[0] ?? new MediaStream([e.track]));
+    };
     pc.ondatachannel = (e) => {
       this.dc = e.channel;
       this.wireDataChannel(e.channel);
@@ -533,6 +526,10 @@ export class Call {
     let received = 0;
     let out: any = null;
     let inc: any = null;
+    let incAudio: any = null;
+    // Ortalama tampon gecikmesi (ms): toplam gecikme / oynatılan örnek sayısı.
+    const bufferMs = (r: any) =>
+      r?.jitterBufferEmittedCount > 0 ? Math.round((r.jitterBufferDelay / r.jitterBufferEmittedCount) * 1000) : null;
     const byId = new Map<string, any>();
     report.forEach((r: any) => byId.set(r.id, r));
     report.forEach((r: any) => {
@@ -547,6 +544,7 @@ export class Call {
         lost += r.packetsLost ?? 0;
         received += r.packetsReceived ?? 0;
         if (r.kind === "video") inc = r;
+        if (r.kind === "audio") incAudio = r;
       }
       if (r.type === "outbound-rtp" && r.kind === "video" && (!out || (r.frameWidth ?? 0) > (out.frameWidth ?? 0))) out = r;
     });
@@ -583,7 +581,10 @@ export class Call {
         height: inc.frameHeight ?? null,
         fps: inc.framesPerSecond != null ? Math.round(inc.framesPerSecond) : null,
         kbps: inKbps,
+        bufferMs: bufferMs(inc),
+        dropped: inc.framesDropped ?? null,
       } : undefined,
+      audioBufferMs: bufferMs(incAudio),
     });
   }
 }
