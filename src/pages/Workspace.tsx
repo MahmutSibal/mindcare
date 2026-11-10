@@ -8,11 +8,11 @@ import { HomeworkCard, useHomeworkDeliveryReceipts } from "../components/workspa
 import { hideMaterial, showMaterial as shareMaterial, type SharedMaterial } from "../components/workspace/materialShare";
 import { errorText } from "../lib/api";
 import { maxScore, parseAnswers, parseDefinition } from "../lib/tests";
-import { Avatar, Badge, Button, Card, cx, Empty, LinkButton, Modal } from "../components/ui";
+import { Avatar, Button, Card, cx, Empty, LinkButton, Modal } from "../components/ui";
 import PatientForm from "../components/PatientForm";
 import { NoteViewer } from "../components/NotesEditor";
 import CallPanel from "../components/workspace/CallPanel";
-import SessionPanel from "../components/workspace/SessionPanel";
+import SessionPanel, { SessionTimer } from "../components/workspace/SessionPanel";
 import { useCall } from "../components/workspace/useCall";
 import type { Page } from "../App";
 
@@ -115,10 +115,30 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
     return <FirstRun onNavigate={onNavigate} onCreated={onSelectPatient} />;
   }
 
+  const historyTabs: { id: HistoryTab; label: string; count: number; body: React.ReactNode }[] = [
+    { id: "notes", label: "Notlar", count: notes.length, body: <PrivateNotesHistory notes={notes} inTab /> },
+    { id: "tests", label: "Testler", count: results.length, body: <TestResults results={results} inTab /> },
+    {
+      id: "homework",
+      label: "Ödevler",
+      count: homework.length,
+      body: (
+        <HomeworkCard
+          patient={patient}
+          homework={homework}
+          call={call}
+          sessionId={session && session.patient_id === patient?.id ? session.id : null}
+          inTab
+        />
+      ),
+    },
+    { id: "sessions", label: "Seanslar", count: sessions.filter((s) => s.status === "completed").length, body: <SessionHistory sessions={sessions} onAll={() => onNavigate("sessions")} inTab /> },
+  ];
+
   return (
-    <div className="grid h-full grid-cols-[minmax(300px,330px)_minmax(0,1fr)_minmax(330px,370px)] gap-3 p-3">
-      {/* Sol panel — danışan */}
-      <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pr-0.5">
+    <div className="grid h-full grid-cols-[minmax(250px,290px)_minmax(0,1fr)_minmax(290px,330px)] gap-2.5 p-2.5">
+      {/* Sol panel — danışan ve geçmişi */}
+      <div className="flex min-h-0 flex-col gap-2.5">
         <PatientProfileCard
           patient={patient}
           patients={patients}
@@ -126,29 +146,31 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
           locked={call.inCall}
           onChanged={loadPatient}
         />
-        <SessionHistory sessions={sessions} onAll={() => onNavigate("sessions")} />
-        <PrivateNotesHistory notes={notes} />
-        <TestResults results={results} />
-        <HomeworkCard
-          patient={patient}
-          homework={homework}
-          call={call}
-          sessionId={session && session.patient_id === patient?.id ? session.id : null}
-        />
-        <MaterialLibrary
-          materials={materials}
-          onShow={showMaterial}
-          onAll={() => onNavigate("materials")}
-          connected={call.state === "connected"}
-          error={shareError}
-        />
+        <TabbedCard tabs={historyTabs} />
       </div>
 
-      {/* Orta panel — görüntülü görüşme */}
-      <CallPanel call={call} patient={patient} />
+      {/* Orta panel — seans süresi ve görüntülü görüşme */}
+      <div className="flex min-h-0 flex-col gap-2.5">
+        <SessionTimer patient={patient} call={call} />
+        <CallPanel call={call} patient={patient} />
+      </div>
 
-      {/* Sağ panel — seans */}
-      <SessionPanel call={call} patient={patient} shared={shared} onClearShared={clearShared} />
+      {/* Sağ panel — canlı notlar ve seans araçları */}
+      <SessionPanel
+        call={call}
+        patient={patient}
+        shared={shared}
+        onClearShared={clearShared}
+        materials={
+          <MaterialLibrary
+            materials={materials}
+            onShow={showMaterial}
+            onAll={() => onNavigate("materials")}
+            connected={call.state === "connected"}
+            error={shareError}
+          />
+        }
+      />
     </div>
   );
 }
@@ -164,33 +186,34 @@ function PatientProfileCard({ patient, patients, onSelect, locked, onChanged }: 
 }) {
   const [editing, setEditing] = useState(false);
   const [picker, setPicker] = useState(false);
-  if (!patient) return <Card title="Danışan Profili"><Empty text="Danışan seçin" /></Card>;
+  if (!patient) return <Card title="Danışan"><Empty text="Danışan seçin" /></Card>;
   const a = age(patient.birth_date);
   return (
-    <Card
-      title="Danışan Profili"
-      action={
-        <button onClick={() => setEditing(true)} className="rounded-md p-1 text-muted hover:bg-card hover:text-ink" title="Düzenle">
-          <PencilLine size={17} />
-        </button>
-      }
-    >
+    <Card className="shrink-0">
       <div className="relative">
-        <button
-          disabled={locked}
-          onClick={() => setPicker(!picker)}
-          className="flex w-full items-center gap-4 rounded-lg p-1 text-left hover:bg-card disabled:hover:bg-transparent"
-          title={locked ? "Görüşme sürerken danışan değiştirilemez" : "Danışan değiştir"}
-        >
-          <Avatar text={initials(patient.full_name)} size={64} />
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-lg font-medium">{patient.full_name}</div>
-            <div className="text-sm text-muted">
-              {a !== null ? `${a} yaş • ${fmtDate(patient.birth_date)}` : "Doğum tarihi yok"}
+        <div className="flex items-center gap-1">
+          <button
+            disabled={locked}
+            onClick={() => setPicker(!picker)}
+            className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 text-left hover:bg-card disabled:hover:bg-transparent"
+            title={locked ? "Görüşme sürerken danışan değiştirilemez" : "Danışan değiştir"}
+          >
+            <Avatar text={initials(patient.full_name)} size={44} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="truncate font-medium">{patient.full_name}</span>
+                <span className={cx("h-2 w-2 shrink-0 rounded-full", patient.status === "active" ? "bg-ok" : "bg-faint")} title={patient.status === "active" ? "Aktif danışan" : "Pasif danışan"} />
+              </div>
+              <div className="text-xs text-muted">
+                {a !== null ? `${a} yaş • ${fmtDate(patient.birth_date)}` : "Doğum tarihi yok"}
+              </div>
             </div>
-          </div>
-          {!locked && <ChevronDown size={16} className="text-faint" />}
-        </button>
+            {!locked && <ChevronDown size={16} className="shrink-0 text-faint" />}
+          </button>
+          <button onClick={() => setEditing(true)} className="shrink-0 rounded-md p-1.5 text-muted hover:bg-card hover:text-ink" title="Düzenle">
+            <PencilLine size={16} />
+          </button>
+        </div>
         {picker && (
           <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded-lg border border-line bg-card p-1 shadow-xl">
             {patients.map((p) => (
@@ -214,19 +237,11 @@ function PatientProfileCard({ patient, patients, onSelect, locked, onChanged }: 
         )}
       </div>
 
-      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-        <Stat label="Toplam Seans" value={String(patient.completed_sessions)} />
-        <Stat label="Son Seans" value={fmtDate(patient.last_session_date)} />
-        <Stat label="Kayıt Tarihi" value={fmtDate(patient.created_at, true)} />
-        <Stat label="Sonraki Randevu" value={patient.next_appointment ? fmtDateTime(patient.next_appointment) : "—"} />
+      <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
+        <Stat label="Seans" value={String(patient.completed_sessions)} />
+        <Stat label="Son seans" value={fmtDate(patient.last_session_date)} />
+        <Stat label="Sonraki" value={patient.next_appointment ? fmtDate(patient.next_appointment) : "—"} />
       </dl>
-      <div className="mt-4">
-        {patient.status === "active" ? (
-          <Badge><span className="h-2 w-2 rounded-full bg-ok" /> Aktif Danışan</Badge>
-        ) : (
-          <Badge tone="muted">Pasif Danışan</Badge>
-        )}
-      </div>
       {editing && <PatientForm patient={patient} onClose={() => setEditing(false)} onSaved={onChanged} />}
     </Card>
   );
@@ -234,24 +249,24 @@ function PatientProfileCard({ patient, patients, onSelect, locked, onChanged }: 
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <dt className="text-[13px] text-muted">{label}</dt>
-      <dd className="mt-0.5 text-ink">{value}</dd>
+    <div className="rounded-lg bg-card/60 px-2 py-1.5">
+      <dt className="text-[11px] text-faint">{label}</dt>
+      <dd className="truncate text-[13px] text-ink">{value}</dd>
     </div>
   );
 }
 
 // ───────────────────────────── Seans geçmişi ─────────────────────────────
 
-function SessionHistory({ sessions, onAll }: { sessions: Session[]; onAll: () => void }) {
+function SessionHistory({ sessions, onAll, inTab }: { sessions: Session[]; onAll: () => void; inTab?: boolean }) {
   const done = sessions.filter((s) => s.status === "completed");
   return (
-    <Card title="Seans Geçmişi" action={<LinkButton onClick={onAll}>Tümünü Gör <ChevronRight size={14} /></LinkButton>}>
+    <Card bare={inTab} title="Seans Geçmişi" action={<LinkButton onClick={onAll}>Tümünü Gör <ChevronRight size={14} /></LinkButton>}>
       {done.length === 0 ? (
         <Empty text="Henüz tamamlanmış seans yok." />
       ) : (
         <ul className="space-y-1">
-          {done.slice(0, 4).map((s, i) => (
+          {(inTab ? done : done.slice(0, 4)).map((s, i) => (
             <li key={s.id} className="grid grid-cols-[20px_1fr_1fr_auto] items-center gap-2 rounded-md px-1 py-1.5 text-[13px]">
               <CalendarCheck2 size={15} className="text-accent" />
               <span className={i === 0 ? "text-accent" : "text-muted"}>{fmtDate(s.session_date)}</span>
@@ -267,14 +282,15 @@ function SessionHistory({ sessions, onAll }: { sessions: Session[]; onAll: () =>
 
 // ───────────────────────────── Notlar ─────────────────────────────
 
-function PrivateNotesHistory({ notes }: { notes: Note[] }) {
+function PrivateNotesHistory({ notes, inTab }: { notes: Note[]; inTab?: boolean }) {
   const [open, setOpen] = useState<Note | null>(null);
   const [all, setAll] = useState(false);
-  const list = all ? notes : notes.slice(0, 3);
+  const list = all || inTab ? notes : notes.slice(0, 3);
   return (
     <Card
+      bare={inTab}
       title="Notlar"
-      action={notes.length > 3 && <LinkButton onClick={() => setAll(!all)}>{all ? "Daralt" : "Tümünü Gör"} <ChevronRight size={14} /></LinkButton>}
+      action={!inTab && notes.length > 3 && <LinkButton onClick={() => setAll(!all)}>{all ? "Daralt" : "Tümünü Gör"} <ChevronRight size={14} /></LinkButton>}
     >
       {notes.length === 0 ? (
         <Empty text="Kayıtlı klinik not yok." />
@@ -306,14 +322,15 @@ function PrivateNotesHistory({ notes }: { notes: Note[] }) {
 
 // ───────────────────────────── Test sonuçları ─────────────────────────────
 
-function TestResults({ results }: { results: TestResult[] }) {
+function TestResults({ results, inTab }: { results: TestResult[]; inTab?: boolean }) {
   const [open, setOpen] = useState<TestResult | null>(null);
   const [all, setAll] = useState(false);
-  const list = all ? results : results.slice(0, 3);
+  const list = all || inTab ? results : results.slice(0, 3);
   return (
     <Card
+      bare={inTab}
       title="Test Sonuçları"
-      action={results.length > 3 && <LinkButton onClick={() => setAll(!all)}>{all ? "Daralt" : "Tümünü Gör"} <ChevronRight size={14} /></LinkButton>}
+      action={!inTab && results.length > 3 && <LinkButton onClick={() => setAll(!all)}>{all ? "Daralt" : "Tümünü Gör"} <ChevronRight size={14} /></LinkButton>}
     >
       {results.length === 0 ? (
         <Empty text="Henüz test sonucu yok." />
@@ -389,32 +406,16 @@ function MaterialLibrary({ materials, onShow, onAll, connected, error }: {
   connected: boolean;
   error: string | null;
 }) {
-  const [tab, setTab] = useState<"all" | "video" | "document">("all");
-  const list = materials.filter((m) => tab === "all" || (tab === "video" ? m.category === "video" : m.category !== "video"));
   return (
-    <Card title="Materyal Kütüphanesi" action={<LinkButton onClick={onAll}>Yönet <ChevronRight size={14} /></LinkButton>}>
-      <div className="mb-3 flex gap-1 border-b border-line">
-        {([["all", "Tümü"], ["video", "Videolar"], ["document", "Dokümanlar"]] as const).map(([id, label]) => (
-          <button
-            key={id}
-            onClick={() => setTab(id)}
-            className={cx(
-              "-mb-px border-b-2 px-3 py-1.5 text-[13px]",
-              tab === id ? "border-accent text-ink" : "border-transparent text-muted hover:text-ink",
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      {list.length === 0 ? (
-        <Empty text="Materyal yok." />
+    <Card bare action={<LinkButton onClick={onAll}>Kütüphaneyi yönet <ChevronRight size={14} /></LinkButton>}>
+      {materials.length === 0 ? (
+        <Empty text="Materyal yok. Materyaller sayfasından ekleyin." />
       ) : (
-        <ul className="space-y-2">
-          {list.slice(0, 3).map((m) => (
-            <li key={m.id} className="flex items-center gap-3 rounded-lg bg-card p-2.5">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md bg-accent-soft text-accent">
-                <CategoryIcon c={m.category} />
+        <ul className="space-y-1.5">
+          {materials.map((m) => (
+            <li key={m.id} className="flex items-center gap-2.5 rounded-lg bg-card/70 p-2">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent-soft text-accent">
+                <CategoryIcon c={m.category} size={18} />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm">{m.title}</div>
@@ -435,6 +436,36 @@ function MaterialLibrary({ materials, onShow, onAll, connected, error }: {
       )}
       {error && <p className="mt-2 text-xs text-danger">{error}</p>}
     </Card>
+  );
+}
+
+// ───────────────────────────── Sekmeli kart ─────────────────────────────
+
+type HistoryTab = "notes" | "tests" | "homework" | "sessions";
+
+/** Danışan geçmişi tek kartta: sekmeler ve kaydırılabilir içerik; kalan yüksekliği doldurur. */
+function TabbedCard({ tabs }: { tabs: { id: HistoryTab; label: string; count: number; body: React.ReactNode }[] }) {
+  const [active, setActive] = useState<HistoryTab>(tabs[0]!.id);
+  const current = tabs.find((t) => t.id === active) ?? tabs[0]!;
+  return (
+    <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-line bg-panel">
+      <div className="flex shrink-0 border-b border-line px-1 pt-1.5">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setActive(t.id)}
+            className={cx(
+              "-mb-px flex min-w-0 flex-1 items-center justify-center gap-1 border-b-2 px-0.5 py-2 text-xs transition-colors",
+              t.id === active ? "border-accent text-ink" : "border-transparent text-muted hover:text-ink",
+            )}
+          >
+            {t.label}
+            {t.count > 0 && <span className="rounded-full bg-card px-1 text-[10px] text-muted">{t.count}</span>}
+          </button>
+        ))}
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">{current.body}</div>
+    </section>
   );
 }
 

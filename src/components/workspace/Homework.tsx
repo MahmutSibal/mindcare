@@ -106,18 +106,20 @@ export function HomeworkDialog({ patient, sessionId, call, onClose }: {
 
 // ───────────────────────────── Danışan dosyasındaki kart ─────────────────────────────
 
-export function HomeworkCard({ patient, homework, call, sessionId }: {
+export function HomeworkCard({ patient, homework, call, sessionId, inTab }: {
   patient: Patient | null;
   homework: Homework[];
   call: CallApi;
   sessionId: string | null;
+  /** Sekmeli panelde: çerçevesiz, tüm liste. */
+  inTab?: boolean;
 }) {
   const [adding, setAdding] = useState(false);
   const [open, setOpen] = useState<Homework | null>(null);
   const [all, setAll] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const connected = call.state === "connected";
-  const list = all ? homework : homework.slice(0, 3);
+  const list = all || inTab ? homework : homework.slice(0, 3);
 
   const resend = (hw: Homework) => {
     setError(sendHomework(call, hw) ? null : "Danışan bağlantısı hazır değil.");
@@ -125,14 +127,19 @@ export function HomeworkCard({ patient, homework, call, sessionId }: {
 
   return (
     <Card
+      bare={inTab}
       title="Ödevler"
       action={
         <div className="flex items-center gap-3">
-          {homework.length > 3 && <LinkButton onClick={() => setAll(!all)}>{all ? "Daralt" : "Tümü"} <ChevronRight size={14} /></LinkButton>}
+          {!inTab && homework.length > 3 && <LinkButton onClick={() => setAll(!all)}>{all ? "Daralt" : "Tümü"} <ChevronRight size={14} /></LinkButton>}
           {patient && (
-            <button onClick={() => setAdding(true)} className="rounded-md p-1 text-muted hover:bg-card hover:text-ink" title="Ödev ver">
-              <Plus size={17} />
-            </button>
+            inTab ? (
+              <LinkButton onClick={() => setAdding(true)}><Plus size={14} /> Ödev ver</LinkButton>
+            ) : (
+              <button onClick={() => setAdding(true)} className="rounded-md p-1 text-muted hover:bg-card hover:text-ink" title="Ödev ver">
+                <Plus size={17} />
+              </button>
+            )
           )}
         </div>
       }

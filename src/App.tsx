@@ -69,18 +69,18 @@ function Shell() {
 
   return (
     <div className="flex h-full">
-      <aside className="flex w-[190px] shrink-0 flex-col border-r border-line bg-rail">
-        <div className="flex h-20 items-center gap-2 px-5">
-          <HeartHandshake className="text-accent" size={30} strokeWidth={2.2} />
-          <span className="text-lg font-semibold tracking-tight">MindCare</span>
+      <aside className="flex w-[168px] shrink-0 flex-col border-r border-line bg-rail">
+        <div className="flex h-14 items-center gap-2 px-4">
+          <HeartHandshake className="text-accent" size={24} strokeWidth={2.2} />
+          <span className="font-semibold tracking-tight">MindCare</span>
         </div>
-        <nav className="flex flex-1 flex-col gap-1 px-2 pt-4">
+        <nav className="flex flex-1 flex-col gap-0.5 px-2 pt-1">
           {NAV.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => setPage(id)}
               className={cx(
-                "flex items-center gap-3 rounded-lg px-4 py-3 text-sm transition-colors",
+                "flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] transition-colors",
                 page === id ? "bg-accent-soft font-medium text-ink" : "text-muted hover:bg-card hover:text-ink",
               )}
             >

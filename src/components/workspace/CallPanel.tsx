@@ -56,7 +56,7 @@ export default function CallPanel({ call, patient }: { call: CallApi; patient: P
   const otherPatientInSession = active.session && patient && active.session.patient_id !== patient.id;
 
   return (
-    <div className="flex min-h-0 flex-col gap-3 rounded-xl border border-line bg-panel p-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-2 rounded-xl border border-line bg-panel p-2.5">
       <ConnectionStatusHeader call={call} />
 
       {/* VideoGrid */}
@@ -105,7 +105,7 @@ export default function CallPanel({ call, patient }: { call: CallApi; patient: P
       </div>
 
       {/* CallControlsBar */}
-      <div className="flex items-center justify-center gap-8 pb-1 pt-1">
+      <div className="flex shrink-0 items-center justify-center gap-4">
         <Control on={call.micOn} onClick={call.toggleMic} icon={call.micOn ? Mic : MicOff} label={call.micOn ? "Mikrofon Açık" : "Mikrofon Kapalı"} />
         <Control on={call.camOn} onClick={call.toggleCam} icon={call.camOn ? Video : VideoOff} label={call.camOn ? "Kamera Açık" : "Kamera Kapalı"} />
         <Control
@@ -116,16 +116,14 @@ export default function CallPanel({ call, patient }: { call: CallApi; patient: P
           disabled={!call.inCall}
           highlight={!!call.screen}
         />
-        <span className="h-12 w-px bg-line" />
+        <span className="h-8 w-px bg-line" />
         <button
           onClick={() => setConfirmEnd(true)}
           disabled={!call.inCall && !active.session}
-          className="flex flex-col items-center gap-1.5 disabled:opacity-40"
+          className="flex h-10 items-center gap-2 rounded-full bg-danger px-4 text-sm font-medium text-white hover:bg-danger/85 disabled:opacity-40"
+          title="Görüşmeyi sonlandır"
         >
-          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-danger text-white hover:bg-danger/80">
-            <PhoneOff size={20} />
-          </span>
-          <span className="text-xs text-ink">Görüşmeyi Sonlandır</span>
+          <PhoneOff size={17} /> Bitir
         </button>
       </div>
 
@@ -152,16 +150,18 @@ function Control({ on, onClick, icon: Icon, label, disabled, highlight }: {
   highlight?: boolean;
 }) {
   return (
-    <button onClick={onClick} disabled={disabled} className="flex w-20 flex-col items-center gap-1.5 disabled:opacity-40">
-      <span
-        className={cx(
-          "flex h-12 w-12 items-center justify-center rounded-full border transition-colors",
-          highlight ? "border-accent bg-accent-soft text-accent" : on ? "border-line bg-card text-ink hover:bg-line" : "border-danger/50 bg-danger/15 text-danger",
-        )}
-      >
-        <Icon size={20} />
-      </span>
-      <span className="text-center text-xs leading-tight text-ink">{label}</span>
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+      aria-label={label}
+      className={cx(
+        "flex h-10 items-center gap-2 rounded-full border px-3.5 text-[13px] transition-colors disabled:opacity-40",
+        highlight ? "border-accent bg-accent-soft text-accent" : on ? "border-line bg-card text-ink hover:bg-line" : "border-danger/50 bg-danger/15 text-danger",
+      )}
+    >
+      <Icon size={17} />
+      <span className="hidden whitespace-nowrap min-[1440px]:inline">{label}</span>
     </button>
   );
 }
@@ -236,14 +236,14 @@ function ConnectionStatusHeader({ call }: { call: CallApi }) {
       </span>
       {st === "connected" && (
         <>
-          <span className="flex items-center gap-2 rounded-lg bg-card px-3 py-1.5 text-ink"><Lock size={14} /> Uçtan Uca Şifreli</span>
-          <span className="flex items-center gap-2 px-2 text-ink">
-            <Signal size={15} className={quality >= 3 ? "text-ok" : quality === 2 ? "text-warn" : "text-danger"} />
-            Gecikme: {s?.rttMs != null ? `${s.rttMs} ms` : "—"}
+          <span className="flex items-center gap-1.5 text-muted" title="Ses ve görüntü uçtan uca şifreli"><Lock size={13} /> Şifreli</span>
+          <span className="flex items-center gap-1.5 text-muted" title="Gecikme">
+            <Signal size={14} className={quality >= 3 ? "text-ok" : quality === 2 ? "text-warn" : "text-danger"} />
+            {s?.rttMs != null ? `${s.rttMs} ms` : "—"}
           </span>
-          <span className="flex items-center gap-2 px-2 text-ink">
-            <Waves size={15} className="text-muted" />
-            Paket Kaybı: %{s?.packetLossPct != null ? s.packetLossPct.toFixed(1).replace(".", ",") : "—"}
+          <span className="flex items-center gap-1.5 text-muted" title="Paket kaybı">
+            <Waves size={14} />
+            %{s?.packetLossPct != null ? s.packetLossPct.toFixed(1).replace(".", ",") : "—"}
           </span>
           {limitationText(s?.outgoing?.limitation) && (
             <button onClick={() => setInfo(true)} className="rounded-lg border border-warn/40 bg-warn/10 px-2 py-1 text-xs text-warn" title="Ayrıntılar">

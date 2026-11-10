@@ -4,21 +4,22 @@
 @source "./";
 @source "../patient";
 
+/* Sakin turkuaz palet (müşterinin ilk tasarımındaki koyu petrol/turkuaz tonlar). */
 @theme {
-  --color-bg: #12131c;
-  --color-rail: #161724;
-  --color-panel: #1b1c2a;
-  --color-card: #222336;
-  --color-line: #2c2d42;
-  --color-ink: #eceaf6;
-  --color-muted: #9a99b3;
-  --color-faint: #6c6b85;
-  --color-accent: #8a7cf8;
-  --color-accent-strong: #7262f0;
-  --color-accent-soft: #2d2a52;
-  --color-ok: #22c55e;
-  --color-warn: #f59e0b;
-  --color-danger: #ef4444;
+  --color-bg: #0f1b1d;
+  --color-rail: #0c1618;
+  --color-panel: #152629;
+  --color-card: #1c3135;
+  --color-line: #27403f;
+  --color-ink: #e6f0ee;
+  --color-muted: #9bb3b0;
+  --color-faint: #6b8582;
+  --color-accent: #4fb3a5;
+  --color-accent-strong: #2f9a8c;
+  --color-accent-soft: #173b38;
+  --color-ok: #5cc28a;
+  --color-warn: #e8b04b;
+  --color-danger: #e5675f;
 
   --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
 }

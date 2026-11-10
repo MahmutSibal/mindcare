@@ -5,12 +5,22 @@ export function cx(...c: (string | false | null | undefined)[]) {
   return c.filter(Boolean).join(" ");
 }
 
-export function Card({ title, action, children, className }: {
+export function Card({ title, action, children, className, bare }: {
   title?: ReactNode;
   action?: ReactNode;
   children: ReactNode;
   className?: string;
+  /** Çerçevesiz ve başlıksız: sekmeli bir panelin içinde kullanılır; eylem düğmesi üstte kalır. */
+  bare?: boolean;
 }) {
+  if (bare) {
+    return (
+      <div className={className}>
+        {action && <div className="mb-2 flex justify-end">{action}</div>}
+        {children}
+      </div>
+    );
+  }
   return (
     <section className={cx("rounded-xl border border-line bg-panel p-4", className)}>
       {(title || action) && (

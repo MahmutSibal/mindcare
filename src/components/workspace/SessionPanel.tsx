@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ClipboardCheck, Clock3, FileSignature, MonitorX, Pause, Play, PenTool, Send, Square, Undo2 } from "lucide-react";
+import { ClipboardCheck, Clock3, FileSignature, MonitorX, Pause, Play, Send, Square, Undo2 } from "lucide-react";
 import { api, errorText, type Patient, type Test } from "../../lib/api";
 import type { SharedMaterial } from "./materialShare";
 import { clock } from "../../lib/format";
@@ -7,29 +7,33 @@ import { notifyDataChanged, useActiveSession } from "../../lib/session";
 import { maxScore, parseDefinition } from "../../lib/tests";
 import { EditorContent, Toolbar, useNotesEditor } from "../NotesEditor";
 import { HomeworkDialog } from "./Homework";
-import { Button, Card, cx, Empty, Modal, SoonTag } from "../ui";
+import { Button, Card, cx, Empty, Modal } from "../ui";
 import { CATEGORY_LABEL, CategoryIcon } from "../category";
 import type { CallApi } from "./useCall";
 
-export default function SessionPanel({ call, patient, shared, onClearShared }: {
+export default function SessionPanel({ call, patient, shared, onClearShared, materials }: {
   call: CallApi;
   patient: Patient | null;
   shared: SharedMaterial | null;
   onClearShared: () => void;
+  /** Materyal kütüphanesi (seans araçlarının bir sekmesi). */
+  materials: React.ReactNode;
 }) {
+  // Önizleme yalnızca danışana bir şey gösterilirken yer kaplar.
+  const sharing = !!call.screen || !!shared;
   return (
-    <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pl-0.5">
-      <SessionTimer patient={patient} call={call} />
+    <div className="flex min-h-0 flex-col gap-2.5">
       <LiveNotesEditor />
-      <QuickTools call={call} patient={patient} />
-      <PatientScreenPreview call={call} shared={shared} onClearShared={onClearShared} />
+      {sharing && <PatientScreenPreview call={call} shared={shared} onClearShared={onClearShared} />}
+      <QuickTools call={call} patient={patient} materials={materials} />
     </div>
   );
 }
 
 // ───────────────────────────── Zamanlayıcı ─────────────────────────────
 
-function SessionTimer({ patient, call }: { patient: Patient | null; call: CallApi }) {
+/** Seans süresi: görüntünün üstünde tek satırlık ince çubuk. */
+export function SessionTimer({ patient, call }: { patient: Patient | null; call: CallApi }) {
   const a = useActiveSession();
   const [error, setError] = useState<string | null>(null);
   const pct = Math.min(100, (a.elapsed / a.targetSeconds) * 100);
@@ -52,42 +56,40 @@ function SessionTimer({ patient, call }: { patient: Patient | null; call: CallAp
   };
 
   return (
-    <Card>
-      <div className="flex items-center gap-4">
-        <Clock3 size={34} className="shrink-0 text-accent" strokeWidth={1.8} />
-        <div className="min-w-0 flex-1">
-          <div className="text-[13px] text-muted">
-            {a.session ? `${a.session.session_number}. Seans • ${a.session.patient_name}` : "Seans Süresi"}
-          </div>
-          <div className="text-[26px] font-semibold tabular-nums leading-tight">
-            <span className={over ? "text-warn" : ""}>{clock(a.elapsed)}</span>
-            <span className="text-lg text-accent"> / {clock(a.targetSeconds)}</span>
-          </div>
-        </div>
+    <section className="shrink-0 overflow-hidden rounded-xl border border-line bg-panel">
+      <div className="flex items-center gap-3 px-3 py-2">
+        <Clock3 size={18} className="shrink-0 text-accent" />
+        <span className="min-w-0 flex-1 truncate text-[13px] text-muted">
+          {a.session ? `${a.session.session_number}. Seans • ${a.session.patient_name}` : "Seans başlamadı"}
+        </span>
+        <span className="text-lg font-semibold tabular-nums">
+          <span className={over ? "text-warn" : ""}>{clock(a.elapsed)}</span>
+          <span className="text-sm font-normal text-muted"> / {clock(a.targetSeconds)}</span>
+        </span>
         {a.session ? (
-          <div className="flex gap-1.5">
+          <div className="flex gap-1">
             <button
               onClick={a.running ? a.pause : a.resume}
-              className="rounded-lg bg-card p-2.5 text-ink hover:bg-line"
+              className="rounded-lg p-1.5 text-ink hover:bg-card"
               title={a.running ? "Duraklat" : "Devam et"}
             >
-              {a.running ? <Pause size={18} /> : <Play size={18} />}
+              {a.running ? <Pause size={16} /> : <Play size={16} />}
             </button>
-            <button onClick={finish} className="rounded-lg bg-card p-2.5 text-danger hover:bg-line" title="Seansı bitir">
-              <Square size={18} />
+            <button onClick={finish} className="rounded-lg p-1.5 text-danger hover:bg-card" title="Seansı bitir">
+              <Square size={16} />
             </button>
           </div>
         ) : (
-          <Button variant="subtle" className="text-xs" onClick={startInPerson} disabled={!patient} title="Görüntülü görüşme olmadan seans başlat">
-            <Play size={14} /> Başlat
+          <Button variant="subtle" className="px-2.5 py-1 text-xs" onClick={startInPerson} disabled={!patient} title="Görüntülü görüşme olmadan seans başlat">
+            <Play size={13} /> Yüz yüze başlat
           </Button>
         )}
       </div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-card">
-        <div className={cx("h-full rounded-full transition-all", over ? "bg-warn" : "bg-accent")} style={{ width: `${pct}%` }} />
+      <div className="h-1 bg-card">
+        <div className={cx("h-full transition-all", over ? "bg-warn" : "bg-accent")} style={{ width: `${pct}%` }} />
       </div>
-      {error && <p className="mt-2 text-xs text-danger">{error}</p>}
-    </Card>
+      {error && <p className="px-3 py-1.5 text-xs text-danger">{error}</p>}
+    </section>
   );
 }
 
@@ -157,7 +159,7 @@ function NotesForSession({ sessionId }: { sessionId: string | null }) {
     : "";
 
   return (
-    <Card title="Seans Notları" className="flex min-h-[300px] flex-1 flex-col">
+    <Card title="Seans Notları" className="flex min-h-[170px] flex-1 flex-col">
       <Toolbar editor={editor} />
       <div
         className={cx("mt-2 min-h-0 flex-1 overflow-y-auto rounded-lg border border-line bg-bg/60 p-3", !sessionId && "opacity-60")}
@@ -187,8 +189,9 @@ interface PendingTest {
 /** Danışan sayfası bu süre içinde "ulaştı" demezse terapist uyarılır. */
 const DELIVERY_TIMEOUT_MS = 6000;
 
-function QuickTools({ call, patient }: { call: CallApi; patient: Patient | null }) {
+function QuickTools({ call, patient, materials }: { call: CallApi; patient: Patient | null; materials: React.ReactNode }) {
   const { session } = useActiveSession();
+  const [tab, setTab] = useState<"tools" | "materials">("tools");
   const [picking, setPicking] = useState(false);
   const [givingHomework, setGivingHomework] = useState(false);
   const [pending, setPending] = useState<PendingTest | null>(null);
@@ -263,17 +266,32 @@ function QuickTools({ call, patient }: { call: CallApi; patient: Patient | null 
     setPending(null);
   };
 
-  const soon = [{ icon: PenTool, title: "Beyaz Tahta Aç", v: "1.3" }];
   const homeworkSession = session && session.patient_id === patient?.id ? session.id : null;
 
   return (
-    <Card title="Hızlı Araçlar">
-      <ul className="space-y-2">
-        <li className="rounded-lg bg-card px-3 py-2.5">
+    <section className="flex max-h-[42%] shrink-0 flex-col rounded-xl border border-line bg-panel">
+      <div className="flex shrink-0 gap-0.5 border-b border-line px-2 pt-1.5">
+        {([["tools", "Test ve Ödev"], ["materials", "Materyaller"]] as const).map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={cx(
+              "-mb-px border-b-2 px-2.5 py-2 text-[13px] transition-colors",
+              tab === id ? "border-accent text-ink" : "border-transparent text-muted hover:text-ink",
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
+      {tab === "materials" ? materials : (
+      <ul className="space-y-1.5">
+        <li className="rounded-lg bg-card/70 px-3 py-2">
           <div className="flex items-center gap-3">
-            <ClipboardCheck size={20} className={connected ? "text-accent" : "text-muted"} />
-            <div className="min-w-0 flex-1 text-sm">
-              Klinik Test Gönder
+            <ClipboardCheck size={18} className={connected ? "text-accent" : "text-muted"} />
+            <div className="min-w-0 flex-1 text-[13px]">
+              Test gönder
               <div className="truncate text-xs text-faint">
                 {pending
                   ? pending.delivered === null
@@ -302,10 +320,10 @@ function QuickTools({ call, patient }: { call: CallApi; patient: Patient | null 
           )}
           {error && <p className="mt-2 text-xs text-danger">{error}</p>}
         </li>
-        <li className="flex items-center gap-3 rounded-lg bg-card px-3 py-2.5">
-          <FileSignature size={20} className={patient ? "text-accent" : "text-muted"} />
-          <div className="min-w-0 flex-1 text-sm">
-            Dijital Ödev Ver
+        <li className="flex items-center gap-3 rounded-lg bg-card/70 px-3 py-2">
+          <FileSignature size={18} className={patient ? "text-accent" : "text-muted"} />
+          <div className="min-w-0 flex-1 text-[13px]">
+            Ödev ver
             <div className="truncate text-xs text-faint">
               {connected ? "Danışanın ekranına da gönderilir" : "Kaydedilir, görüşmede gönderilebilir"}
             </div>
@@ -314,19 +332,14 @@ function QuickTools({ call, patient }: { call: CallApi; patient: Patient | null 
             Ver
           </Button>
         </li>
-        {soon.map(({ icon: I, title, v }) => (
-          <li key={title} className="flex items-center gap-3 rounded-lg bg-card px-3 py-2.5 opacity-70" title="Sonraki sürümde">
-            <I size={20} className="text-muted" />
-            <div className="flex-1 text-sm">{title}</div>
-            <SoonTag version={v} />
-          </li>
-        ))}
       </ul>
+      )}
+      </div>
       {picking && <TestPicker onClose={() => setPicking(false)} onSend={send} />}
       {givingHomework && patient && (
         <HomeworkDialog patient={patient} sessionId={homeworkSession} call={call} onClose={() => setGivingHomework(false)} />
       )}
-    </Card>
+    </section>
   );
 }
 
@@ -377,7 +390,7 @@ function PatientScreenPreview({ call, shared, onClearShared }: { call: CallApi; 
   }, [live]);
 
   return (
-    <Card title="Paylaşılan Ekran Önizleme">
+    <Card title="Danışanın gördüğü" className="shrink-0">
       <div className="relative aspect-video overflow-hidden rounded-lg border border-line bg-bg">
         {live ? (
           <video ref={ref} autoPlay muted playsInline className="h-full w-full object-contain" />
