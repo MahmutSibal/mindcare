@@ -213,6 +213,26 @@ export function buildIceServers(turn?: TurnConfig | null): RTCIceServer[] {
   return servers;
 }
 
+/**
+ * Görüntüde H.264'ü öne alır: bilgisayar ve telefonlarda donanım hızlandırmalı olduğu için
+ * işlemci yükü düşer ve "işlemci yetişemiyor" kaynaklı kalite düşüşü azalır. H.264 yoksa
+ * tarayıcının kendi sırası (VP8 vb.) geçerli kalır.
+ */
+function preferHardwareCodec(pc: RTCPeerConnection) {
+  const codecs = RTCRtpReceiver.getCapabilities?.("video")?.codecs;
+  if (!codecs?.some((c) => /h264/i.test(c.mimeType))) return;
+  const rank = (c: { mimeType: string }) => (/h264/i.test(c.mimeType) ? 0 : 1);
+  const ordered = [...codecs].sort((a, b) => rank(a) - rank(b));
+  for (const t of pc.getTransceivers()) {
+    if (t.sender.track?.kind !== "video") continue;
+    try {
+      t.setCodecPreferences(ordered);
+    } catch {
+      /* desteklenmiyorsa tarayıcının sırası kalır */
+    }
+  }
+}
+
 export class Call {
   private transport: SignalTransport | null = null;
   private pc: RTCPeerConnection | null = null;
@@ -271,7 +291,8 @@ export class Call {
     const p = sender.getParameters();
     const enc = p.encodings?.[0];
     if (!enc) return; // Henüz müzakere edilmemiş; kodlama listesi eklenemez.
-    enc.maxBitrate = profile === "screen" ? 2_500_000 : 1_500_000;
+    // Tavan değerler: bağlantı elvermezse tarayıcı kendiliğinden daha düşüğe iner.
+    enc.maxBitrate = profile === "screen" ? 3_000_000 : 2_500_000;
     enc.maxFramerate = profile === "screen" ? 15 : 30;
     p.degradationPreference = profile === "screen" ? "maintain-resolution" : "balanced";
     await sender.setParameters(p).catch(() => {});
@@ -358,6 +379,7 @@ export class Call {
       const enc = p.encodings?.[0];
       if (enc) {
         // Bant daraldığında konuşma görüntüden önce gelsin.
+        enc.maxBitrate = 64_000; // konuşma için yüksek kalite (Opus varsayılanı ~32 kbps)
         enc.priority = "high";
         enc.networkPriority = "high";
         await audio.setParameters(p).catch(() => {});
@@ -466,6 +488,7 @@ export class Call {
     const pc = new RTCPeerConnection({ iceServers: this.iceServers, bundlePolicy: "max-bundle" });
     this.pc = pc;
     for (const t of this.localStream.getTracks()) pc.addTrack(t, this.localStream);
+    preferHardwareCodec(pc);
     pc.onicecandidate = (e) => e.candidate && this.send({ kind: "ice", candidate: e.candidate.toJSON() });
     pc.ontrack = (e) => this.h.onRemoteStream(e.streams[0] ?? new MediaStream([e.track]));
     pc.ondatachannel = (e) => {
