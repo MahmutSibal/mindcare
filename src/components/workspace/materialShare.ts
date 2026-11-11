@@ -2,7 +2,9 @@
 // video ise bilgisayarda oynatılıp görüntü/ses olarak yayınlanır (useCall.showVideo).
 
 import { api, type Material } from "../../lib/api";
-import { CHUNK_BYTES, extensionOf, fmtBytes, isSafeImage, MAX_FILE_SHARE_BYTES, mimeFor, toBase64 } from "../../lib/share";
+import {
+  CHUNK_BYTES, extensionOf, fmtBytes, httpsUrl, isSafeImage, isWebLink, MAX_FILE_SHARE_BYTES, mimeFor, toBase64,
+} from "../../lib/share";
 import type { CallApi } from "./useCall";
 
 export interface SharedMaterial {
@@ -34,6 +36,16 @@ async function quoteText(m: Material): Promise<string> {
  */
 export async function showMaterial(call: CallApi, m: Material, update: (s: SharedMaterial) => void): Promise<void> {
   if (call.state !== "connected") throw new Error("Materyal göstermek için görüşmenin bağlı olması gerekir.");
+
+  if (isWebLink(m.file_path)) {
+    const url = httpsUrl(m.file_path);
+    if (!url) throw new Error("Bağlantı geçersiz. Yalnızca https:// ile başlayan bağlantılar gösterilebilir.");
+    const shareId = crypto.randomUUID();
+    const ok = call.sendMessage({ type: "material_show", id: shareId, title: m.title, kind: "link", mime: "text/uri-list", size: url.length, url });
+    if (!ok) throw new Error("Danışan bağlantısı hazır değil.");
+    update({ material: m, shareId, status: "sent", progress: 1 });
+    return;
+  }
 
   if (m.category === "video") {
     const bytes = await api.readMaterial(m.id);

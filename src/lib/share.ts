@@ -50,3 +50,43 @@ export function fmtBytes(n: number): string {
   if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
   return `${(n / 1024 / 1024).toFixed(1).replace(".", ",")} MB`;
 }
+
+// ───────────────────────────── Bağlantı materyalleri ─────────────────────────────
+
+/** Materyalin dosya yolu yerine web bağlantısı olup olmadığı. */
+export const isWebLink = (path: string) => /^https?:\/\//i.test(path.trim());
+
+/** Yalnızca https bağlantıları kabul edilir (http ve diğer şemalar danışana gönderilmez). */
+export function httpsUrl(input: string): string | null {
+  try {
+    const u = new URL(input.trim());
+    return u.protocol === "https:" ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * YouTube bağlantısından video kimliğini ve (varsa) başlangıç saniyesini çıkarır.
+ * watch?v=, youtu.be/, shorts/, embed/ ve live/ biçimleri; t=90, t=1m30s, start=90.
+ */
+export function parseYouTube(input: string): { id: string; start: number } | null {
+  let u: URL;
+  try {
+    u = new URL(input.trim());
+  } catch {
+    return null;
+  }
+  const host = u.hostname.replace(/^(www|m|music)\./, "");
+  let id: string | null = null;
+  if (host === "youtu.be") id = u.pathname.slice(1).split("/")[0] ?? null;
+  else if (host === "youtube.com" || host === "youtube-nocookie.com") {
+    const m = u.pathname.match(/^\/(?:embed|shorts|live)\/([^/?]+)/);
+    id = m ? m[1]! : u.pathname === "/watch" ? u.searchParams.get("v") : null;
+  }
+  if (!id || !/^[A-Za-z0-9_-]{11}$/.test(id)) return null;
+  const t = u.searchParams.get("t") ?? u.searchParams.get("start") ?? "";
+  const hms = t.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$/);
+  const start = hms && t ? Number(hms[1] ?? 0) * 3600 + Number(hms[2] ?? 0) * 60 + Number(hms[3] ?? 0) : 0;
+  return { id, start: Number.isFinite(start) ? start : 0 };
+}

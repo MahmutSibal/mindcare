@@ -141,7 +141,8 @@ export type ChannelMessage =
   | { type: "homework_received"; id: string }
   // Terapist → danışan: materyal gösterimi. Alıntıda metin doğrudan gelir; görsel ve
   // belgede ardından `material_chunk` parçaları (base64) ve `material_end` gelir.
-  | { type: "material_show"; id: string; title: string; kind: "image" | "document" | "quote"; mime: string; size: number; text?: string }
+  // `link`: dosya gönderilmez; danışan sayfası bağlantıyı kendi doğrular (YouTube ise gömülü oynatır).
+  | { type: "material_show"; id: string; title: string; kind: "image" | "document" | "quote" | "link"; mime: string; size: number; text?: string; url?: string }
   | { type: "material_chunk"; id: string; data: string }
   | { type: "material_end"; id: string }
   | { type: "material_hide"; id: string }

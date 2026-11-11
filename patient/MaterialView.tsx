@@ -4,7 +4,7 @@
 import { useCallback, useRef, useState } from "react";
 import { Download, ExternalLink, FileText, Quote, X } from "lucide-react";
 import type { ChannelMessage } from "../src/lib/rtc";
-import { fmtBytes, fromBase64, isPdf, isSafeImage, MAX_FILE_SHARE_BYTES } from "../src/lib/share";
+import { fmtBytes, fromBase64, httpsUrl, isPdf, isSafeImage, MAX_FILE_SHARE_BYTES, parseYouTube } from "../src/lib/share";
 import { Button } from "../src/components/ui";
 import { saveFile } from "./saveFile";
 
@@ -19,6 +19,8 @@ export interface IncomingMaterial {
   text?: string;
   progress: number;
   url?: string;
+  /** Doğrulanmış https bağlantısı (kind: "link"). */
+  link?: string;
 }
 
 /** Materyal mesajlarını işler. `handle` materyal mesajıysa `true` döner. */
@@ -43,6 +45,15 @@ export function useIncomingMaterial(ack: (id: string) => void) {
       switch (m.type) {
         case "material_show": {
           clear();
+          if (m.kind === "link") {
+            // Bağlantı burada yeniden doğrulanır; yalnızca https kabul edilir.
+            const link = httpsUrl(m.url ?? "");
+            if (!link) return true;
+            shownId.current = m.id;
+            setCurrent({ id: m.id, title: m.title, kind: "link", mime: m.mime, size: 0, progress: 1, link });
+            ack(m.id);
+            return true;
+          }
           if (!["image", "document", "quote"].includes(m.kind) || m.size > MAX_FILE_SHARE_BYTES) return true;
           const meta: IncomingMaterial = { id: m.id, title: m.title, kind: m.kind, mime: m.mime, size: m.size, progress: 0 };
           shownId.current = m.id;
@@ -113,6 +124,45 @@ export default function MaterialView({ item, onClose }: { item: IncomingMaterial
       <X size={18} />
     </button>
   );
+
+  if (item.kind === "link" && item.link) {
+    const yt = parseYouTube(item.link);
+    if (yt) {
+      // Adres burada, yalnızca doğrulanmış video kimliğinden kurulur; gelen bağlantı gömülmez.
+      const src = `https://www.youtube-nocookie.com/embed/${yt.id}?autoplay=1&playsinline=1&rel=0${yt.start ? `&start=${yt.start}` : ""}`;
+      return (
+        <div className="absolute inset-0 z-20 flex flex-col bg-black/95">
+          <div className="flex items-center gap-2 px-3 py-2">
+            <span className="flex-1 truncate text-sm text-white">{item.title}</span>
+            {closeBtn}
+          </div>
+          <div className="flex min-h-0 flex-1 items-center justify-center p-2 pb-24 sm:pb-2">
+            <iframe
+              src={src}
+              title={item.title}
+              className="aspect-video max-h-full w-full max-w-4xl rounded-lg border-0"
+              allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+              allowFullScreen
+              referrerPolicy="strict-origin-when-cross-origin"
+            />
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="absolute inset-x-3 top-16 z-20 rounded-2xl border border-line bg-panel/95 p-4 shadow-2xl backdrop-blur sm:inset-x-auto sm:right-4 sm:w-[380px]">
+        <div className="mb-3 flex items-center gap-2">
+          <ExternalLink size={18} className="text-accent" />
+          <span className="flex-1 truncate font-medium">{item.title}</span>
+          {closeBtn}
+        </div>
+        <p className="mb-3 break-all text-xs text-muted">Terapistiniz bir bağlantı paylaştı: {new URL(item.link).hostname}</p>
+        <Button variant="outline" className="w-full py-1.5 text-xs" onClick={() => window.open(item.link, "_blank", "noopener,noreferrer")}>
+          <ExternalLink size={14} /> Bağlantıyı yeni sekmede aç
+        </Button>
+      </div>
+    );
+  }
 
   if (!item.url && item.kind !== "quote") {
     return (
