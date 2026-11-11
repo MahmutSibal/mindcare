@@ -3,6 +3,7 @@ import { api } from "../../lib/api";
 import { DEFAULT_PATIENT_APP_URL } from "../../lib/config";
 import {
   buildIceServers, Call, type CallState, type CallStats, type ChannelMessage, createInvite, getLocalMedia, type Invite,
+  type QualityPreset,
 } from "../../lib/rtc";
 
 /** Terapist tarafı görüşme durumu: yerel medya, davet, bağlantı ve ekran paylaşımı. */
@@ -17,6 +18,14 @@ export function useCall() {
   const [screen, setScreen] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [turnWarning, setTurnWarning] = useState<string | null>(null);
+  // Kendi gönderdiğim görüntünün kalitesi; görüşmeler arasında korunur.
+  const [quality, setQualityState] = useState<QualityPreset>("auto");
+  const qualityRef = useRef(quality);
+  const setQuality = useCallback((q: QualityPreset) => {
+    qualityRef.current = q;
+    setQualityState(q);
+    void callRef.current?.setQuality(q);
+  }, []);
   const callRef = useRef<Call | null>(null);
   const localRef = useRef<MediaStream | null>(null);
   localRef.current = local;
@@ -68,6 +77,7 @@ export function useCall() {
         onMessage: (m) => listeners.current.forEach((fn) => fn(m)),
       }, ice);
       callRef.current = call;
+      void call.setQuality(qualityRef.current);
       setInvite(inv);
       await call.start();
     } catch (e) {
@@ -249,7 +259,7 @@ export function useCall() {
     local, remote, state, stats, invite, micOn, camOn, screen, error, turnWarning, videoShare, videoPaused,
     inCall: callRef.current !== null || (state !== "idle" && state !== "ended" && state !== "failed"),
     start, hangup, toggleMic, toggleCam, shareScreen, stopScreen, sendMessage, sendBuffered, onMessage, ensureLocal,
-    showVideo, stopVideo, renewInvite, renewing,
+    showVideo, stopVideo, renewInvite, renewing, quality, setQuality,
     clearError: () => setError(null),
   };
 }

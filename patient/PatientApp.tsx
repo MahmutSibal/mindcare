@@ -4,13 +4,16 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  FileSignature, FileText, HeartHandshake, Lock, Maximize2, Mic, MicOff, PhoneOff, Smartphone, SwitchCamera, Video, VideoOff,
+  FileSignature, FileText, HeartHandshake, Lock, Maximize2, Mic, MicOff, MoreVertical, PhoneOff, Smartphone, SwitchCamera, Video,
+  VideoOff,
 } from "lucide-react";
 import { Call, type CallState, type CallStats, type ChannelMessage, getLocalMedia, joinRoom, type JoinResult } from "../src/lib/rtc";
 import { Button, cx } from "../src/components/ui";
 import TestForm from "./TestForm";
 import HomeworkView, { type HomeworkMessage } from "./HomeworkView";
-import MaterialView, { useIncomingMaterial } from "./MaterialView";
+import MaterialView, { type MediaReport, useIncomingMaterial } from "./MaterialView";
+import QualityPicker from "../src/components/QualityPicker";
+import type { QualityPreset } from "../src/lib/rtc";
 import WaitingRoom from "./WaitingRoom";
 
 type Phase = "invalid" | "consent" | "joining" | "rejected" | "call" | "left";
@@ -126,6 +129,19 @@ export default function PatientApp() {
   const [homework, setHomework] = useState<HomeworkMessage[]>([]);
   const [homeworkOpen, setHomeworkOpen] = useState(false);
   const callRef = useRef<Call | null>(null);
+  // Gösterilen videonun durumu terapiste bildirilir (ne izlendiğini görebilsin).
+  const reportMedia = useCallback((id: string, s: MediaReport) => {
+    callRef.current?.sendMessage({ type: "media_state", id, ...s });
+  }, []);
+  // Ayarlar menüsü: kendi gönderdiğim görüntünün kalitesi.
+  const [menu, setMenu] = useState(false);
+  const [quality, setQualityState] = useState<QualityPreset>("auto");
+  const qualityRef = useRef(quality);
+  const setQuality = (q: QualityPreset) => {
+    qualityRef.current = q;
+    setQualityState(q);
+    void callRef.current?.setQuality(q);
+  };
   const material = useIncomingMaterial(
     useCallback((id: string) => callRef.current?.sendMessage({ type: "material_received", id }), []),
   );
@@ -228,6 +244,7 @@ export default function PatientApp() {
         },
       });
       callRef.current = call;
+      void call.setQuality(qualityRef.current);
       setPhase("call");
       await call.start();
     } catch (e) {
@@ -307,7 +324,7 @@ export default function PatientApp() {
           ) : (
             <WaitingRoom reconnecting={state === "reconnecting"} />
           )}
-          <div className="absolute bottom-4 right-4 aspect-[3/4] w-28 overflow-hidden rounded-xl border border-line bg-card shadow-xl sm:aspect-[4/3] sm:w-48">
+          <div className="absolute bottom-3 right-3 aspect-[3/4] w-24 overflow-hidden rounded-xl border border-line bg-card shadow-xl landscape:aspect-video landscape:w-32 sm:bottom-4 sm:right-4 sm:aspect-[4/3] sm:w-48">
             {camOn ? <VideoEl key={facing} stream={local} muted mirrored={facing === "user"} /> : <div className="flex h-full items-center justify-center text-faint"><VideoOff /></div>}
           </div>
           <ConnectionBadge state={state} stats={stats} />
@@ -331,7 +348,9 @@ export default function PatientApp() {
               <FileText size={18} className="text-accent" /> Terapistiniz bir materyal paylaştı: <b>{notice.title}</b>
             </div>
           )}
-          {material.current && <MaterialView item={material.current} onClose={material.clear} />}
+          {material.current && (
+            <MaterialView item={material.current} onClose={material.clear} control={material.control} onMediaState={reportMedia} />
+          )}
           {homework.length > 0 && !homeworkOpen && (
             <button
               onClick={() => setHomeworkOpen(true)}
@@ -352,7 +371,19 @@ export default function PatientApp() {
             />
           )}
         </div>
-        <div className="flex items-center justify-center gap-5 border-t border-line bg-panel py-4">
+        <div className="relative flex shrink-0 items-center justify-center gap-3 border-t border-line bg-panel px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] landscape:pt-2 landscape:pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:gap-5">
+          {menu && (
+            <>
+              <button className="fixed inset-0 z-30 cursor-default" aria-label="Ayarları kapat" onClick={() => setMenu(false)} />
+              <div className="absolute bottom-full left-1/2 z-40 mb-2 w-[min(92vw,340px)] -translate-x-1/2 rounded-2xl border border-line bg-panel p-4 shadow-2xl">
+                <QualityPicker value={quality} onChange={setQuality} />
+                <p className="mt-3 text-[11px] leading-relaxed text-faint">
+                  Bu ayar yalnızca sizin kameranızdan giden görüntüyü etkiler. Görüntü donuyor ya da ses kesiliyorsa
+                  "Veri tasarrufu"nu deneyin.
+                </p>
+              </div>
+            </>
+          )}
           <Round on={micOn} onClick={() => toggle("audio")} icon={micOn ? Mic : MicOff} label={micOn ? "Mikrofonu kapat" : "Mikrofonu aç"} />
           <Round on={camOn} onClick={() => toggle("video")} icon={camOn ? Video : VideoOff} label={camOn ? "Kamerayı kapat" : "Kamerayı aç"} />
           {canFlip && (
@@ -363,7 +394,8 @@ export default function PatientApp() {
               label={facing === "user" ? "Arka kameraya geç" : "Ön kameraya geç"}
             />
           )}
-          <button onClick={leave} className="flex h-12 w-12 items-center justify-center rounded-full bg-danger text-white hover:bg-danger/80" aria-label="Görüşmeden ayrıl">
+          <Round on onClick={() => setMenu(!menu)} icon={MoreVertical} label="Ayarlar" />
+          <button onClick={leave} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-danger text-white hover:bg-danger/80" aria-label="Görüşmeden ayrıl">
             <PhoneOff size={20} />
           </button>
         </div>
@@ -473,7 +505,7 @@ function Round({ on, onClick, icon: Icon, label, small }: { on: boolean; onClick
       aria-label={label}
       title={label}
       className={cx(
-        "flex items-center justify-center rounded-full border",
+        "flex shrink-0 items-center justify-center rounded-full border",
         small ? "h-10 w-10" : "h-12 w-12",
         on ? "border-line bg-card text-ink hover:bg-line" : "border-danger/50 bg-danger/15 text-danger",
       )}

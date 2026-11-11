@@ -152,7 +152,26 @@ export type ChannelMessage =
   // bu durumda görüntüyü kırpmadan sığdırır (yatay ekran dikey telefonda yarım görünmesin).
   | { type: "content_share"; active: boolean }
   // Danışan → terapist: danışan katılırken çevrim içi görüşme onamını işaretledi.
-  | { type: "consent" };
+  | { type: "consent" }
+  // Danışan → terapist: gösterilen videonun (YouTube) danışandaki durumu.
+  | { type: "media_state"; id: string; state: MediaState; time: number; duration: number }
+  // Terapist → danışan: videoyu uzaktan oynat / duraklat / ileri-geri al.
+  | { type: "media_control"; id: string; action: "play" | "pause" | "seek"; time?: number };
+
+export type MediaState = "unstarted" | "playing" | "paused" | "buffering" | "ended";
+
+/** Kişinin kendi gönderdiği kamera görüntüsü için kalite seçimi. */
+export type QualityPreset = "auto" | "balanced" | "saver";
+export const QUALITY_PRESETS: { id: QualityPreset; label: string; hint: string }[] = [
+  { id: "auto", label: "Otomatik (en iyi)", hint: "Bağlantı elverdiği kadar yüksek kalite." },
+  { id: "balanced", label: "Dengeli", hint: "Orta kalite; zayıf bağlantıda daha akıcı." },
+  { id: "saver", label: "Veri tasarrufu", hint: "Düşük kalite; mobil veride az kota harcar, ses önceliklidir." },
+];
+const CAMERA_QUALITY: Record<QualityPreset, { bitrate: number; scale: number; fps: number }> = {
+  auto: { bitrate: 2_500_000, scale: 1, fps: 30 },
+  balanced: { bitrate: 1_000_000, scale: 1.5, fps: 24 },
+  saver: { bitrate: 400_000, scale: 2.5, fps: 15 },
+};
 
 export type Signal =
   | { kind: "hello" }
@@ -227,6 +246,7 @@ export class Call {
   private recoveryTimer: ReturnType<typeof setTimeout> | null = null;
   private rebuildTimer: ReturnType<typeof setTimeout> | null = null;
   private videoProfile: "camera" | "screen" = "camera";
+  private quality: QualityPreset = "auto";
   private lastLoss = { lost: 0, received: 0 };
   private lastBytes = { sent: 0, received: 0, at: 0 };
   private iceServers: RTCIceServer[];
@@ -269,6 +289,12 @@ export class Call {
    * Giden görüntünün kodlama ayarları. Ekran paylaşımında yazı net kalsın diye çözünürlük
    * korunur ve bit hızı yükseltilir (kare hızı düşebilir); kamerada denge tercih edilir.
    */
+  /** Kamera görüntüsünün kalite seçimi; bağlantı kuruluysa hemen uygulanır. */
+  async setQuality(quality: QualityPreset): Promise<void> {
+    this.quality = quality;
+    await this.setVideoProfile(this.videoProfile);
+  }
+
   async setVideoProfile(profile: "camera" | "screen"): Promise<void> {
     this.videoProfile = profile;
     const sender = this.pc?.getSenders().find((s) => s.track?.kind === "video");
@@ -277,8 +303,10 @@ export class Call {
     const enc = p.encodings?.[0];
     if (!enc) return; // Henüz müzakere edilmemiş; kodlama listesi eklenemez.
     // Tavan değerler: bağlantı elvermezse tarayıcı kendiliğinden daha düşüğe iner.
-    enc.maxBitrate = profile === "screen" ? 3_000_000 : 2_500_000;
-    enc.maxFramerate = profile === "screen" ? 15 : 30;
+    const cam = CAMERA_QUALITY[this.quality];
+    enc.maxBitrate = profile === "screen" ? 3_000_000 : cam.bitrate;
+    enc.maxFramerate = profile === "screen" ? 15 : cam.fps;
+    enc.scaleResolutionDownBy = profile === "screen" ? 1 : cam.scale;
     // Kamera: bağlantı daralınca kare hızı korunur, çözünürlük düşer (takılma yerine yumuşak görüntü).
     p.degradationPreference = profile === "screen" ? "maintain-resolution" : "maintain-framerate";
     await sender.setParameters(p).catch(() => {});

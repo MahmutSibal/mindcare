@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Check, Copy, Info, Lock, Mic, MicOff, MonitorUp, PhoneOff, RefreshCw, ShieldAlert, Signal, Video, VideoOff, Wifi, WifiOff, Waves,
+  Check, Copy, Info, Lock, Mic, MicOff, MonitorUp, MoreVertical, PhoneOff, RefreshCw, ShieldAlert, Signal, Video, VideoOff, Wifi,
+  WifiOff, Waves,
 } from "lucide-react";
 import type { Patient } from "../../lib/api";
 import { audioProcessing, type CallStats, type VideoStats } from "../../lib/rtc";
 import { initials } from "../../lib/format";
 import { useActiveSession } from "../../lib/session";
 import { Avatar, Button, cx, Modal } from "../ui";
+import QualityPicker from "../QualityPicker";
 import type { CallApi } from "./useCall";
 
 function VideoEl({ stream, muted, mirrored, className }: {
@@ -33,6 +35,7 @@ function VideoEl({ stream, muted, mirrored, className }: {
 export default function CallPanel({ call, patient }: { call: CallApi; patient: Patient | null }) {
   const active = useActiveSession();
   const [confirmEnd, setConfirmEnd] = useState(false);
+  const [settings, setSettings] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const begin = async () => {
@@ -127,6 +130,14 @@ export default function CallPanel({ call, patient }: { call: CallApi; patient: P
           disabled={!call.inCall}
           highlight={!!call.screen}
         />
+        <button
+          onClick={() => setSettings(true)}
+          title="Görüşme ayarları"
+          aria-label="Görüşme ayarları"
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-line bg-card text-ink hover:bg-line"
+        >
+          <MoreVertical size={17} />
+        </button>
         <span className="h-8 w-px bg-line" />
         <button
           onClick={() => setConfirmEnd(true)}
@@ -137,6 +148,19 @@ export default function CallPanel({ call, patient }: { call: CallApi; patient: P
           <PhoneOff size={17} /> Bitir
         </button>
       </div>
+
+      {settings && (
+        <Modal title="Görüşme ayarları" onClose={() => setSettings(false)}>
+          <QualityPicker value={call.quality} onChange={call.setQuality} />
+          <p className="mt-3 text-xs leading-relaxed text-muted">
+            Bu ayar yalnızca sizin kameranızdan danışana giden görüntüyü etkiler; ekran paylaşımı her zaman net gönderilir.
+            Danışan kendi kalitesini kendi ekranındaki ayarlar menüsünden seçer.
+          </p>
+          <div className="mt-4">
+            <MicProcessing stream={call.local} />
+          </div>
+        </Modal>
+      )}
 
       {confirmEnd && (
         <Modal title="Görüşmeyi sonlandır" onClose={() => setConfirmEnd(false)}>

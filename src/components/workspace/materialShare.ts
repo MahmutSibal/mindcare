@@ -5,6 +5,7 @@ import { api, type Material } from "../../lib/api";
 import {
   CHUNK_BYTES, extensionOf, fmtBytes, httpsUrl, isSafeImage, isWebLink, MAX_FILE_SHARE_BYTES, mimeFor, toBase64,
 } from "../../lib/share";
+import type { MediaState } from "../../lib/rtc";
 import type { CallApi } from "./useCall";
 
 export interface SharedMaterial {
@@ -17,6 +18,8 @@ export interface SharedMaterial {
   previewUrl?: string;
   /** Alıntı metni. */
   text?: string;
+  /** Gösterilen videonun danışandaki durumu (YouTube bağlantısı). */
+  media?: { state: MediaState; time: number; duration: number };
   error?: string;
 }
 

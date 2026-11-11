@@ -382,6 +382,14 @@ function TestPicker({ onClose, onSend }: { onClose: () => void; onSend: (t: Test
 
 // ───────────────────────────── Paylaşım önizlemesi ─────────────────────────────
 
+const MEDIA_LABEL = {
+  unstarted: "başlatılmadı",
+  playing: "oynatılıyor",
+  paused: "duraklatıldı",
+  buffering: "yükleniyor",
+  ended: "bitti",
+} as const;
+
 const SHARE_STATUS: Record<SharedMaterial["status"], string> = {
   sending: "Gönderiliyor",
   sent: "Gönderildi, danışanın onayı bekleniyor",
@@ -417,7 +425,9 @@ function PatientScreenPreview({ call, shared, onClearShared }: { call: CallApi; 
         )}
         {shared && !call.screen && (
           <div className="absolute left-2 top-2 rounded-md bg-black/60 px-2 py-1 text-[11px] text-white">
-            {SHARE_STATUS[shared.status]}
+            {shared.media
+              ? `Danışanda: ${MEDIA_LABEL[shared.media.state]} • ${clock(shared.media.time)}${shared.media.duration ? ` / ${clock(shared.media.duration)}` : ""}`
+              : SHARE_STATUS[shared.status]}
             {shared.status === "sending" && ` • %${Math.round(shared.progress * 100)}`}
           </div>
         )}
@@ -425,6 +435,17 @@ function PatientScreenPreview({ call, shared, onClearShared }: { call: CallApi; 
           <div className="absolute inset-x-0 bottom-0 h-1 bg-card">
             <div className="h-full bg-accent transition-all" style={{ width: `${shared.progress * 100}%` }} />
           </div>
+        )}
+        {shared?.media && shared.shareId && !call.screen && (
+          <button
+            onClick={() =>
+              call.sendMessage({ type: "media_control", id: shared.shareId!, action: shared.media!.state === "playing" ? "pause" : "play" })
+            }
+            className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-lg bg-card px-3 py-1.5 text-xs font-medium hover:bg-line"
+            title="Danışanın ekranındaki videoyu kumanda eder"
+          >
+            {shared.media.state === "playing" ? <><Pause size={14} /> Duraklat</> : <><Play size={14} /> Oynat</>}
+          </button>
         )}
         {shared?.status === "video" && call.videoShare && !call.screen && (
           <button

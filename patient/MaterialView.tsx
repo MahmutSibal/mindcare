@@ -1,9 +1,9 @@
 // Danışan tarafı: terapistin gösterdiği materyal (görsel, belge, alıntı).
 // Parçalar şifreli veri kanalından gelir, bellekte birleştirilir; hiçbir yere kaydedilmez.
 
-import { useCallback, useRef, useState } from "react";
-import { Download, ExternalLink, FileText, Quote, X } from "lucide-react";
-import type { ChannelMessage } from "../src/lib/rtc";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Download, ExternalLink, FileText, Play, Quote, X } from "lucide-react";
+import type { ChannelMessage, MediaState } from "../src/lib/rtc";
 import { fmtBytes, fromBase64, httpsUrl, isPdf, isSafeImage, MAX_FILE_SHARE_BYTES, parseYouTube } from "../src/lib/share";
 import { Button } from "../src/components/ui";
 import { saveFile } from "./saveFile";
@@ -30,6 +30,7 @@ export function useIncomingMaterial(ack: (id: string) => void) {
   // bu yüzden state'in son çizimdeki değerine güvenilmez.
   const parts = useRef<{ meta: IncomingMaterial; chunks: Uint8Array<ArrayBuffer>[]; received: number; lastReport: number } | null>(null);
   const shownId = useRef<string | null>(null);
+  const [control, setControl] = useState<MediaControl | null>(null);
   const objectUrl = useRef<string | null>(null);
 
   const clear = useCallback(() => {
@@ -37,6 +38,7 @@ export function useIncomingMaterial(ack: (id: string) => void) {
     objectUrl.current = null;
     parts.current = null;
     shownId.current = null;
+    setControl(null);
     setCurrent(null);
   }, []);
 
@@ -93,6 +95,9 @@ export function useIncomingMaterial(ack: (id: string) => void) {
           ack(m.id);
           return true;
         }
+        case "media_control":
+          if (shownId.current === m.id) setControl({ action: m.action, time: m.time, nonce: Date.now() });
+          return true;
         case "material_hide":
           if (shownId.current === m.id) clear();
           return true;
@@ -103,7 +108,7 @@ export function useIncomingMaterial(ack: (id: string) => void) {
     [ack, clear],
   );
 
-  return { current, handle, clear };
+  return { current, control, handle, clear };
 }
 
 function safeName(title: string, mime: string): string {
@@ -112,7 +117,141 @@ function safeName(title: string, mime: string): string {
   return base + ext;
 }
 
-export default function MaterialView({ item, onClose }: { item: IncomingMaterial; onClose: () => void }) {
+export interface MediaReport {
+  state: MediaState;
+  time: number;
+  duration: number;
+}
+export interface MediaControl {
+  action: "play" | "pause" | "seek";
+  time?: number;
+  /** Aynı komut art arda gelse de etkili olsun diye her mesajda değişir. */
+  nonce: number;
+}
+
+const YT_ORIGIN = "https://www.youtube-nocookie.com";
+// YouTube oynatıcı durum kodları.
+const YT_STATE: Record<number, MediaState> = { [-1]: "unstarted", 0: "ended", 1: "playing", 2: "paused", 3: "buffering", 5: "unstarted" };
+const MEDIA_TEXT: Record<MediaState, string> = {
+  unstarted: "Video başlatılmadı",
+  playing: "Oynatılıyor",
+  paused: "Duraklatıldı",
+  buffering: "Yükleniyor…",
+  ended: "Video bitti",
+};
+
+/**
+ * Kumandalı YouTube oynatıcısı. Oynatıcıyla, YouTube'un gömülü oynatıcı mesajlaşmasıyla
+ * (postMessage) konuşulur; dışarıdan betik yüklenmez. Durum terapiste bildirilir, terapistin
+ * oynat/duraklat komutları uygulanır.
+ */
+function YouTubeEmbed({ id, title, videoId, start, closeBtn, control, onMediaState }: {
+  id: string;
+  title: string;
+  videoId: string;
+  start: number;
+  closeBtn: React.ReactNode;
+  control?: MediaControl | null;
+  onMediaState?: (id: string, s: MediaReport) => void;
+}) {
+  const frame = useRef<HTMLIFrameElement>(null);
+  const info = useRef<MediaReport>({ state: "unstarted", time: 0, duration: 0 });
+  const [state, setState] = useState<MediaState>("unstarted");
+
+  const post = useCallback((msg: object) => {
+    frame.current?.contentWindow?.postMessage(JSON.stringify({ ...msg, id: "mindcare", channel: "widget" }), YT_ORIGIN);
+  }, []);
+  const command = useCallback((func: string, args: unknown[] = []) => post({ event: "command", func, args }), [post]);
+
+  useEffect(() => {
+    let ready = false;
+    let lastSent = 0;
+    let lastState = "";
+    const onMsg = (e: MessageEvent) => {
+      if (e.origin !== YT_ORIGIN || e.source !== frame.current?.contentWindow) return;
+      let d: { info?: Record<string, unknown> } | null = null;
+      try {
+        d = typeof e.data === "string" ? JSON.parse(e.data) : e.data;
+      } catch {
+        return;
+      }
+      ready = true;
+      const i = d?.info;
+      if (!i || typeof i !== "object") return;
+      if (typeof i.currentTime === "number") info.current.time = Math.floor(i.currentTime);
+      if (typeof i.duration === "number" && i.duration > 0) info.current.duration = Math.floor(i.duration);
+      if (typeof i.playerState === "number") {
+        info.current.state = YT_STATE[i.playerState] ?? info.current.state;
+        setState(info.current.state);
+      }
+      const changed = info.current.state !== lastState;
+      const now = Date.now();
+      if (!changed && now - lastSent < 3000) return;
+      lastState = info.current.state;
+      lastSent = now;
+      onMediaState?.(id, { ...info.current });
+    };
+    window.addEventListener("message", onMsg);
+    // Oynatıcı hazır olana kadar "dinliyorum" bildirimi yinelenir.
+    const t = setInterval(() => {
+      if (!ready) post({ event: "listening" });
+    }, 500);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener("message", onMsg);
+    };
+  }, [id, post, onMediaState]);
+
+  useEffect(() => {
+    if (!control) return;
+    if (control.action === "play") command("playVideo");
+    else if (control.action === "pause") command("pauseVideo");
+    else command("seekTo", [Math.max(0, control.time ?? 0), true]);
+  }, [control, command]);
+
+  // Adres burada, yalnızca doğrulanmış video kimliğinden kurulur; gelen bağlantı gömülmez.
+  const src =
+    `${YT_ORIGIN}/embed/${videoId}?autoplay=1&playsinline=1&rel=0&enablejsapi=1` +
+    `&origin=${encodeURIComponent(window.location.origin)}${start ? `&start=${start}` : ""}`;
+
+  return (
+    <div className="absolute inset-0 z-20 flex flex-col bg-black/95">
+      <div className="flex items-center gap-2 px-3 py-2">
+        <span className="flex-1 truncate text-sm text-white">{title}</span>
+        {closeBtn}
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-2">
+        <iframe
+          ref={frame}
+          src={src}
+          title={title}
+          className="aspect-video max-h-[70%] w-full max-w-4xl rounded-lg border-0 landscape:max-h-full landscape:w-auto"
+          allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+          allowFullScreen
+          referrerPolicy="strict-origin-when-cross-origin"
+        />
+        <div className="flex items-center gap-3 text-xs text-white/80">
+          <span role="status">{MEDIA_TEXT[state]}</span>
+          {state !== "playing" && (
+            <button
+              onClick={() => command("playVideo")}
+              className="flex items-center gap-1.5 rounded-lg bg-accent-strong px-4 py-2 text-sm font-medium text-white"
+            >
+              <Play size={15} /> Videoyu başlat
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function MaterialView({ item, onClose, control, onMediaState }: {
+  item: IncomingMaterial;
+  onClose: () => void;
+  control?: MediaControl | null;
+  onMediaState?: (id: string, s: MediaReport) => void;
+}) {
   // Görüşme sayfasından ayrılmadan kaydet (bkz. saveFile).
   const save = async () => {
     if (!item.url) return;
@@ -128,25 +267,17 @@ export default function MaterialView({ item, onClose }: { item: IncomingMaterial
   if (item.kind === "link" && item.link) {
     const yt = parseYouTube(item.link);
     if (yt) {
-      // Adres burada, yalnızca doğrulanmış video kimliğinden kurulur; gelen bağlantı gömülmez.
-      const src = `https://www.youtube-nocookie.com/embed/${yt.id}?autoplay=1&playsinline=1&rel=0${yt.start ? `&start=${yt.start}` : ""}`;
       return (
-        <div className="absolute inset-0 z-20 flex flex-col bg-black/95">
-          <div className="flex items-center gap-2 px-3 py-2">
-            <span className="flex-1 truncate text-sm text-white">{item.title}</span>
-            {closeBtn}
-          </div>
-          <div className="flex min-h-0 flex-1 items-center justify-center p-2 pb-24 sm:pb-2">
-            <iframe
-              src={src}
-              title={item.title}
-              className="aspect-video max-h-full w-full max-w-4xl rounded-lg border-0"
-              allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-              allowFullScreen
-              referrerPolicy="strict-origin-when-cross-origin"
-            />
-          </div>
-        </div>
+        <YouTubeEmbed
+          key={item.id}
+          id={item.id}
+          title={item.title}
+          videoId={yt.id}
+          start={yt.start}
+          closeBtn={closeBtn}
+          control={control}
+          onMediaState={onMediaState}
+        />
       );
     }
     return (

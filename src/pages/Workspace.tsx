@@ -47,6 +47,11 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
         if (m.type === "material_received") {
           setShared((s) => (s && s.shareId === m.id ? { ...s, status: "shown" } : s));
         }
+        if (m.type === "media_state") {
+          setShared((s) =>
+            s && s.shareId === m.id ? { ...s, status: "shown", media: { state: m.state, time: m.time, duration: m.duration } } : s,
+          );
+        }
         // Danışan katılırken onam verdi: görüşmenin ait olduğu danışanın dosyasına işlenir.
         if (m.type === "consent" && sessionRef.current) {
           api.recordPatientConsent(sessionRef.current.patient_id).then(notifyDataChanged).catch(() => {});
