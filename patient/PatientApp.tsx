@@ -113,6 +113,8 @@ export default function PatientApp() {
   const [camOn, setCamOn] = useState(true);
   const [notice, setNotice] = useState<ChannelMessage | null>(null);
   const [stats, setStats] = useState<CallStats | null>(null);
+  // Çevrim içi görüşme onamı: işaretlenmeden katılınamaz; bağlanınca terapiste bildirilir.
+  const [consented, setConsented] = useState(false);
   // Terapist ekran/video paylaşıyorsa görüntü sığdırılır; danışan dokunarak değiştirebilir.
   const [contentShare, setContentShare] = useState(false);
   const [fitOverride, setFitOverride] = useState<"cover" | "contain" | null>(null);
@@ -180,6 +182,14 @@ export default function PatientApp() {
       const call = new Call("guest", invite.room, local, {
         onState: (s) => {
           setState(s);
+          if (s === "connected") {
+            // Veri kanalı bağlantıdan biraz sonra açılabilir; onam iletilene kadar birkaç kez dene.
+            let tries = 0;
+            const send = () => {
+              if (!call.sendMessage({ type: "consent" }) && ++tries < 10) setTimeout(send, 1000);
+            };
+            send();
+          }
           if (s === "ended") {
             local.getTracks().forEach((t) => t.stop());
             setPhase("left");
@@ -370,7 +380,12 @@ export default function PatientApp() {
         </div>
 
         {phase === "invalid" && <p className="text-sm text-muted">Bağlantı eksik veya hatalı. Lütfen terapistinizin gönderdiği bağlantıyı eksiksiz açın.</p>}
-        {phase === "left" && <p className="text-sm text-muted">Görüşme sona erdi. Bu pencereyi kapatabilirsiniz.</p>}
+        {phase === "left" && (
+          <>
+            <p className="text-sm text-muted">Görüşme sona erdi. Bu pencereyi kapatabilirsiniz.</p>
+            <CrisisNote />
+          </>
+        )}
         {phase === "rejected" && <p className="text-sm text-danger">{error}</p>}
 
         {(phase === "consent" || phase === "joining") && (
@@ -396,10 +411,24 @@ export default function PatientApp() {
               </div>
             )}
             {error && <p className="mt-3 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
-            <Button className="mt-5 w-full py-2.5" onClick={join} disabled={!local || phase === "joining"}>
+            <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-line bg-card/60 p-3 text-xs leading-relaxed text-muted">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--color-accent)]"
+                checked={consented}
+                onChange={(e) => setConsented(e.target.checked)}
+              />
+              <span>
+                Görüşmenin görüntülü ve sesli olarak çevrim içi yapılmasını, görüşme sırasında terapistimin gönderdiği test ve
+                ödevlere verdiğim yanıtların terapistime iletilmesini kabul ediyorum. Görüşme kaydedilmez. Görüşme süresince
+                yalnız ve rahat konuşabileceğim bir yerde olacağım.
+              </span>
+            </label>
+            <Button className="mt-4 w-full py-2.5" onClick={join} disabled={!local || !consented || phase === "joining"}>
               {phase === "joining" ? "Katılınıyor…" : "Görüşmeye Katıl"}
             </Button>
-            <p className="mt-4 text-xs leading-relaxed text-faint">
+            <CrisisNote />
+            <p className="mt-3 text-xs leading-relaxed text-faint">
               Bu bağlantı size özeldir ve tek kullanımlıktır; başkalarıyla paylaşmayın. Bağlantı bilgileri yalnızca görüşmeyi
               kurmak için kullanılır. Terapistinizin gönderdiği test cevapları şifreli görüşme bağlantısıyla doğrudan
               terapistinize iletilir; bu sayfada veya bir sunucuda saklanmaz.
@@ -408,6 +437,16 @@ export default function PatientApp() {
         )}
       </div>
     </div>
+  );
+}
+
+/** Bu sayfa acil yardım kanalı değildir; kriz anında nereye başvurulacağı. */
+function CrisisNote() {
+  return (
+    <p className="mt-4 rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-xs leading-relaxed text-warn">
+      Bu görüşme acil yardım hattı değildir. Kendinize veya bir başkasına zarar verme düşünceniz varsa ya da acil bir
+      durumdaysanız <b>112</b>'yi arayın.
+    </p>
   );
 }
 

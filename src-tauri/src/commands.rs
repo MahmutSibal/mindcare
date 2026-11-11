@@ -71,6 +71,10 @@ pub struct Patient {
     completed_sessions: i64,
     last_session_date: Option<String>,
     next_appointment: Option<String>,
+    emergency_contact: Option<String>,
+    emergency_phone: Option<String>,
+    risk_note: Option<String>,
+    consent_at: Option<String>,
 }
 
 const PATIENT_SELECT: &str = "
@@ -79,7 +83,8 @@ const PATIENT_SELECT: &str = "
         (SELECT max(s.session_date) FROM sessions s WHERE s.patient_id = p.id AND s.status = 'completed'),
         (SELECT min(a.appointment_date) FROM appointments a
             WHERE a.patient_id = p.id AND a.status = 'scheduled'
-              AND a.appointment_date >= strftime('%Y-%m-%dT%H:%M', 'now', 'localtime'))
+              AND a.appointment_date >= strftime('%Y-%m-%dT%H:%M', 'now', 'localtime')),
+        p.emergency_contact, p.emergency_phone, p.risk_note, p.consent_at
     FROM patients p";
 
 fn map_patient(r: &rusqlite::Row) -> rusqlite::Result<Patient> {
@@ -94,6 +99,10 @@ fn map_patient(r: &rusqlite::Row) -> rusqlite::Result<Patient> {
         completed_sessions: r.get(7)?,
         last_session_date: r.get(8)?,
         next_appointment: r.get(9)?,
+        emergency_contact: r.get(10)?,
+        emergency_phone: r.get(11)?,
+        risk_note: r.get(12)?,
+        consent_at: r.get(13)?,
     })
 }
 
@@ -104,6 +113,9 @@ pub struct PatientInput {
     phone: Option<String>,
     email: Option<String>,
     status: Option<String>,
+    emergency_contact: Option<String>,
+    emergency_phone: Option<String>,
+    risk_note: Option<String>,
 }
 
 #[tauri::command]
@@ -128,10 +140,12 @@ pub fn create_patient(state: State<AppState>, input: PatientInput) -> AppResult<
     with_conn(&state, |c| {
         let id = new_id();
         c.execute(
-            "INSERT INTO patients (id, full_name, birth_date, phone, email, status)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO patients (id, full_name, birth_date, phone, email, status,
+                emergency_contact, emergency_phone, risk_note)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![id, name, opt(&input.birth_date), opt(&input.phone), opt(&input.email),
-                    input.status.unwrap_or_else(|| "active".into())],
+                    input.status.unwrap_or_else(|| "active".into()),
+                    opt(&input.emergency_contact), opt(&input.emergency_phone), opt(&input.risk_note)],
         )?;
         Ok(id)
     })
@@ -143,9 +157,20 @@ pub fn update_patient(state: State<AppState>, id: String, input: PatientInput) -
     with_conn(&state, |c| {
         c.execute(
             "UPDATE patients SET full_name = ?2, birth_date = ?3, phone = ?4, email = ?5,
-                status = coalesce(?6, status), updated_at = CURRENT_TIMESTAMP WHERE id = ?1",
-            params![id, name, opt(&input.birth_date), opt(&input.phone), opt(&input.email), input.status],
+                status = coalesce(?6, status), emergency_contact = ?7, emergency_phone = ?8, risk_note = ?9,
+                updated_at = CURRENT_TIMESTAMP WHERE id = ?1",
+            params![id, name, opt(&input.birth_date), opt(&input.phone), opt(&input.email), input.status,
+                    opt(&input.emergency_contact), opt(&input.emergency_phone), opt(&input.risk_note)],
         )?;
+        Ok(())
+    })
+}
+
+/// Danışan görüşmeye katılırken çevrim içi görüşme onamını verdiğinde çağrılır.
+#[tauri::command]
+pub fn record_patient_consent(state: State<AppState>, id: String) -> AppResult<()> {
+    with_conn(&state, |c| {
+        c.execute("UPDATE patients SET consent_at = CURRENT_TIMESTAMP WHERE id = ?1", [id])?;
         Ok(())
     })
 }

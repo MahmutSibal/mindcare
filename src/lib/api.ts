@@ -13,6 +13,13 @@ export interface Patient {
   completed_sessions: number;
   last_session_date: string | null;
   next_appointment: string | null;
+  /** Acil durumda aranacak kişi ve telefonu. */
+  emergency_contact: string | null;
+  emergency_phone: string | null;
+  /** Terapistin risk notu (kendine zarar riski, kriz planı vb.). */
+  risk_note: string | null;
+  /** Danışanın çevrim içi görüşme onamını en son verdiği an (UTC). */
+  consent_at: string | null;
 }
 
 export interface PatientInput {
@@ -21,6 +28,9 @@ export interface PatientInput {
   phone?: string | null;
   email?: string | null;
   status?: PatientStatus;
+  emergency_contact?: string | null;
+  emergency_phone?: string | null;
+  risk_note?: string | null;
 }
 
 export type SessionStatus = "planned" | "in_progress" | "completed" | "cancelled";
@@ -121,6 +131,7 @@ export const api = {
   createPatient: (input: PatientInput) => invoke<string>("create_patient", { input }),
   updatePatient: (id: string, input: PatientInput) => invoke<void>("update_patient", { id, input }),
   deletePatient: (id: string) => invoke<void>("delete_patient", { id }),
+  recordPatientConsent: (id: string) => invoke<void>("record_patient_consent", { id }),
 
   listSessions: (patientId?: string) =>
     invoke<Session[]>("list_sessions", { patientId: patientId ?? null }),

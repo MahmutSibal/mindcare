@@ -149,7 +149,9 @@ export type ChannelMessage =
   | { type: "material_received"; id: string }
   // Terapist → danışan: görüntüde ekran paylaşımı veya materyal videosu var mı. Danışan sayfası
   // bu durumda görüntüyü kırpmadan sığdırır (yatay ekran dikey telefonda yarım görünmesin).
-  | { type: "content_share"; active: boolean };
+  | { type: "content_share"; active: boolean }
+  // Danışan → terapist: danışan katılırken çevrim içi görüşme onamını işaretledi.
+  | { type: "consent" };
 
 export type Signal =
   | { kind: "hello" }

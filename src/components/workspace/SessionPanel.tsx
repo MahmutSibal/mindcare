@@ -38,6 +38,9 @@ export function SessionTimer({ patient, call }: { patient: Patient | null; call:
   const [error, setError] = useState<string | null>(null);
   const pct = Math.min(100, (a.elapsed / a.targetSeconds) * 100);
   const over = a.elapsed > a.targetSeconds;
+  // Son 5 dakikada terapisti seansı toparlaması için uyar.
+  const remaining = a.targetSeconds - a.elapsed;
+  const closing = !!a.session && remaining > 0 && remaining <= 300;
 
   const startInPerson = async () => {
     if (!patient) return;
@@ -62,6 +65,11 @@ export function SessionTimer({ patient, call }: { patient: Patient | null; call:
         <span className="min-w-0 flex-1 truncate text-[13px] text-muted">
           {a.session ? `${a.session.session_number}. Seans • ${a.session.patient_name}` : "Seans başlamadı"}
         </span>
+        {closing && (
+          <span className="rounded-md border border-warn/40 bg-warn/10 px-2 py-0.5 text-xs text-warn">
+            {Math.ceil(remaining / 60)} dk kaldı
+          </span>
+        )}
         <span className="text-lg font-semibold tabular-nums">
           <span className={over ? "text-warn" : ""}>{clock(a.elapsed)}</span>
           <span className="text-sm font-normal text-muted"> / {clock(a.targetSeconds)}</span>

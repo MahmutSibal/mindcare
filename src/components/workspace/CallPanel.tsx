@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Check, Copy, Info, Lock, Mic, MicOff, MonitorUp, PhoneOff, RefreshCw, Signal, Video, VideoOff, Wifi, WifiOff, Waves,
+  Check, Copy, Info, Lock, Mic, MicOff, MonitorUp, PhoneOff, RefreshCw, ShieldAlert, Signal, Video, VideoOff, Wifi, WifiOff, Waves,
 } from "lucide-react";
 import type { Patient } from "../../lib/api";
 import { audioProcessing, type CallStats, type VideoStats } from "../../lib/rtc";
@@ -86,6 +86,17 @@ export default function CallPanel({ call, patient }: { call: CallApi; patient: P
             {call.turnWarning && (
               <p className="max-w-md rounded-lg bg-warn/10 px-3 py-2 text-xs text-warn">{call.turnWarning}</p>
             )}
+          </div>
+        )}
+
+        {/* Tüm ekran paylaşılıyorsa notlar ve diğer danışan bilgileri de görünebilir. */}
+        {call.screen && (call.screen.getVideoTracks()[0]?.getSettings() as { displaySurface?: string }).displaySurface === "monitor" && (
+          <div className="absolute inset-x-3 top-3 z-10 flex items-start gap-2 rounded-lg border border-warn/40 bg-black/75 px-3 py-2 text-xs leading-relaxed text-warn">
+            <ShieldAlert size={15} className="mt-0.5 shrink-0" />
+            <span>
+              <b>Tüm ekranınız paylaşılıyor.</b> Seans notları, danışan listesi ve bildirimler danışana görünebilir.
+              Paylaşımı durdurup yalnızca göstermek istediğiniz <b>pencereyi</b> seçmeniz önerilir.
+            </span>
           </div>
         )}
 

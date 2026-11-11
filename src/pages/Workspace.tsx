@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CalendarCheck2, ChevronDown, ChevronRight, ClipboardList, PencilLine, UserPlus, Users } from "lucide-react";
+import {
+  CalendarCheck2, ChevronDown, ChevronRight, ClipboardList, FileCheck2, PencilLine, Phone, ShieldAlert, UserPlus, Users,
+} from "lucide-react";
 import { CATEGORY_LABEL, CategoryIcon } from "../components/category";
 import { api, type Homework, type Material, type Note, type Patient, type Session, type TestResult } from "../lib/api";
 import { age, fmtDate, fmtDateTime, initials, minutes, plainText } from "../lib/format";
-import { useActiveSession, useDataVersion } from "../lib/session";
+import { notifyDataChanged, useActiveSession, useDataVersion } from "../lib/session";
 import { HomeworkCard, useHomeworkDeliveryReceipts } from "../components/workspace/Homework";
 import { hideMaterial, showMaterial as shareMaterial, type SharedMaterial } from "../components/workspace/materialShare";
 import { errorText } from "../lib/api";
@@ -33,6 +35,8 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
   const [shareError, setShareError] = useState<string | null>(null);
   const call = useCall();
   const { session } = useActiveSession();
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
   useHomeworkDeliveryReceipts(call);
 
   // Danışan materyali eksiksiz aldığında onay gönderir.
@@ -42,6 +46,10 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
       onMessage((m) => {
         if (m.type === "material_received") {
           setShared((s) => (s && s.shareId === m.id ? { ...s, status: "shown" } : s));
+        }
+        // Danışan katılırken onam verdi: görüşmenin ait olduğu danışanın dosyasına işlenir.
+        if (m.type === "consent" && sessionRef.current) {
+          api.recordPatientConsent(sessionRef.current.patient_id).then(notifyDataChanged).catch(() => {});
         }
       }),
     [onMessage],
@@ -237,11 +245,30 @@ function PatientProfileCard({ patient, patients, onSelect, locked, onChanged }: 
         )}
       </div>
 
+      {patient.risk_note && (
+        <p className="mt-3 flex items-start gap-2 rounded-lg border border-warn/40 bg-warn/10 px-2.5 py-2 text-xs leading-relaxed text-warn" title="Risk notu (danışana gösterilmez)">
+          <ShieldAlert size={14} className="mt-0.5 shrink-0" /> <span className="whitespace-pre-wrap">{patient.risk_note}</span>
+        </p>
+      )}
       <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
         <Stat label="Seans" value={String(patient.completed_sessions)} />
         <Stat label="Son seans" value={fmtDate(patient.last_session_date)} />
         <Stat label="Sonraki" value={patient.next_appointment ? fmtDate(patient.next_appointment) : "—"} />
       </dl>
+      <div className="mt-2 space-y-1 text-xs text-muted">
+        <p className="flex items-center gap-1.5">
+          <Phone size={12} className="shrink-0 text-faint" />
+          {patient.emergency_contact || patient.emergency_phone ? (
+            <span className="select-text truncate">Acil: {[patient.emergency_contact, patient.emergency_phone].filter(Boolean).join(" • ")}</span>
+          ) : (
+            <button onClick={() => setEditing(true)} className="text-warn hover:underline">Acil durum kişisi eklenmemiş</button>
+          )}
+        </p>
+        <p className="flex items-center gap-1.5">
+          <FileCheck2 size={12} className={cx("shrink-0", patient.consent_at ? "text-ok" : "text-faint")} />
+          {patient.consent_at ? `Çevrim içi görüşme onamı: ${fmtDate(patient.consent_at, true)}` : "Çevrim içi görüşme onamı henüz yok"}
+        </p>
+      </div>
       {editing && <PatientForm patient={patient} onClose={() => setEditing(false)} onSaved={onChanged} />}
     </Card>
   );

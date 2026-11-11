@@ -125,6 +125,14 @@ const MIGRATIONS: &[&str] = &[
     );
     CREATE INDEX idx_homework_patient ON homework(patient_id, created_at DESC);
     "#,
+    // 4 — Klinik güvenlik: acil durumda aranacak kişi, terapistin risk notu ve danışanın
+    // çevrim içi görüşme onamını en son verdiği an.
+    r#"
+    ALTER TABLE patients ADD COLUMN emergency_contact TEXT;
+    ALTER TABLE patients ADD COLUMN emergency_phone TEXT;
+    ALTER TABLE patients ADD COLUMN risk_note TEXT;
+    ALTER TABLE patients ADD COLUMN consent_at DATETIME;
+    "#,
 ];
 
 fn apply_key(conn: &Connection, key: &Zeroizing<String>) -> AppResult<()> {
@@ -366,6 +374,29 @@ mod tests {
         assert!(err.to_string().contains("ait değil"));
         assert!(!prepared.exists());
         assert_eq!(std::fs::read(&db_path).unwrap(), before, "ana veritabanı değişti");
+    }
+
+    /// Eski sürümden (şema 3) gelen veritabanı yükseltilince mevcut danışan korunur ve
+    /// yeni klinik güvenlik alanları boş olarak eklenir.
+    #[test]
+    fn upgrade_adds_clinical_safety_fields_and_keeps_patients() {
+        let p = tmp("upgrade.db");
+        let mut c = open_encrypted(&p, &key('9')).unwrap();
+        for (i, sql) in MIGRATIONS.iter().enumerate().take(3) {
+            c.execute_batch(sql).unwrap();
+            c.pragma_update(None, "user_version", (i + 1) as i64).unwrap();
+        }
+        c.execute("INSERT INTO patients (id, full_name) VALUES ('1', 'Eski Kayıt')", []).unwrap();
+        migrate(&mut c).unwrap();
+        c.execute(
+            "UPDATE patients SET emergency_contact = 'Yakını', emergency_phone = '0500', risk_note = 'not',
+                consent_at = CURRENT_TIMESTAMP WHERE id = '1'",
+            [],
+        ).unwrap();
+        let (name, contact): (String, String) = c
+            .query_row("SELECT full_name, emergency_contact FROM patients", [], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap();
+        assert_eq!((name.as_str(), contact.as_str()), ("Eski Kayıt", "Yakını"));
     }
 
     #[test]

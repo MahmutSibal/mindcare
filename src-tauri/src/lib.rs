@@ -67,6 +67,7 @@ pub fn run() {
             commands::create_patient,
             commands::update_patient,
             commands::delete_patient,
+            commands::record_patient_consent,
             commands::list_sessions,
             commands::start_session,
             commands::finish_session,
