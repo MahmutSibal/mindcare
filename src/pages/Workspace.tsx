@@ -218,7 +218,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
   ];
 
   return (
-    <div className="grid h-full grid-cols-[minmax(250px,290px)_minmax(0,1fr)_minmax(290px,330px)] gap-2.5 p-2.5">
+    <div className="grid h-full grid-cols-[minmax(270px,310px)_minmax(0,1fr)_minmax(290px,330px)] gap-2.5 p-2.5">
       {/* Sol panel — danışan ve geçmişi */}
       <div className="flex min-h-0 flex-col gap-2.5">
         <PatientProfileCard
@@ -607,12 +607,14 @@ function TabbedCard({ tabs, request }: {
             key={t.id}
             onClick={() => setActive(t.id)}
             className={cx(
-              "-mb-px flex min-w-0 flex-1 items-center justify-center gap-1 border-b-2 px-0.5 py-2 text-xs transition-colors",
+              "relative -mb-px flex min-w-0 flex-1 items-center justify-center border-b-2 px-1 pb-2 pt-3 text-[12px] transition-colors",
               t.id === active ? "border-accent text-ink" : "border-transparent text-muted hover:text-ink",
             )}
           >
-            {t.label}
-            {t.count > 0 && <span className="rounded-full bg-card px-1 text-[10px] text-muted">{t.count}</span>}
+            <span className="truncate">{t.label}</span>
+            {t.count > 0 && (
+              <span className="absolute right-0 top-0.5 min-w-[15px] rounded-full bg-card px-1 text-center text-[9px] leading-[15px] text-muted">{t.count}</span>
+            )}
           </button>
         ))}
       </div>
