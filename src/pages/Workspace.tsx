@@ -131,7 +131,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
   // yenisi gelen bir aktarımın geç gelen güncellemeleri yok sayılır.
   const activeShare = useRef<object | null>(null);
 
-  const showMaterial = async (m: Material): Promise<SharedMaterial | null> => {
+  const showMaterial = async (m: Material, bytes?: Uint8Array<ArrayBuffer>): Promise<SharedMaterial | null> => {
     setShareError(null);
     if (shared) hideMaterial(call, shared);
     setShared(null);
@@ -142,7 +142,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
       await shareMaterial(call, m, (s) => {
         last = s;
         if (activeShare.current === token) setShared(s);
-      });
+      }, bytes);
       return last;
     } catch (e) {
       if (activeShare.current !== token) return null;
@@ -153,11 +153,21 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
   };
 
   /** Görseli danışana gösterir, sonra üzerine ortak çizim açar. */
-  const drawOnMaterial = async (m: Material) => {
-    const s = await showMaterial(m);
+  const drawOnMaterial = async (m: Material, bytes?: Uint8Array<ArrayBuffer>) => {
+    const s = await showMaterial(m, bytes);
     if (!s?.shareId || !s.previewUrl) return;
     setBoardBackdrop(s.previewUrl);
     boardApi.open(null, s.shareId);
+  };
+
+  /** Danışanın gönderdiği görseli ekrana getirir ve üzerine ortak çizim açar. */
+  const drawOnFile = async (f: PatientFileMeta) => {
+    try {
+      const bytes = new Uint8Array(await api.getPatientFile(f.id));
+      await drawOnMaterial({ id: `file:${f.id}`, title: f.name, category: "image", file_path: f.name, description: null, created_at: f.created_at }, bytes);
+    } catch (e) {
+      setShareError(errorText(e));
+    }
   };
 
   const clearShared = () => {
@@ -186,7 +196,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
         <>
           <TestResults results={results} inTab />
           <DrawingsList drawings={drawings} />
-          <PatientFiles files={files} />
+          <PatientFiles files={files} onDraw={call.state === "connected" ? (f) => void drawOnFile(f) : undefined} />
         </>
       ),
     },

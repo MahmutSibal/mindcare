@@ -37,7 +37,7 @@ async function quoteText(m: Material): Promise<string> {
  * Materyali danışana gösterir. Durum değişiklikleri `update` ile bildirilir.
  * Görüşme bağlı değilse veya aktarım yarıda kalırsa hata fırlatır.
  */
-export async function showMaterial(call: CallApi, m: Material, update: (s: SharedMaterial) => void): Promise<void> {
+export async function showMaterial(call: CallApi, m: Material, update: (s: SharedMaterial) => void, bytesOverride?: Uint8Array<ArrayBuffer>): Promise<void> {
   if (call.state !== "connected") throw new Error("Materyal göstermek için görüşmenin bağlı olması gerekir.");
 
   if (isWebLink(m.file_path)) {
@@ -68,7 +68,7 @@ export async function showMaterial(call: CallApi, m: Material, update: (s: Share
 
   const mime = mimeFor(m.file_path);
   const kind = m.category === "image" && isSafeImage(mime) ? "image" : "document";
-  const bytes = new Uint8Array(await api.readMaterial(m.id));
+  const bytes = bytesOverride ?? new Uint8Array(await api.readMaterial(m.id));
   if (bytes.byteLength > MAX_FILE_SHARE_BYTES) {
     throw new Error(
       `Dosya ${fmtBytes(bytes.byteLength)}; en fazla ${fmtBytes(MAX_FILE_SHARE_BYTES)} gönderilebilir. Daha büyük dosyaları ekran paylaşımıyla gösterin.`,

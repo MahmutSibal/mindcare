@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
-import { Download, File as FileIcon, FileText, Image as ImageIcon, Music, Paperclip, Trash2 } from "lucide-react";
+import { Download, File as FileIcon, FileText, Image as ImageIcon, Music, Paperclip, Pencil, Trash2 } from "lucide-react";
 import { api, errorText, type PatientFileMeta } from "../../lib/api";
 import { fmtDate } from "../../lib/format";
 import { notifyDataChanged } from "../../lib/session";
@@ -130,7 +130,7 @@ export function ReceivedFilesToast({ files, onOpen, onDismiss }: { files: Receiv
 }
 
 /** Danışan dosyasında: danışanın gönderdiği dosyalar. */
-export function PatientFiles({ files }: { files: PatientFileMeta[] }) {
+export function PatientFiles({ files, onDraw }: { files: PatientFileMeta[]; onDraw?: (f: PatientFileMeta) => void }) {
   const [open, setOpen] = useState<PatientFileMeta | null>(null);
   const [url, setUrl] = useState<string | null>(null);
   const [text, setText] = useState<string | null>(null);
@@ -242,6 +242,17 @@ export function PatientFiles({ files }: { files: PatientFileMeta[] }) {
               </Button>
             )}
             <div className="flex gap-2">
+              {onDraw && isSafeImage(open.mime) && (
+                <Button
+                  onClick={() => {
+                    const f = open;
+                    setOpen(null);
+                    onDraw(f);
+                  }}
+                >
+                  <Pencil size={15} /> Üzerine çiz
+                </Button>
+              )}
               <Button variant="outline" onClick={() => void download(open)}>
                 <Download size={15} /> İndir
               </Button>
