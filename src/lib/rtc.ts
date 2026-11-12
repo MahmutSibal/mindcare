@@ -158,6 +158,12 @@ export type ChannelMessage =
   | { type: "media_state"; id: string; state: MediaState; time: number; duration: number }
   // Terapist → danışan: videoyu uzaktan oynat / duraklat / ileri-geri al.
   | { type: "media_control"; id: string; action: "play" | "pause" | "seek"; time?: number }
+  // Danışan → terapist: danışanın gönderdiği dosya. Başlık, parçalar (base64), bitiş; terapist
+  // sonunda `upload_result` ile kaydedildiğini (ya da neden reddedildiğini) bildirir.
+  | { type: "upload_start"; id: string; name: string; mime: string; size: number }
+  | { type: "upload_chunk"; id: string; data: string }
+  | { type: "upload_end"; id: string }
+  | { type: "upload_result"; id: string; ok: boolean; error?: string }
   | BoardMessage;
 
 export type MediaState = "unstarted" | "playing" | "paused" | "buffering" | "ended";

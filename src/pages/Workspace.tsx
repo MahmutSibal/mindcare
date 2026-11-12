@@ -3,8 +3,9 @@ import {
   CalendarCheck2, ChevronDown, ChevronRight, ClipboardList, FileCheck2, Pencil, PencilLine, Phone, ShieldAlert, UserPlus, Users,
 } from "lucide-react";
 import { CATEGORY_LABEL, CategoryIcon } from "../components/category";
-import { api, type DrawingMeta, type Homework, type Material, type Note, type Patient, type Session, type Substance, type TestResult } from "../lib/api";
+import { api, type DrawingMeta, type Homework, type Material, type Note, type Patient, type PatientFileMeta, type Session, type Substance, type TestResult } from "../lib/api";
 import ClinicalTab from "../components/workspace/ClinicalTab";
+import { PatientFiles, ReceivedFilesToast, useIncomingFiles } from "../components/workspace/patientFiles";
 import { BoardPanel, BoardStartDialog, DrawingsList } from "../components/workspace/BoardPanel";
 import { useBoard } from "../lib/useBoard";
 import { age, fmtDate, fmtDateTime, initials, minutes, plainText } from "../lib/format";
@@ -43,6 +44,12 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
   const sessionRef = useRef(session);
   sessionRef.current = session;
   useHomeworkDeliveryReceipts(call);
+  const [files, setFiles] = useState<PatientFileMeta[]>([]);
+  const [tabRequest, setTabRequest] = useState<{ tab: HistoryTab; n: number } | null>(null);
+  // Danışanın gönderdiği dosyalar, görüşmenin ait olduğu danışanın dosyasına kaydedilir.
+  const incoming = useIncomingFiles(call, () =>
+    sessionRef.current ? { patientId: sessionRef.current.patient_id, sessionId: sessionRef.current.id } : null,
+  );
 
   // Ortak çizim: terapist başlatır; gösterilen görsel arka plan olabilir.
   const boardApi = useBoard("host", call.sendMessage, call.state === "connected");
@@ -96,7 +103,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
       setPatient(null);
       return;
     }
-    const [p, s, n, r, h, sub, dr] = await Promise.all([
+    const [p, s, n, r, h, sub, dr, fl] = await Promise.all([
       api.getPatient(patientId),
       api.listSessions(patientId),
       api.listNotes(patientId),
@@ -104,6 +111,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
       api.listHomework(patientId),
       api.listSubstances(patientId),
       api.listDrawings(patientId),
+      api.listPatientFiles(patientId),
     ]);
     setPatient(p);
     setSessions(s);
@@ -112,6 +120,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
     setHomework(h);
     setSubstances(sub);
     setDrawings(dr);
+    setFiles(fl);
   }, [patientId]);
 
   useEffect(() => {
@@ -172,11 +181,12 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
     {
       id: "tests",
       label: "Çalışmalar",
-      count: results.length + drawings.length,
+      count: results.length + drawings.length + files.length,
       body: (
         <>
           <TestResults results={results} inTab />
           <DrawingsList drawings={drawings} />
+          <PatientFiles files={files} />
         </>
       ),
     },
@@ -208,11 +218,19 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
           locked={call.inCall}
           onChanged={loadPatient}
         />
-        <TabbedCard tabs={historyTabs} />
+        <TabbedCard tabs={historyTabs} request={tabRequest} />
       </div>
 
       {/* Orta panel — seans süresi ve görüntülü görüşme */}
       <div className="flex min-h-0 flex-col gap-2.5">
+        <ReceivedFilesToast
+          files={incoming.received}
+          onOpen={() => {
+            setTabRequest({ tab: "tests", n: Date.now() });
+            incoming.dismiss();
+          }}
+          onDismiss={incoming.dismiss}
+        />
         <SessionTimer patient={patient} call={call} />
         <CallPanel call={call} patient={patient} />
       </div>
@@ -561,8 +579,15 @@ function MaterialLibrary({ materials, onShow, onDraw, onAll, connected, error }:
 type HistoryTab = "clinical" | "notes" | "tests" | "homework" | "sessions";
 
 /** Danışan geçmişi tek kartta: sekmeler ve kaydırılabilir içerik; kalan yüksekliği doldurur. */
-function TabbedCard({ tabs }: { tabs: { id: HistoryTab; label: string; count: number; body: React.ReactNode }[] }) {
+function TabbedCard({ tabs, request }: {
+  tabs: { id: HistoryTab; label: string; count: number; body: React.ReactNode }[];
+  /** Dışarıdan sekme açma isteği (her istek farklı `n` taşır). */
+  request?: { tab: HistoryTab; n: number } | null;
+}) {
   const [active, setActive] = useState<HistoryTab>(tabs[0]!.id);
+  useEffect(() => {
+    if (request) setActive(request.tab);
+  }, [request]);
   const current = tabs.find((t) => t.id === active) ?? tabs[0]!;
   return (
     <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-line bg-panel">

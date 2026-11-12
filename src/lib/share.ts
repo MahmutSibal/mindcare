@@ -28,7 +28,36 @@ export function mimeFor(path: string): string {
   return MIME[extensionOf(path)] ?? "application/octet-stream";
 }
 
-export const isSafeImage = (mime: string) => /^image\/(png|jpeg|gif|webp)$/.test(mime);
+// Danışanın terapiste gönderebileceği dosyalar. Liste Rust tarafındaki (commands.rs) ile aynıdır.
+const UPLOAD_EXT: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  gif: "image/gif",
+  pdf: "application/pdf",
+  txt: "text/plain",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  mp3: "audio/mpeg",
+  m4a: "audio/mp4",
+  wav: "audio/wav",
+  ogg: "audio/ogg",
+  webm: "audio/webm",
+};
+export const UPLOAD_MIMES: string[] = [...new Set(Object.values(UPLOAD_EXT))];
+/** Dosyanın gönderilebilir türü; izinli değilse `null`. Uzantı ile bildirilen tür birbirini doğrular. */
+export function uploadMimeFor(file: { name: string; type: string }): string | null {
+  const byExt = UPLOAD_EXT[extensionOf(file.name)] ?? null;
+  if (!byExt) return null;
+  // Tarayıcı bazen türü boş ya da genel verir; bildirilen tür varsa uzantıyla çelişmemeli.
+  if (file.type && UPLOAD_MIMES.includes(file.type) && file.type !== byExt) return null;
+  return byExt;
+}
+/** Tarayıcıda satır içi görüntülenebilir mi? (diğerleri yalnızca indirilir) */
+export const isViewable = (mime: string) => isSafeImage(mime) || isPdf(mime) || mime === "text/plain" || mime.startsWith("audio/");
+
+export const isSafeImage =(mime: string) => /^image\/(png|jpeg|gif|webp)$/.test(mime);
 export const isPdf = (mime: string) => mime === "application/pdf";
 
 export function toBase64(bytes: Uint8Array): string {

@@ -44,6 +44,15 @@ export interface DrawingMeta {
   created_at: string;
 }
 
+export interface PatientFileMeta {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+  session_number: number | null;
+  created_at: string;
+}
+
 export type SubstanceKind = "medication" | "substance";
 
 export interface Substance {
@@ -205,6 +214,16 @@ export const api = {
   setAppointmentStatus: (id: string, status: AppointmentStatus) =>
     invoke<void>("set_appointment_status", { id, status }),
   deleteAppointment: (id: string) => invoke<void>("delete_appointment", { id }),
+
+  /** Danışanın gönderdiği dosyayı kaydeder; içerik ham bayt, bilgiler üst bilgi olarak gider. */
+  savePatientFile: (patientId: string, sessionId: string | null, name: string, mime: string, bytes: Uint8Array) =>
+    invoke<string>("save_patient_file", bytes, {
+      headers: { "x-patient-id": patientId, "x-session-id": sessionId ?? "", "x-name": encodeURIComponent(name), "x-mime": mime },
+    }),
+  listPatientFiles: (patientId: string) => invoke<PatientFileMeta[]>("list_patient_files", { patientId }),
+  getPatientFile: (id: string) => invoke<ArrayBuffer>("get_patient_file", { id }),
+  exportPatientFile: (id: string, dest: string) => invoke<void>("export_patient_file", { id, dest }),
+  deletePatientFile: (id: string) => invoke<void>("delete_patient_file", { id }),
 
   listMaterials: () => invoke<Material[]>("list_materials"),
   createMaterial: (input: { title: string; category: MaterialCategory; file_path: string; description?: string }) =>

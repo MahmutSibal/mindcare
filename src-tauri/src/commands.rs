@@ -351,6 +351,163 @@ pub fn delete_drawing(state: State<AppState>, id: String) -> AppResult<()> {
     })
 }
 
+// ─────────────────────── Danışanın gönderdiği dosyalar ───────────────────────
+
+/// Danışandan kabul edilen en büyük dosya (danışan sayfasındaki sınırla aynı).
+const MAX_PATIENT_FILE_BYTES: usize = 25 * 1024 * 1024;
+
+/// Kabul edilen türler. Çalıştırılabilir ve betik dosyaları listede yoktur.
+const PATIENT_FILE_MIMES: &[&str] = &[
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+    "image/gif",
+    "application/pdf",
+    "text/plain",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "audio/mpeg",
+    "audio/mp4",
+    "audio/wav",
+    "audio/ogg",
+    "audio/webm",
+];
+
+/// `%XX` biçiminde kodlanmış (başlıkta taşınan) metni çözer.
+fn percent_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' && i + 2 < b.len() {
+            let hex = std::str::from_utf8(&b[i + 1..i + 3]).ok().and_then(|h| u8::from_str_radix(h, 16).ok());
+            if let Some(v) = hex {
+                out.push(v);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(b[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// Dosya adından yol ve denetim karakterlerini atar; boşsa "dosya" döner.
+fn sanitize_file_name(name: &str) -> String {
+    let base = name.rsplit(['/', '\\']).next().unwrap_or("");
+    let cleaned: String = base.chars().filter(|c| !c.is_control() && !matches!(c, '<' | '>' | ':' | '"' | '|' | '?' | '*')).collect();
+    let cleaned = cleaned.trim().trim_matches('.').trim();
+    let cleaned: String = cleaned.chars().take(120).collect();
+    if cleaned.is_empty() { "dosya".into() } else { cleaned }
+}
+
+/// Tür izinli mi ve içerik bildirilen türe uyuyor mu? Hata metni kullanıcıya gösterilir.
+fn validate_patient_file(mime: &str, bytes: &[u8]) -> AppResult<()> {
+    if !PATIENT_FILE_MIMES.contains(&mime) {
+        return Err(AppError::Invalid("Bu dosya türü kabul edilmiyor.".into()));
+    }
+    if bytes.is_empty() || bytes.len() > MAX_PATIENT_FILE_BYTES {
+        return Err(AppError::Invalid("Dosya boş veya 25 MB'tan büyük.".into()));
+    }
+    let magic_ok = match mime {
+        "image/png" => bytes.starts_with(&[0x89, b'P', b'N', b'G']),
+        "image/jpeg" => bytes.starts_with(&[0xFF, 0xD8, 0xFF]),
+        "image/gif" => bytes.starts_with(b"GIF8"),
+        "image/webp" => bytes.len() > 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP",
+        "application/pdf" => bytes.starts_with(b"%PDF"),
+        _ => true,
+    };
+    if magic_ok { Ok(()) } else { Err(AppError::Invalid("Dosya içeriği bildirilen türle uyuşmuyor.".into())) }
+}
+
+#[derive(Serialize)]
+pub struct PatientFileMeta {
+    id: String,
+    name: String,
+    mime: String,
+    size: i64,
+    session_number: Option<i64>,
+    created_at: String,
+}
+
+/// Danışandan gelen dosyayı kaydeder. İçerik ham bayt olarak gelir (JSON şişmesi olmasın);
+/// üst bilgiler `x-patient-id`, `x-session-id` (isteğe bağlı), `x-name` (%-kodlu), `x-mime`.
+#[tauri::command]
+pub fn save_patient_file(state: State<AppState>, request: tauri::ipc::Request<'_>) -> AppResult<String> {
+    let bytes = match request.body() {
+        tauri::ipc::InvokeBody::Raw(b) => b.as_slice(),
+        _ => return Err(AppError::Invalid("Dosya içeriği alınamadı.".into())),
+    };
+    let header = |k: &str| request.headers().get(k).and_then(|v| v.to_str().ok()).map(str::to_owned);
+    let patient_id = header("x-patient-id").ok_or_else(|| AppError::Invalid("Danışan belirtilmedi.".into()))?;
+    let session_id = header("x-session-id").filter(|s| !s.is_empty());
+    let name = sanitize_file_name(&percent_decode(&header("x-name").unwrap_or_default()));
+    let mime = header("x-mime").unwrap_or_default().to_ascii_lowercase();
+    validate_patient_file(&mime, bytes)?;
+    with_conn(&state, |c| {
+        let id = new_id();
+        c.execute(
+            "INSERT INTO patient_files (id, patient_id, session_id, name, mime, size, data)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![id, patient_id, session_id, name, mime, bytes.len() as i64, bytes],
+        )?;
+        Ok(id)
+    })
+}
+
+#[tauri::command]
+pub fn list_patient_files(state: State<AppState>, patient_id: String) -> AppResult<Vec<PatientFileMeta>> {
+    with_conn(&state, |c| {
+        let mut st = c.prepare(
+            "SELECT f.id, f.name, f.mime, f.size, s.session_number, f.created_at
+             FROM patient_files f LEFT JOIN sessions s ON s.id = f.session_id
+             WHERE f.patient_id = ?1 ORDER BY f.created_at DESC",
+        )?;
+        let rows = st
+            .query_map([patient_id], |r| {
+                Ok(PatientFileMeta { id: r.get(0)?, name: r.get(1)?, mime: r.get(2)?, size: r.get(3)?, session_number: r.get(4)?, created_at: r.get(5)? })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    })
+}
+
+/// Dosyanın içeriği (ham bayt); görüntülemek için.
+#[tauri::command]
+pub fn get_patient_file(state: State<AppState>, id: String) -> AppResult<tauri::ipc::Response> {
+    let data: Vec<u8> = with_conn(&state, |c| {
+        c.query_row("SELECT data FROM patient_files WHERE id = ?1", [id], |r| r.get(0))
+            .optional()?
+            .ok_or_else(|| AppError::Invalid("Dosya bulunamadı.".into()))
+    })?;
+    Ok(tauri::ipc::Response::new(data))
+}
+
+/// Dosyayı terapistin seçtiği konuma yazar (indirme).
+#[tauri::command]
+pub fn export_patient_file(state: State<AppState>, id: String, dest: String) -> AppResult<()> {
+    let dest = PathBuf::from(dest);
+    if dest == state.db_path {
+        return Err(AppError::Invalid("Veritabanının üzerine yazılamaz.".into()));
+    }
+    let data: Vec<u8> = with_conn(&state, |c| {
+        c.query_row("SELECT data FROM patient_files WHERE id = ?1", [id], |r| r.get(0))
+            .optional()?
+            .ok_or_else(|| AppError::Invalid("Dosya bulunamadı.".into()))
+    })?;
+    std::fs::write(&dest, data)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn delete_patient_file(state: State<AppState>, id: String) -> AppResult<()> {
+    with_conn(&state, |c| {
+        c.execute("DELETE FROM patient_files WHERE id = ?1", [id])?;
+        Ok(())
+    })
+}
+
 /// Danışan görüşmeye katılırken çevrim içi görüşme onamını verdiğinde çağrılır.
 #[tauri::command]
 pub fn record_patient_consent(state: State<AppState>, id: String) -> AppResult<()> {
@@ -1134,7 +1291,30 @@ pub fn restore_with_recovery_key(state: State<AppState>, src: String, recovery_k
 
 #[cfg(test)]
 mod tests {
-    use super::valid_png_base64;
+    use super::{percent_decode, sanitize_file_name, valid_png_base64, validate_patient_file};
+
+    #[test]
+    fn patient_file_validation() {
+        assert!(validate_patient_file("application/pdf", b"%PDF-1.7 x").is_ok());
+        assert!(validate_patient_file("application/pdf", b"MZ\x90\x00").is_err(), "exe pdf diye gönderilemez");
+        assert!(validate_patient_file("application/x-msdownload", b"MZ").is_err(), "tür izinli değil");
+        assert!(validate_patient_file("text/html", b"<script>").is_err(), "html kabul edilmez");
+        assert!(validate_patient_file("image/png", &[]).is_err(), "boş");
+        assert!(validate_patient_file("image/png", &[0x89, b'P', b'N', b'G', 1]).is_ok());
+        assert!(validate_patient_file("audio/mp4", &vec![1u8; 26 * 1024 * 1024]).is_err(), "25 MB üstü");
+    }
+
+    #[test]
+    fn file_names_are_cleaned() {
+        assert_eq!(sanitize_file_name("..\\..\\Windows\\sistem.pdf"), "sistem.pdf");
+        assert_eq!(sanitize_file_name("/etc/passwd"), "passwd");
+        assert_eq!(sanitize_file_name("  rapor?.pdf "), "rapor.pdf");
+        assert_eq!(sanitize_file_name("..."), "dosya");
+        assert_eq!(sanitize_file_name(&"a".repeat(300)).len(), 120);
+        assert_eq!(percent_decode("Ay%C5%9Fe%20rapor.pdf"), "Ayşe rapor.pdf");
+        assert_eq!(percent_decode("100%"), "100%");
+        assert_eq!(percent_decode("%zz%4"), "%zz%4");
+    }
 
     #[test]
     fn only_png_base64_is_accepted_as_drawing() {

@@ -13,6 +13,7 @@ import TestForm from "./TestForm";
 import HomeworkView, { type HomeworkMessage } from "./HomeworkView";
 import MaterialView, { type MediaReport, useIncomingMaterial } from "./MaterialView";
 import QualityPicker from "../src/components/QualityPicker";
+import { UploadSection, useUpload } from "./Upload";
 import BoardOverlay from "./BoardOverlay";
 import { useBoard } from "../src/lib/useBoard";
 import type { QualityPreset } from "../src/lib/rtc";
@@ -145,6 +146,9 @@ export default function PatientApp() {
     void callRef.current?.setQuality(q);
   };
   // Ortak çizim: terapist başlatır. Gösterilen görsel arka plan olursa adresi oturum boyunca korunur.
+  const upload = useUpload(() => callRef.current);
+  const uploadRef = useRef(upload);
+  uploadRef.current = upload;
   const [boardVisible, setBoardVisible] = useState(true);
   const [backdropUrl, setBackdropUrl] = useState<string | null>(null);
   const board = useBoard("guest", (m) => callRef.current?.sendMessage(m) ?? false, state === "connected");
@@ -232,6 +236,7 @@ export default function PatientApp() {
         onStats: setStats,
         onMessage: (m) => {
           if (board.handle(m)) return;
+          if (uploadRef.current.handle(m)) return;
           if (material.handle(m)) return;
           if (m.type === "content_share") {
             setContentShare(!!m.active);
@@ -410,6 +415,7 @@ export default function PatientApp() {
             <>
               <button className="fixed inset-0 z-30 cursor-default" aria-label="Ayarları kapat" onClick={() => setMenu(false)} />
               <div className="absolute bottom-full left-1/2 z-40 mb-2 w-[min(92vw,340px)] -translate-x-1/2 rounded-2xl border border-line bg-panel p-4 shadow-2xl">
+                <UploadSection upload={upload} />
                 <QualityPicker value={quality} onChange={setQuality} />
                 <p className="mt-3 text-[11px] leading-relaxed text-faint">
                   Bu ayar yalnızca sizin kameranızdan giden görüntüyü etkiler. Görüntü donuyor ya da ses kesiliyorsa

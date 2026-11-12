@@ -10,6 +10,14 @@ Terapistler için masaüstü seans ve danışan yönetim sistemi.
 - **Görüntülü görüşme:** WebRTC (P2P, gerekirse TURN). Supabase Realtime yalnızca SDP/ICE sinyalleşmesi için kullanılır;
   klinik veri sunucuya gönderilmez. Davetler süreli ve tek kullanımlıktır, kanal erişimi RLS ile sınırlıdır.
   Veritabanı şeması ve kurulum adımları: [`supabase/`](supabase/README.md).
+- **Klinik kayıt:** Danışan dosyasında başvuru nedeni ile kullanılan ilaç/maddeler ("Klinik" sekmesi).
+- **Ortak çizim:** Seans sırasında terapist tuvali açar; iki taraf da (fare, parmak, kalem) aynı tuvale çizer ve yazar,
+  çizimler anında karşıda görünür. Terapistin gösterdiği bir görsel ("Çiz" düğmesi) arka plan olarak üzerine çizilebilir.
+  Çizimler danışan dosyasına PNG olarak kaydedilir ("Çalışmalar" sekmesi). Tüm trafik şifreli veri kanalındadır.
+- **Danışandan dosya:** Danışan ayarlar menüsünden fotoğraf, PDF, metin, Word veya ses dosyası gönderir (en fazla 25 MB).
+  Terapist ekranında bildirim çıkar; dosya şifreli veritabanında danışan dosyasına kaydedilir, uygulama içinde
+  görüntülenir (görsel, PDF, metin, ses) ve bilgisayara indirilebilir. Tür listesi hem danışan sayfasında hem
+  Rust tarafında (`commands.rs`) denetlenir; içerik bildirilen türle eşleşmiyorsa reddedilir.
 
 ## Cloudflare TURN kurulumu
 
