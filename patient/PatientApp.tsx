@@ -18,6 +18,7 @@ import BoardOverlay from "./BoardOverlay";
 import { useBoard } from "../src/lib/useBoard";
 import type { QualityPreset } from "../src/lib/rtc";
 import WaitingRoom from "./WaitingRoom";
+import ConnectionTest from "./ConnectionTest";
 
 type Phase = "invalid" | "consent" | "joining" | "rejected" | "call" | "left";
 
@@ -121,6 +122,7 @@ export default function PatientApp() {
   const [stats, setStats] = useState<CallStats | null>(null);
   // Çevrim içi görüşme onamı: işaretlenmeden katılınamaz; bağlanınca terapiste bildirilir.
   const [consented, setConsented] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
   // Terapist ekran/video paylaşıyorsa görüntü sığdırılır; danışan dokunarak değiştirebilir.
   const [contentShare, setContentShare] = useState(false);
   const [fitOverride, setFitOverride] = useState<"cover" | "contain" | null>(null);
@@ -460,6 +462,11 @@ export default function PatientApp() {
         )}
         {phase === "rejected" && <p className="text-sm text-danger">{error}</p>}
 
+        {testOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4">
+            <ConnectionTest onClose={() => setTestOpen(false)} />
+          </div>
+        )}
         {(phase === "consent" || phase === "joining") && (
           <>
             <h1 className="text-xl font-semibold">Görüşmeye katıl</h1>
@@ -499,6 +506,9 @@ export default function PatientApp() {
             <Button className="mt-4 w-full py-2.5" onClick={join} disabled={!local || !consented || phase === "joining"}>
               {phase === "joining" ? "Katılınıyor…" : "Görüşmeye Katıl"}
             </Button>
+            <button onClick={() => setTestOpen(true)} className="mt-3 w-full text-center text-xs text-muted underline hover:text-ink">
+              Bağlantımı test et (kamera, mikrofon, internet)
+            </button>
             <CrisisNote />
             <p className="mt-3 text-xs leading-relaxed text-faint">
               Bu bağlantı size özeldir ve tek kullanımlıktır; başkalarıyla paylaşmayın. Bağlantı bilgileri yalnızca görüşmeyi

@@ -7,6 +7,7 @@ import { HeartHandshake, Lock, Mic, MicOff, PhoneOff, Video, VideoOff } from "lu
 import { Button, cx } from "../src/components/ui";
 import { GroupCall, joinGroupRoom, type GroupPeer } from "../src/lib/groupRtc";
 import { getLocalMedia, type CallState, type JoinResult } from "../src/lib/rtc";
+import ConnectionTest from "./ConnectionTest";
 
 type Phase = "invalid" | "consent" | "joining" | "rejected" | "call" | "left";
 
@@ -111,6 +112,7 @@ export default function GroupApp() {
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
   const [consented, setConsented] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
   const callRef = useRef<GroupCall | null>(null);
   const consentSent = useRef(false);
 
@@ -228,6 +230,11 @@ export default function GroupApp() {
         {phase === "invalid" && <p className="text-sm text-muted">Bağlantı eksik veya hatalı. Lütfen terapistinizin gönderdiği bağlantıyı eksiksiz açın.</p>}
         {phase === "left" && <p className="text-sm text-muted">Grup görüşmesi sona erdi. Bu pencereyi kapatabilirsiniz.</p>}
         {phase === "rejected" && <p className="text-sm text-danger">{error}</p>}
+        {testOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4">
+            <ConnectionTest onClose={() => setTestOpen(false)} />
+          </div>
+        )}
         {(phase === "consent" || phase === "joining") && (
           <>
             <h1 className="text-xl font-semibold">Grup görüşmesine katıl</h1>
@@ -266,6 +273,9 @@ export default function GroupApp() {
             <Button className="mt-4 w-full py-2.5" onClick={join} disabled={!local || !consented || phase === "joining"}>
               {phase === "joining" ? "Katılınıyor…" : "Görüşmeye Katıl"}
             </Button>
+            <button onClick={() => setTestOpen(true)} className="mt-3 w-full text-center text-xs text-muted underline hover:text-ink">
+              Bağlantımı test et (kamera, mikrofon, internet)
+            </button>
             <p className="mt-4 rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-xs leading-relaxed text-warn">
               Bu görüşme acil yardım hattı değildir. Kendinize veya bir başkasına zarar verme düşünceniz varsa ya da acil bir
               durumdaysanız <b>112</b>'yi arayın.
