@@ -36,6 +36,14 @@ export interface PatientInput {
   intake_reason?: string | null;
 }
 
+export interface DrawingMeta {
+  id: string;
+  title: string;
+  prompt: string | null;
+  session_number: number | null;
+  created_at: string;
+}
+
 export type SubstanceKind = "medication" | "substance";
 
 export interface Substance {
@@ -161,6 +169,17 @@ export const api = {
   updatePatient: (id: string, input: PatientInput) => invoke<void>("update_patient", { id, input }),
   deletePatient: (id: string) => invoke<void>("delete_patient", { id }),
   recordPatientConsent: (id: string) => invoke<void>("record_patient_consent", { id }),
+
+  saveDrawing: (input: {
+    patient_id: string;
+    session_id: string | null;
+    title: string;
+    prompt?: string;
+    png_base64: string;
+  }) => invoke<string>("save_drawing", { input }),
+  listDrawings: (patientId: string) => invoke<DrawingMeta[]>("list_drawings", { patientId }),
+  getDrawing: (id: string) => invoke<string>("get_drawing", { id }),
+  deleteDrawing: (id: string) => invoke<void>("delete_drawing", { id }),
 
   listSubstances: (patientId: string) => invoke<Substance[]>("list_substances", { patientId }),
   saveSubstance: (id: string | null, input: SubstanceInput) => invoke<string>("save_substance", { id, input }),

@@ -268,6 +268,89 @@ pub fn delete_substance(state: State<AppState>, id: String) -> AppResult<()> {
     })
 }
 
+// ───────────────────────────── Çizimler ─────────────────────────────
+
+/// Kaydedilebilecek en büyük çizim (base64 metin uzunluğu, yaklaşık 6 MB'lık PNG).
+const MAX_DRAWING_CHARS: usize = 8_000_000;
+
+#[derive(Deserialize)]
+pub struct DrawingInput {
+    patient_id: String,
+    session_id: Option<String>,
+    title: String,
+    prompt: Option<String>,
+    png_base64: String,
+}
+
+#[derive(Serialize)]
+pub struct DrawingMeta {
+    id: String,
+    title: String,
+    prompt: Option<String>,
+    session_number: Option<i64>,
+    created_at: String,
+}
+
+/// PNG'nin base64 metni mi? (başlık "iVBOR" = 0x89 'P' 'N' 'G'; yalnızca base64 karakterleri)
+fn valid_png_base64(s: &str) -> bool {
+    s.len() >= 16
+        && s.len() <= MAX_DRAWING_CHARS
+        && s.starts_with("iVBOR")
+        && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'+' || b == b'/' || b == b'=')
+}
+
+#[tauri::command]
+pub fn save_drawing(state: State<AppState>, input: DrawingInput) -> AppResult<String> {
+    let title = non_empty(&input.title, "Başlık")?;
+    if !valid_png_base64(&input.png_base64) {
+        return Err(AppError::Invalid("Çizim geçerli bir PNG resmi değil veya çok büyük.".into()));
+    }
+    with_conn(&state, |c| {
+        let id = new_id();
+        c.execute(
+            "INSERT INTO drawings (id, patient_id, session_id, title, prompt, png_base64)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![id, input.patient_id, input.session_id, title, opt(&input.prompt), input.png_base64],
+        )?;
+        Ok(id)
+    })
+}
+
+#[tauri::command]
+pub fn list_drawings(state: State<AppState>, patient_id: String) -> AppResult<Vec<DrawingMeta>> {
+    with_conn(&state, |c| {
+        let mut st = c.prepare(
+            "SELECT d.id, d.title, d.prompt, s.session_number, d.created_at
+             FROM drawings d LEFT JOIN sessions s ON s.id = d.session_id
+             WHERE d.patient_id = ?1 ORDER BY d.created_at DESC",
+        )?;
+        let rows = st
+            .query_map([patient_id], |r| {
+                Ok(DrawingMeta { id: r.get(0)?, title: r.get(1)?, prompt: r.get(2)?, session_number: r.get(3)?, created_at: r.get(4)? })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    })
+}
+
+/// Çizimin PNG'si (base64). Liste ağır olmasın diye resim ayrı çekilir.
+#[tauri::command]
+pub fn get_drawing(state: State<AppState>, id: String) -> AppResult<String> {
+    with_conn(&state, |c| {
+        c.query_row("SELECT png_base64 FROM drawings WHERE id = ?1", [id], |r| r.get(0))
+            .optional()?
+            .ok_or_else(|| AppError::Invalid("Çizim bulunamadı.".into()))
+    })
+}
+
+#[tauri::command]
+pub fn delete_drawing(state: State<AppState>, id: String) -> AppResult<()> {
+    with_conn(&state, |c| {
+        c.execute("DELETE FROM drawings WHERE id = ?1", [id])?;
+        Ok(())
+    })
+}
+
 /// Danışan görüşmeye katılırken çevrim içi görüşme onamını verdiğinde çağrılır.
 #[tauri::command]
 pub fn record_patient_consent(state: State<AppState>, id: String) -> AppResult<()> {
@@ -1047,4 +1130,18 @@ pub fn restore_with_recovery_key(state: State<AppState>, src: String, recovery_k
     *guard = Some(db::open_encrypted(&state.db_path, &key)?);
     *state.init_error.lock().unwrap() = None;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::valid_png_base64;
+
+    #[test]
+    fn only_png_base64_is_accepted_as_drawing() {
+        assert!(valid_png_base64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ"));
+        assert!(!valid_png_base64("PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg=="), "png başlığı yok");
+        assert!(!valid_png_base64("iVBORw0KGgo<script>"), "base64 dışı karakter");
+        assert!(!valid_png_base64("iVBOR"), "çok kısa");
+        assert!(!valid_png_base64(&format!("iVBOR{}", "A".repeat(8_000_000))), "çok büyük");
+    }
 }

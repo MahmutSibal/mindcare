@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  CalendarCheck2, ChevronDown, ChevronRight, ClipboardList, FileCheck2, PencilLine, Phone, ShieldAlert, UserPlus, Users,
+  CalendarCheck2, ChevronDown, ChevronRight, ClipboardList, FileCheck2, Pencil, PencilLine, Phone, ShieldAlert, UserPlus, Users,
 } from "lucide-react";
 import { CATEGORY_LABEL, CategoryIcon } from "../components/category";
-import { api, type Homework, type Material, type Note, type Patient, type Session, type Substance, type TestResult } from "../lib/api";
+import { api, type DrawingMeta, type Homework, type Material, type Note, type Patient, type Session, type Substance, type TestResult } from "../lib/api";
 import ClinicalTab from "../components/workspace/ClinicalTab";
+import { BoardPanel, BoardStartDialog, DrawingsList } from "../components/workspace/BoardPanel";
+import { useBoard } from "../lib/useBoard";
 import { age, fmtDate, fmtDateTime, initials, minutes, plainText } from "../lib/format";
 import { notifyDataChanged, useActiveSession, useDataVersion } from "../lib/session";
 import { HomeworkCard, useHomeworkDeliveryReceipts } from "../components/workspace/Homework";
@@ -32,6 +34,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
   const [results, setResults] = useState<TestResult[]>([]);
   const [homework, setHomework] = useState<Homework[]>([]);
   const [substances, setSubstances] = useState<Substance[]>([]);
+  const [drawings, setDrawings] = useState<DrawingMeta[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [shared, setShared] = useState<SharedMaterial | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
@@ -40,6 +43,16 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
   const sessionRef = useRef(session);
   sessionRef.current = session;
   useHomeworkDeliveryReceipts(call);
+
+  // Ortak çizim: terapist başlatır; gösterilen görsel arka plan olabilir.
+  const boardApi = useBoard("host", call.sendMessage, call.state === "connected");
+  const [boardStarting, setBoardStarting] = useState(false);
+  const [boardBackdrop, setBoardBackdrop] = useState<string | null>(null);
+  const { onMessage: onCallMessage } = call;
+  useEffect(() => onCallMessage((m) => void boardApi.handle(m)), [onCallMessage, boardApi.handle]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!call.inCall && boardApi.session) boardApi.close();
+  }, [call.inCall]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Danışan materyali eksiksiz aldığında onay gönderir.
   const { onMessage } = call;
@@ -83,13 +96,14 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
       setPatient(null);
       return;
     }
-    const [p, s, n, r, h, sub] = await Promise.all([
+    const [p, s, n, r, h, sub, dr] = await Promise.all([
       api.getPatient(patientId),
       api.listSessions(patientId),
       api.listNotes(patientId),
       api.listTestResults(patientId),
       api.listHomework(patientId),
       api.listSubstances(patientId),
+      api.listDrawings(patientId),
     ]);
     setPatient(p);
     setSessions(s);
@@ -97,6 +111,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
     setResults(r);
     setHomework(h);
     setSubstances(sub);
+    setDrawings(dr);
   }, [patientId]);
 
   useEffect(() => {
@@ -107,19 +122,33 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
   // yenisi gelen bir aktarımın geç gelen güncellemeleri yok sayılır.
   const activeShare = useRef<object | null>(null);
 
-  const showMaterial = async (m: Material) => {
+  const showMaterial = async (m: Material): Promise<SharedMaterial | null> => {
     setShareError(null);
     if (shared) hideMaterial(call, shared);
     setShared(null);
     const token = {};
     activeShare.current = token;
+    let last: SharedMaterial | null = null;
     try {
-      await shareMaterial(call, m, (s) => activeShare.current === token && setShared(s));
+      await shareMaterial(call, m, (s) => {
+        last = s;
+        if (activeShare.current === token) setShared(s);
+      });
+      return last;
     } catch (e) {
-      if (activeShare.current !== token) return;
+      if (activeShare.current !== token) return null;
       setShared(null);
       setShareError(errorText(e));
+      return null;
     }
+  };
+
+  /** Görseli danışana gösterir, sonra üzerine ortak çizim açar. */
+  const drawOnMaterial = async (m: Material) => {
+    const s = await showMaterial(m);
+    if (!s?.shareId || !s.previewUrl) return;
+    setBoardBackdrop(s.previewUrl);
+    boardApi.open(null, s.shareId);
   };
 
   const clearShared = () => {
@@ -140,7 +169,17 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
       body: <ClinicalTab patient={patient} substances={substances} />,
     },
     { id: "notes", label: "Notlar", count: notes.length, body: <PrivateNotesHistory notes={notes} inTab /> },
-    { id: "tests", label: "Testler", count: results.length, body: <TestResults results={results} inTab /> },
+    {
+      id: "tests",
+      label: "Çalışmalar",
+      count: results.length + drawings.length,
+      body: (
+        <>
+          <TestResults results={results} inTab />
+          <DrawingsList drawings={drawings} />
+        </>
+      ),
+    },
     {
       id: "homework",
       label: "Ödevler",
@@ -187,13 +226,36 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
         materials={
           <MaterialLibrary
             materials={materials}
-            onShow={showMaterial}
+            onShow={(m) => void showMaterial(m)}
+            onDraw={(m) => void drawOnMaterial(m)}
             onAll={() => onNavigate("materials")}
             connected={call.state === "connected"}
             error={shareError}
           />
         }
+        onOpenBoard={() => setBoardStarting(true)}
       />
+
+      {boardStarting && (
+        <BoardStartDialog
+          onClose={() => setBoardStarting(false)}
+          onStart={(prompt) => {
+            setBoardStarting(false);
+            setBoardBackdrop(null);
+            boardApi.open(prompt);
+          }}
+        />
+      )}
+      {boardApi.session && (
+        <BoardPanel
+          key={boardApi.session.id}
+          boardApi={boardApi}
+          patient={patient}
+          sessionId={session && session.patient_id === patient?.id ? session.id : null}
+          remote={call.remote}
+          backdropUrl={boardBackdrop}
+        />
+      )}
     </div>
   );
 }
@@ -441,9 +503,11 @@ function TestResultView({ result, onClose }: { result: TestResult; onClose: () =
 
 // ───────────────────────────── Materyaller ─────────────────────────────
 
-function MaterialLibrary({ materials, onShow, onAll, connected, error }: {
+function MaterialLibrary({ materials, onShow, onDraw, onAll, connected, error }: {
   materials: Material[];
   onShow: (m: Material) => void;
+  /** Görselin üzerine ortak çizim açar. */
+  onDraw: (m: Material) => void;
   onAll: () => void;
   connected: boolean;
   error: string | null;
@@ -472,6 +536,17 @@ function MaterialLibrary({ materials, onShow, onAll, connected, error }: {
               >
                 Göster
               </Button>
+              {m.category === "image" && (
+                <Button
+                  variant="ghost"
+                  className="px-2 py-1 text-xs"
+                  onClick={() => onDraw(m)}
+                  disabled={!connected}
+                  title={connected ? "Görseli gösterip üzerine birlikte çizin" : "Görüşme bağlanınca kullanılabilir"}
+                >
+                  <Pencil size={13} /> Çiz
+                </Button>
+              )}
             </li>
           ))}
         </ul>

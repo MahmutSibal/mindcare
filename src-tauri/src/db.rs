@@ -154,6 +154,22 @@ const MIGRATIONS: &[&str] = &[
     );
     CREATE INDEX idx_substances_patient ON patient_substances(patient_id, active DESC, created_at DESC);
     "#,
+    // 6 — Seans sırasında ortak tuvalde yapılan çizimler. Resim PNG'nin base64 metni olarak şifreli
+    // veritabanında tutulur (ayrı dosya yok, yedeğe ve kurtarma anahtarına otomatik dahil).
+    r#"
+    CREATE TABLE drawings (
+        id TEXT PRIMARY KEY,
+        patient_id TEXT NOT NULL,
+        session_id TEXT,
+        title TEXT NOT NULL,
+        prompt TEXT,
+        png_base64 TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+        FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE SET NULL
+    );
+    CREATE INDEX idx_drawings_patient ON drawings(patient_id, created_at DESC);
+    "#,
 ];
 
 fn apply_key(conn: &Connection, key: &Zeroizing<String>) -> AppResult<()> {
@@ -436,6 +452,24 @@ mod tests {
         assert!(c.execute("UPDATE patient_substances SET active = 2", []).is_err(), "durum kısıtı");
         c.execute("DELETE FROM patients WHERE id = 'p'", []).unwrap();
         let n: i64 = c.query_row("SELECT count(*) FROM patient_substances", [], |r| r.get(0)).unwrap();
+        assert_eq!(n, 0, "danışanla birlikte silinir");
+    }
+
+    #[test]
+    fn drawings_follow_patient_and_survive_session_deletion() {
+        let p = tmp("drawings.db");
+        let mut c = open_encrypted(&p, &key('7')).unwrap();
+        migrate(&mut c).unwrap();
+        c.execute_batch(
+            "INSERT INTO patients (id, full_name) VALUES ('p', 'X');
+             INSERT INTO sessions (id, patient_id, session_number, session_date) VALUES ('s', 'p', 1, '2026-01-01');
+             INSERT INTO drawings (id, patient_id, session_id, title, png_base64) VALUES ('d', 'p', 's', 'Ev-ağaç-insan', 'iVBORw0KGgo=');",
+        ).unwrap();
+        c.execute("DELETE FROM sessions WHERE id = 's'", []).unwrap();
+        let sid: Option<String> = c.query_row("SELECT session_id FROM drawings", [], |r| r.get(0)).unwrap();
+        assert_eq!(sid, None, "seans silinince çizim kalır, bağı kopar");
+        c.execute("DELETE FROM patients WHERE id = 'p'", []).unwrap();
+        let n: i64 = c.query_row("SELECT count(*) FROM drawings", [], |r| r.get(0)).unwrap();
         assert_eq!(n, 0, "danışanla birlikte silinir");
     }
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ClipboardCheck, Clock3, FileSignature, MonitorX, Pause, Play, Send, Square, Undo2 } from "lucide-react";
+import { ClipboardCheck, Clock3, FileSignature, MonitorX, Pause, Pencil, Play, Send, Square, Undo2 } from "lucide-react";
 import { api, errorText, type Patient, type Test } from "../../lib/api";
 import type { SharedMaterial } from "./materialShare";
 import { clock } from "../../lib/format";
@@ -11,13 +11,14 @@ import { Button, Card, cx, Empty, Modal } from "../ui";
 import { CATEGORY_LABEL, CategoryIcon } from "../category";
 import type { CallApi } from "./useCall";
 
-export default function SessionPanel({ call, patient, shared, onClearShared, materials }: {
+export default function SessionPanel({ call, patient, shared, onClearShared, materials, onOpenBoard }: {
   call: CallApi;
   patient: Patient | null;
   shared: SharedMaterial | null;
   onClearShared: () => void;
   /** Materyal kütüphanesi (seans araçlarının bir sekmesi). */
   materials: React.ReactNode;
+  onOpenBoard: () => void;
 }) {
   // Önizleme yalnızca danışana bir şey gösterilirken yer kaplar.
   const sharing = !!call.screen || !!shared;
@@ -25,7 +26,7 @@ export default function SessionPanel({ call, patient, shared, onClearShared, mat
     <div className="flex min-h-0 flex-col gap-2.5">
       <LiveNotesEditor />
       {sharing && <PatientScreenPreview call={call} shared={shared} onClearShared={onClearShared} />}
-      <QuickTools call={call} patient={patient} materials={materials} />
+      <QuickTools call={call} patient={patient} materials={materials} onOpenBoard={onOpenBoard} />
     </div>
   );
 }
@@ -197,7 +198,12 @@ interface PendingTest {
 /** Danışan sayfası bu süre içinde "ulaştı" demezse terapist uyarılır. */
 const DELIVERY_TIMEOUT_MS = 6000;
 
-function QuickTools({ call, patient, materials }: { call: CallApi; patient: Patient | null; materials: React.ReactNode }) {
+function QuickTools({ call, patient, materials, onOpenBoard }: {
+  call: CallApi;
+  patient: Patient | null;
+  materials: React.ReactNode;
+  onOpenBoard: () => void;
+}) {
   const { session } = useActiveSession();
   const [tab, setTab] = useState<"tools" | "materials">("tools");
   const [picking, setPicking] = useState(false);
@@ -327,6 +333,18 @@ function QuickTools({ call, patient, materials }: { call: CallApi; patient: Pati
             </p>
           )}
           {error && <p className="mt-2 text-xs text-danger">{error}</p>}
+        </li>
+        <li className="flex items-center gap-3 rounded-lg bg-card/70 px-3 py-2">
+          <Pencil size={18} className={connected ? "text-accent" : "text-muted"} />
+          <div className="min-w-0 flex-1 text-[13px]">
+            Ortak çizim
+            <div className="truncate text-xs text-faint">
+              {connected ? "İkiniz de aynı tuvale çizersiniz" : "Görüşme bağlanınca kullanılabilir"}
+            </div>
+          </div>
+          <Button variant="outline" className="px-3 py-1 text-xs" onClick={onOpenBoard} disabled={!connected}>
+            Aç
+          </Button>
         </li>
         <li className="flex items-center gap-3 rounded-lg bg-card/70 px-3 py-2">
           <FileSignature size={18} className={patient ? "text-accent" : "text-muted"} />

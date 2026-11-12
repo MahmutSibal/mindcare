@@ -14,6 +14,7 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { DEFAULT_STUN, SUPABASE_KEY, SUPABASE_URL } from "./config";
+import type { BoardMessage } from "./board";
 import type { Answers, TestDefinition } from "./tests";
 
 let client: SupabaseClient | null = null;
@@ -156,7 +157,8 @@ export type ChannelMessage =
   // Danışan → terapist: gösterilen videonun (YouTube) danışandaki durumu.
   | { type: "media_state"; id: string; state: MediaState; time: number; duration: number }
   // Terapist → danışan: videoyu uzaktan oynat / duraklat / ileri-geri al.
-  | { type: "media_control"; id: string; action: "play" | "pause" | "seek"; time?: number };
+  | { type: "media_control"; id: string; action: "play" | "pause" | "seek"; time?: number }
+  | BoardMessage;
 
 export type MediaState = "unstarted" | "playing" | "paused" | "buffering" | "ended";
 

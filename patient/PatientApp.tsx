@@ -4,8 +4,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  FileSignature, FileText, HeartHandshake, Lock, Maximize2, Mic, MicOff, MoreVertical, PhoneOff, Smartphone, SwitchCamera, Video,
-  VideoOff,
+  FileSignature, FileText, HeartHandshake, Lock, Maximize2, Mic, MicOff, MoreVertical, Pencil, PhoneOff, Smartphone, SwitchCamera,
+  Video, VideoOff,
 } from "lucide-react";
 import { Call, type CallState, type CallStats, type ChannelMessage, getLocalMedia, joinRoom, type JoinResult } from "../src/lib/rtc";
 import { Button, cx } from "../src/components/ui";
@@ -13,6 +13,8 @@ import TestForm from "./TestForm";
 import HomeworkView, { type HomeworkMessage } from "./HomeworkView";
 import MaterialView, { type MediaReport, useIncomingMaterial } from "./MaterialView";
 import QualityPicker from "../src/components/QualityPicker";
+import BoardOverlay from "./BoardOverlay";
+import { useBoard } from "../src/lib/useBoard";
 import type { QualityPreset } from "../src/lib/rtc";
 import WaitingRoom from "./WaitingRoom";
 
@@ -142,9 +144,24 @@ export default function PatientApp() {
     setQualityState(q);
     void callRef.current?.setQuality(q);
   };
+  // Ortak çizim: terapist başlatır. Gösterilen görsel arka plan olursa adresi oturum boyunca korunur.
+  const [boardVisible, setBoardVisible] = useState(true);
+  const [backdropUrl, setBackdropUrl] = useState<string | null>(null);
+  const board = useBoard("guest", (m) => callRef.current?.sendMessage(m) ?? false, state === "connected");
+  useEffect(() => {
+    setBoardVisible(true);
+    setBackdropUrl(null);
+  }, [board.session?.id]);
   const material = useIncomingMaterial(
     useCallback((id: string) => callRef.current?.sendMessage({ type: "material_received", id }), []),
   );
+  // Tuvalin arka planı: terapistin az önce gösterdiği görsel. Adres burada saklanır; görsel
+  // kapatılıp adresi iptal edilse de tuval oturum boyunca aynı görselle çalışır.
+  useEffect(() => {
+    const id = board.session?.backdropId;
+    const cur = material.current;
+    if (id && cur && cur.id === id && cur.url) setBackdropUrl(cur.url);
+  }, [board.session?.backdropId, material.current?.id, material.current?.url]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Davet anahtarını adres çubuğundan ve geçmişten kaldır.
   useEffect(() => {
@@ -214,6 +231,7 @@ export default function PatientApp() {
         onRemoteStream: setRemote,
         onStats: setStats,
         onMessage: (m) => {
+          if (board.handle(m)) return;
           if (material.handle(m)) return;
           if (m.type === "content_share") {
             setContentShare(!!m.active);
@@ -347,6 +365,22 @@ export default function PatientApp() {
             <div className="absolute left-1/2 top-4 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-line bg-panel px-4 py-3 text-sm shadow-xl">
               <FileText size={18} className="text-accent" /> Terapistiniz bir materyal paylaştı: <b>{notice.title}</b>
             </div>
+          )}
+          {board.session && boardVisible && (
+            <BoardOverlay
+              boardApi={board}
+              backdropUrl={backdropUrl}
+              onMinimize={() => setBoardVisible(false)}
+              video={remote ? <VideoEl stream={remote} muted /> : null}
+            />
+          )}
+          {board.session && !boardVisible && (
+            <button
+              onClick={() => setBoardVisible(true)}
+              className="absolute left-3 top-14 z-20 flex items-center gap-1.5 rounded-lg bg-accent-strong px-3 py-1.5 text-xs font-medium text-white shadow-lg"
+            >
+              <Pencil size={14} /> Çizime dön
+            </button>
           )}
           {material.current && (
             <MaterialView item={material.current} onClose={material.clear} control={material.control} onMediaState={reportMedia} />
