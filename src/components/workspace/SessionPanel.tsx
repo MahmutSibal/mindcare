@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ClipboardCheck, Clock3, FileSignature, MonitorX, Pause, Pencil, Play, Send, Square, Undo2 } from "lucide-react";
+import { ClipboardCheck, Clock3, FileSignature, MonitorX, Pause, Pencil, Play, Send, Sparkles, Square, Undo2 } from "lucide-react";
 import { api, errorText, type Patient, type Test } from "../../lib/api";
 import type { SharedMaterial } from "./materialShare";
 import { clock } from "../../lib/format";
@@ -10,8 +10,9 @@ import { HomeworkDialog } from "./Homework";
 import { Button, Card, cx, Empty, Modal } from "../ui";
 import { CATEGORY_LABEL, CategoryIcon } from "../category";
 import type { CallApi } from "./useCall";
+import AssistantChat from "../AssistantChat";
 
-export default function SessionPanel({ call, patient, shared, onClearShared, materials, onOpenBoard }: {
+export default function SessionPanel({ call, patient, shared, onClearShared, materials, onOpenBoard, onOpenSettings }: {
   call: CallApi;
   patient: Patient | null;
   shared: SharedMaterial | null;
@@ -19,14 +20,39 @@ export default function SessionPanel({ call, patient, shared, onClearShared, mat
   /** Materyal kütüphanesi (seans araçlarının bir sekmesi). */
   materials: React.ReactNode;
   onOpenBoard: () => void;
+  onOpenSettings: () => void;
 }) {
+  const [view, setView] = useState<"session" | "assistant">("session");
   // Önizleme yalnızca danışana bir şey gösterilirken yer kaplar.
   const sharing = !!call.screen || !!shared;
   return (
-    <div className="flex min-h-0 flex-col gap-2.5">
-      <LiveNotesEditor />
-      {sharing && <PatientScreenPreview call={call} shared={shared} onClearShared={onClearShared} />}
-      <QuickTools call={call} patient={patient} materials={materials} onOpenBoard={onOpenBoard} />
+    <div className="flex min-h-0 flex-col gap-2">
+      <div className="flex shrink-0 gap-1 rounded-xl border border-line bg-panel p-1" role="tablist">
+        {([["session", "Seans", null], ["assistant", "Asistan", Sparkles]] as const).map(([id, label, Icon]) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={view === id}
+            onClick={() => setView(id)}
+            className={cx(
+              "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] transition-colors",
+              view === id ? "bg-accent-soft font-medium text-ink" : "text-muted hover:text-ink",
+            )}
+          >
+            {Icon && <Icon size={14} className={view === id ? "text-accent" : ""} />}
+            {label}
+          </button>
+        ))}
+      </div>
+      {/* İkisi de bağlı kalır: görünüm değişince not ve konuşma kaybolmaz. */}
+      <div className={cx("min-h-0 flex-1 flex-col gap-2.5", view === "session" ? "flex" : "hidden")}>
+        <LiveNotesEditor />
+        {sharing && <PatientScreenPreview call={call} shared={shared} onClearShared={onClearShared} />}
+        <QuickTools call={call} patient={patient} materials={materials} onOpenBoard={onOpenBoard} />
+      </div>
+      <div className={cx("min-h-0 flex-1 overflow-hidden rounded-xl border border-line bg-panel", view === "assistant" ? "block" : "hidden")}>
+        <AssistantChat onOpenSettings={onOpenSettings} />
+      </div>
     </div>
   );
 }

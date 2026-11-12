@@ -4,8 +4,7 @@ import { ExternalLink, Send, ShieldAlert, Sparkles, Trash2 } from "lucide-react"
 import { api, errorText, type AssistantAnswer } from "../lib/api";
 import { findIdentifiers } from "../lib/privacy";
 import { useDataVersion } from "../lib/session";
-import { Button, cx, inputCls } from "../components/ui";
-import type { Page } from "../App";
+import { Button, cx, inputCls } from "./ui";
 
 interface Msg {
   role: "user" | "model";
@@ -69,7 +68,8 @@ function Answer({ a }: { a: AssistantAnswer }) {
   );
 }
 
-export default function Assistant({ onNavigate }: { onNavigate: (p: Page) => void }) {
+/** Seans ekranının sağ panelinde duran sohbet: görüşme sırasında hızlıca soru sorulur. */
+export default function AssistantChat({ onOpenSettings }: { onOpenSettings: () => void }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -111,15 +111,15 @@ export default function Assistant({ onNavigate }: { onNavigate: (p: Page) => voi
 
   if (configured === false) {
     return (
-      <div className="flex h-full items-center justify-center p-8">
-        <div className="max-w-md text-center">
-          <Sparkles className="mx-auto mb-3 text-accent" size={32} />
-          <h1 className="text-xl font-semibold">Terapist asistanı</h1>
-          <p className="mt-2 text-sm text-muted">
+      <div className="flex h-full items-center justify-center p-4">
+        <div className="text-center">
+          <Sparkles className="mx-auto mb-3 text-accent" size={28} />
+          <h1 className="text-base font-semibold">Terapist asistanı</h1>
+          <p className="mt-2 text-xs leading-relaxed text-muted">
             Asistanı kullanmak için Gemini API anahtarı gerekir. Ücretsiz anahtarı aistudio.google.com/apikey adresinden alıp
             Ayarlar sayfasındaki "Yapay zekâ asistanı" bölümüne yapıştırın.
           </p>
-          <Button className="mt-4" onClick={() => onNavigate("settings")}>Ayarlar'a git</Button>
+          <Button className="mt-4" onClick={onOpenSettings}>Ayarlar'a git</Button>
         </div>
       </div>
     );
@@ -127,22 +127,22 @@ export default function Assistant({ onNavigate }: { onNavigate: (p: Page) => voi
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex shrink-0 items-center gap-3 border-b border-line px-6 py-3">
-        <Sparkles className="text-accent" size={20} />
+      <div className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-2">
+        <Sparkles className="shrink-0 text-accent" size={16} />
         <div className="min-w-0 flex-1">
-          <h1 className="text-base font-semibold">Terapist asistanı</h1>
-          <p className="text-xs text-muted">Kaynaklı meslek içi hatırlatma. Klinik karar sizindir; bilgileri teyit edin.</p>
+          <h1 className="text-[13px] font-semibold">Terapist asistanı</h1>
+          <p className="truncate text-[11px] text-muted">Kaynaklı hatırlatma • klinik karar sizindir</p>
         </div>
         {msgs.length > 0 && (
-          <Button variant="ghost" className="text-xs" onClick={() => setMsgs([])}>
-            <Trash2 size={14} /> Konuşmayı temizle
+          <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => setMsgs([])} title="Konuşmayı temizle">
+            <Trash2 size={14} />
           </Button>
         )}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-        <div className="mx-auto max-w-3xl space-y-4">
-          <div className="flex items-start gap-2 rounded-xl border border-warn/30 bg-warn/10 px-3 py-2.5 text-xs leading-relaxed text-warn">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+        <div className="space-y-3">
+          <div className="flex items-start gap-2 rounded-xl border border-warn/30 bg-warn/10 px-2.5 py-2 text-[11px] leading-relaxed text-warn">
             <ShieldAlert size={15} className="mt-0.5 shrink-0" />
             <span>
               Soruları Google'ın Gemini servisi yanıtlar. <b>Danışan adı, kimlik ya da tanımlayıcı bilgi yazmayın</b>; konuyu
@@ -157,7 +157,7 @@ export default function Assistant({ onNavigate }: { onNavigate: (p: Page) => voi
                 <button
                   key={e}
                   onClick={() => void send(e)}
-                  className="block w-full rounded-lg border border-line bg-card px-3 py-2 text-left text-sm hover:bg-line"
+                  className="block w-full rounded-lg border border-line bg-card px-2.5 py-1.5 text-left text-[13px] hover:bg-line"
                 >
                   {e}
                 </button>
@@ -169,7 +169,7 @@ export default function Assistant({ onNavigate }: { onNavigate: (p: Page) => voi
             <div key={i} className={cx("flex", m.role === "user" && "justify-end")}>
               <div
                 className={cx(
-                  "max-w-[90%] rounded-2xl px-4 py-3",
+                  "max-w-[95%] rounded-2xl px-3 py-2.5",
                   m.role === "user" ? "bg-accent-soft text-ink" : m.error ? "border border-danger/40 bg-danger/10 text-danger" : "border border-line bg-panel",
                 )}
               >
@@ -182,8 +182,8 @@ export default function Assistant({ onNavigate }: { onNavigate: (p: Page) => voi
         </div>
       </div>
 
-      <div className="shrink-0 border-t border-line px-6 py-3">
-        <div className="mx-auto max-w-3xl">
+      <div className="shrink-0 border-t border-line px-3 py-2.5">
+        <div>
           {blocked && (
             <p className="mb-2 rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger" role="alert">
               Soru gönderilmedi: tanımlayıcı bilgi içeriyor ({blocked.join(", ")}). Lütfen danışanı anonimleştirip yeniden yazın.

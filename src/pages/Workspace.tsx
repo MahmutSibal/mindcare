@@ -218,7 +218,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
   ];
 
   return (
-    <div className="grid h-full grid-cols-[minmax(270px,310px)_minmax(0,1fr)_minmax(290px,330px)] gap-2.5 p-2.5">
+    <div className="grid h-full grid-cols-[minmax(270px,310px)_minmax(0,1fr)_minmax(300px,360px)] gap-2.5 p-2.5">
       {/* Sol panel — danışan ve geçmişi */}
       <div className="flex min-h-0 flex-col gap-2.5">
         <PatientProfileCard
@@ -262,6 +262,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
           />
         }
         onOpenBoard={() => setBoardStarting(true)}
+        onOpenSettings={() => onNavigate("settings")}
       />
 
       {boardStarting && (
