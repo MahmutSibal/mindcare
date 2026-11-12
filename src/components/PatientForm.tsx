@@ -17,6 +17,7 @@ export default function PatientForm({ patient, onClose, onSaved }: {
     emergency_contact: patient?.emergency_contact ?? "",
     emergency_phone: patient?.emergency_phone ?? "",
     risk_note: patient?.risk_note ?? "",
+    intake_reason: patient?.intake_reason ?? "",
   });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -64,6 +65,9 @@ export default function PatientForm({ patient, onClose, onSaved }: {
             <input type="email" className={inputCls} value={form.email} onChange={set("email")} />
           </Field>
         </div>
+        <Field label="Başvuru nedeni" hint="Danışanın gelme nedeni; sonradan danışan dosyasındaki Klinik sekmesinden de düzenlenir.">
+          <textarea className={inputCls} rows={2} value={form.intake_reason} onChange={set("intake_reason")} />
+        </Field>
         <div className="rounded-lg border border-line p-3">
           <p className="mb-3 text-[13px] font-medium">Acil durum ve güvenlik</p>
           <div className="grid grid-cols-2 gap-4">

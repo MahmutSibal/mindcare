@@ -133,6 +133,27 @@ const MIGRATIONS: &[&str] = &[
     ALTER TABLE patients ADD COLUMN risk_note TEXT;
     ALTER TABLE patients ADD COLUMN consent_at DATETIME;
     "#,
+    // 5 — Başvuru nedeni ile kullanılan ilaçlar ve maddeler (alkol, sigara vb.). `active` = 1:
+    // hâlâ kullanılıyor; 0: bırakıldı/bitti (geçmiş olarak kalır).
+    r#"
+    ALTER TABLE patients ADD COLUMN intake_reason TEXT;
+
+    CREATE TABLE patient_substances (
+        id TEXT PRIMARY KEY,
+        patient_id TEXT NOT NULL,
+        kind TEXT NOT NULL CHECK (kind IN ('medication','substance')),
+        name TEXT NOT NULL,
+        dose TEXT,
+        frequency TEXT,
+        started_on TEXT,
+        active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
+        note TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME,
+        FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+    );
+    CREATE INDEX idx_substances_patient ON patient_substances(patient_id, active DESC, created_at DESC);
+    "#,
 ];
 
 fn apply_key(conn: &Connection, key: &Zeroizing<String>) -> AppResult<()> {
@@ -397,6 +418,25 @@ mod tests {
             .query_row("SELECT full_name, emergency_contact FROM patients", [], |r| Ok((r.get(0)?, r.get(1)?)))
             .unwrap();
         assert_eq!((name.as_str(), contact.as_str()), ("Eski Kayıt", "Yakını"));
+    }
+
+    #[test]
+    fn substances_are_constrained_and_follow_patient() {
+        let p = tmp("subst.db");
+        let mut c = open_encrypted(&p, &key('8')).unwrap();
+        migrate(&mut c).unwrap();
+        c.execute_batch(
+            "INSERT INTO patients (id, full_name, intake_reason) VALUES ('p', 'X', 'Uyku sorunu');
+             INSERT INTO patient_substances (id, patient_id, kind, name, dose) VALUES ('s1', 'p', 'medication', 'Sertralin', '50 mg');
+             INSERT INTO patient_substances (id, patient_id, kind, name) VALUES ('s2', 'p', 'substance', 'Alkol');",
+        ).unwrap();
+        let active: i64 = c.query_row("SELECT active FROM patient_substances WHERE id = 's1'", [], |r| r.get(0)).unwrap();
+        assert_eq!(active, 1, "varsayılan: kullanılıyor");
+        assert!(c.execute("UPDATE patient_substances SET kind = 'baska'", []).is_err(), "tür kısıtı");
+        assert!(c.execute("UPDATE patient_substances SET active = 2", []).is_err(), "durum kısıtı");
+        c.execute("DELETE FROM patients WHERE id = 'p'", []).unwrap();
+        let n: i64 = c.query_row("SELECT count(*) FROM patient_substances", [], |r| r.get(0)).unwrap();
+        assert_eq!(n, 0, "danışanla birlikte silinir");
     }
 
     #[test]

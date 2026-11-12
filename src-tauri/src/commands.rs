@@ -75,6 +75,7 @@ pub struct Patient {
     emergency_phone: Option<String>,
     risk_note: Option<String>,
     consent_at: Option<String>,
+    intake_reason: Option<String>,
 }
 
 const PATIENT_SELECT: &str = "
@@ -84,7 +85,7 @@ const PATIENT_SELECT: &str = "
         (SELECT min(a.appointment_date) FROM appointments a
             WHERE a.patient_id = p.id AND a.status = 'scheduled'
               AND a.appointment_date >= strftime('%Y-%m-%dT%H:%M', 'now', 'localtime')),
-        p.emergency_contact, p.emergency_phone, p.risk_note, p.consent_at
+        p.emergency_contact, p.emergency_phone, p.risk_note, p.consent_at, p.intake_reason
     FROM patients p";
 
 fn map_patient(r: &rusqlite::Row) -> rusqlite::Result<Patient> {
@@ -103,6 +104,7 @@ fn map_patient(r: &rusqlite::Row) -> rusqlite::Result<Patient> {
         emergency_phone: r.get(11)?,
         risk_note: r.get(12)?,
         consent_at: r.get(13)?,
+        intake_reason: r.get(14)?,
     })
 }
 
@@ -116,6 +118,7 @@ pub struct PatientInput {
     emergency_contact: Option<String>,
     emergency_phone: Option<String>,
     risk_note: Option<String>,
+    intake_reason: Option<String>,
 }
 
 #[tauri::command]
@@ -141,11 +144,12 @@ pub fn create_patient(state: State<AppState>, input: PatientInput) -> AppResult<
         let id = new_id();
         c.execute(
             "INSERT INTO patients (id, full_name, birth_date, phone, email, status,
-                emergency_contact, emergency_phone, risk_note)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                emergency_contact, emergency_phone, risk_note, intake_reason)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![id, name, opt(&input.birth_date), opt(&input.phone), opt(&input.email),
                     input.status.unwrap_or_else(|| "active".into()),
-                    opt(&input.emergency_contact), opt(&input.emergency_phone), opt(&input.risk_note)],
+                    opt(&input.emergency_contact), opt(&input.emergency_phone), opt(&input.risk_note),
+                    opt(&input.intake_reason)],
         )?;
         Ok(id)
     })
@@ -158,10 +162,108 @@ pub fn update_patient(state: State<AppState>, id: String, input: PatientInput) -
         c.execute(
             "UPDATE patients SET full_name = ?2, birth_date = ?3, phone = ?4, email = ?5,
                 status = coalesce(?6, status), emergency_contact = ?7, emergency_phone = ?8, risk_note = ?9,
-                updated_at = CURRENT_TIMESTAMP WHERE id = ?1",
+                intake_reason = ?10, updated_at = CURRENT_TIMESTAMP WHERE id = ?1",
             params![id, name, opt(&input.birth_date), opt(&input.phone), opt(&input.email), input.status,
-                    opt(&input.emergency_contact), opt(&input.emergency_phone), opt(&input.risk_note)],
+                    opt(&input.emergency_contact), opt(&input.emergency_phone), opt(&input.risk_note),
+                    opt(&input.intake_reason)],
         )?;
+        Ok(())
+    })
+}
+
+// ───────────────────────────── İlaçlar ve maddeler ─────────────────────────────
+
+#[derive(Serialize)]
+pub struct Substance {
+    id: String,
+    patient_id: String,
+    kind: String,
+    name: String,
+    dose: Option<String>,
+    frequency: Option<String>,
+    started_on: Option<String>,
+    active: bool,
+    note: Option<String>,
+    created_at: String,
+}
+
+#[derive(Deserialize)]
+pub struct SubstanceInput {
+    patient_id: String,
+    kind: String,
+    name: String,
+    dose: Option<String>,
+    frequency: Option<String>,
+    started_on: Option<String>,
+    active: bool,
+    note: Option<String>,
+}
+
+#[tauri::command]
+pub fn list_substances(state: State<AppState>, patient_id: String) -> AppResult<Vec<Substance>> {
+    with_conn(&state, |c| {
+        let mut st = c.prepare(
+            "SELECT id, patient_id, kind, name, dose, frequency, started_on, active, note, created_at
+             FROM patient_substances WHERE patient_id = ?1
+             ORDER BY active DESC, kind, name COLLATE NOCASE",
+        )?;
+        let rows = st
+            .query_map([patient_id], |r| {
+                Ok(Substance {
+                    id: r.get(0)?,
+                    patient_id: r.get(1)?,
+                    kind: r.get(2)?,
+                    name: r.get(3)?,
+                    dose: r.get(4)?,
+                    frequency: r.get(5)?,
+                    started_on: r.get(6)?,
+                    active: r.get::<_, i64>(7)? == 1,
+                    note: r.get(8)?,
+                    created_at: r.get(9)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    })
+}
+
+/// Yeni kayıt (`id` yoksa) veya mevcut kaydın güncellenmesi.
+#[tauri::command]
+pub fn save_substance(state: State<AppState>, id: Option<String>, input: SubstanceInput) -> AppResult<String> {
+    if input.kind != "medication" && input.kind != "substance" {
+        return Err(AppError::Invalid("Geçersiz tür.".into()));
+    }
+    let name = non_empty(&input.name, "Ad")?;
+    with_conn(&state, |c| match id {
+        Some(id) => {
+            let n = c.execute(
+                "UPDATE patient_substances SET kind = ?2, name = ?3, dose = ?4, frequency = ?5, started_on = ?6,
+                    active = ?7, note = ?8, updated_at = CURRENT_TIMESTAMP WHERE id = ?1",
+                params![id, input.kind, name, opt(&input.dose), opt(&input.frequency), opt(&input.started_on),
+                        i64::from(input.active), opt(&input.note)],
+            )?;
+            if n == 0 {
+                return Err(AppError::Invalid("Kayıt bulunamadı.".into()));
+            }
+            Ok(id)
+        }
+        None => {
+            let id = new_id();
+            c.execute(
+                "INSERT INTO patient_substances (id, patient_id, kind, name, dose, frequency, started_on, active, note)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                params![id, input.patient_id, input.kind, name, opt(&input.dose), opt(&input.frequency),
+                        opt(&input.started_on), i64::from(input.active), opt(&input.note)],
+            )?;
+            Ok(id)
+        }
+    })
+}
+
+#[tauri::command]
+pub fn delete_substance(state: State<AppState>, id: String) -> AppResult<()> {
+    with_conn(&state, |c| {
+        c.execute("DELETE FROM patient_substances WHERE id = ?1", [id])?;
         Ok(())
     })
 }

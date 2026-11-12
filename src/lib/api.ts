@@ -20,6 +20,8 @@ export interface Patient {
   risk_note: string | null;
   /** Danışanın çevrim içi görüşme onamını en son verdiği an (UTC). */
   consent_at: string | null;
+  /** Başvuru nedeni: danışanın gelme nedeni. */
+  intake_reason: string | null;
 }
 
 export interface PatientInput {
@@ -31,6 +33,33 @@ export interface PatientInput {
   emergency_contact?: string | null;
   emergency_phone?: string | null;
   risk_note?: string | null;
+  intake_reason?: string | null;
+}
+
+export type SubstanceKind = "medication" | "substance";
+
+export interface Substance {
+  id: string;
+  patient_id: string;
+  kind: SubstanceKind;
+  name: string;
+  dose: string | null;
+  frequency: string | null;
+  started_on: string | null;
+  active: boolean;
+  note: string | null;
+  created_at: string;
+}
+
+export interface SubstanceInput {
+  patient_id: string;
+  kind: SubstanceKind;
+  name: string;
+  dose?: string;
+  frequency?: string;
+  started_on?: string;
+  active: boolean;
+  note?: string;
 }
 
 export type SessionStatus = "planned" | "in_progress" | "completed" | "cancelled";
@@ -132,6 +161,10 @@ export const api = {
   updatePatient: (id: string, input: PatientInput) => invoke<void>("update_patient", { id, input }),
   deletePatient: (id: string) => invoke<void>("delete_patient", { id }),
   recordPatientConsent: (id: string) => invoke<void>("record_patient_consent", { id }),
+
+  listSubstances: (patientId: string) => invoke<Substance[]>("list_substances", { patientId }),
+  saveSubstance: (id: string | null, input: SubstanceInput) => invoke<string>("save_substance", { id, input }),
+  deleteSubstance: (id: string) => invoke<void>("delete_substance", { id }),
 
   listSessions: (patientId?: string) =>
     invoke<Session[]>("list_sessions", { patientId: patientId ?? null }),

@@ -3,7 +3,8 @@ import {
   CalendarCheck2, ChevronDown, ChevronRight, ClipboardList, FileCheck2, PencilLine, Phone, ShieldAlert, UserPlus, Users,
 } from "lucide-react";
 import { CATEGORY_LABEL, CategoryIcon } from "../components/category";
-import { api, type Homework, type Material, type Note, type Patient, type Session, type TestResult } from "../lib/api";
+import { api, type Homework, type Material, type Note, type Patient, type Session, type Substance, type TestResult } from "../lib/api";
+import ClinicalTab from "../components/workspace/ClinicalTab";
 import { age, fmtDate, fmtDateTime, initials, minutes, plainText } from "../lib/format";
 import { notifyDataChanged, useActiveSession, useDataVersion } from "../lib/session";
 import { HomeworkCard, useHomeworkDeliveryReceipts } from "../components/workspace/Homework";
@@ -30,6 +31,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
   const [notes, setNotes] = useState<Note[]>([]);
   const [results, setResults] = useState<TestResult[]>([]);
   const [homework, setHomework] = useState<Homework[]>([]);
+  const [substances, setSubstances] = useState<Substance[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [shared, setShared] = useState<SharedMaterial | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
@@ -81,18 +83,20 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
       setPatient(null);
       return;
     }
-    const [p, s, n, r, h] = await Promise.all([
+    const [p, s, n, r, h, sub] = await Promise.all([
       api.getPatient(patientId),
       api.listSessions(patientId),
       api.listNotes(patientId),
       api.listTestResults(patientId),
       api.listHomework(patientId),
+      api.listSubstances(patientId),
     ]);
     setPatient(p);
     setSessions(s);
     setNotes(n);
     setResults(r);
     setHomework(h);
+    setSubstances(sub);
   }, [patientId]);
 
   useEffect(() => {
@@ -129,6 +133,12 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
   }
 
   const historyTabs: { id: HistoryTab; label: string; count: number; body: React.ReactNode }[] = [
+    {
+      id: "clinical",
+      label: "Klinik",
+      count: substances.filter((s) => s.active).length,
+      body: <ClinicalTab patient={patient} substances={substances} />,
+    },
     { id: "notes", label: "Notlar", count: notes.length, body: <PrivateNotesHistory notes={notes} inTab /> },
     { id: "tests", label: "Testler", count: results.length, body: <TestResults results={results} inTab /> },
     {
@@ -473,7 +483,7 @@ function MaterialLibrary({ materials, onShow, onAll, connected, error }: {
 
 // ───────────────────────────── Sekmeli kart ─────────────────────────────
 
-type HistoryTab = "notes" | "tests" | "homework" | "sessions";
+type HistoryTab = "clinical" | "notes" | "tests" | "homework" | "sessions";
 
 /** Danışan geçmişi tek kartta: sekmeler ve kaydırılabilir içerik; kalan yüksekliği doldurur. */
 function TabbedCard({ tabs }: { tabs: { id: HistoryTab; label: string; count: number; body: React.ReactNode }[] }) {
