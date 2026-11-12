@@ -14,6 +14,15 @@ Terapistler için masaüstü seans ve danışan yönetim sistemi.
 - **Ortak çizim:** Seans sırasında terapist tuvali açar; iki taraf da (fare, parmak, kalem) aynı tuvale çizer ve yazar,
   çizimler anında karşıda görünür. Terapistin gösterdiği bir görsel ("Çiz" düğmesi) arka plan olarak üzerine çizilebilir.
   Çizimler danışan dosyasına PNG olarak kaydedilir ("Çalışmalar" sekmesi). Tüm trafik şifreli veri kanalındadır.
+- **Grup terapisi:** "Gruplar" sayfasında grup ve üyeler tanımlanır (en fazla 6 danışan). Her üyeye özel, tek kullanımlık
+  davet bağlantısı üretilir; görüşme herkesin herkesi gördüğü doğrudan (mesh) bağlantıdır, bağlantı sayısına göre
+  kalite otomatik düşer. Grup notu ve üye başına not tutulur. Tablolar `supabase/migrations/20261112120000_group_rooms.sql`.
+- **Bağlantı testi:** Danışan sayfası `/#test` (ve katılma ekranındaki bağlantı) kamera, mikrofon, doğrudan bağlantı imkânı,
+  gecikme ve hızı ölçer, sorun varsa ne yapılacağını söyler.
+- **Terapist asistanı (Gemini):** "Asistan" sayfası, Google Search ile kaynaklı yanıt verir (kaynaklar numaralı bağlantılardır).
+  API anahtarı Ayarlar'da girilir, yalnızca şifreli veritabanında durur ve istekler Rust tarafından yapılır. Ücretsiz Gemini
+  kullanımında metin Google'ca ürün geliştirmede kullanılabildiği için kayıtlı danışan adı ve kimlik/telefon/e-posta
+  kalıpları içeren sorular gönderilmez (`src/lib/privacy.ts`); gerçek danışan bilgisiyle çalışmak için ücretli plan gerekir.
 - **Danışandan dosya:** Danışan ayarlar menüsünden fotoğraf, PDF, metin, Word veya ses dosyası gönderir (en fazla 25 MB).
   Terapist ekranında bildirim çıkar; dosya şifreli veritabanında danışan dosyasına kaydedilir, uygulama içinde
   görüntülenir (görsel, PDF, metin, ses) ve bilgisayara indirilebilir. Tür listesi hem danışan sayfasında hem

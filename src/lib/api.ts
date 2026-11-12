@@ -76,6 +76,13 @@ export interface GroupSession {
   note: string | null;
 }
 
+export interface AssistantAnswer {
+  text: string;
+  sources: { title: string; uri: string }[];
+  queries: string[];
+  grounded: boolean;
+}
+
 export type SubstanceKind = "medication" | "substance";
 
 export interface Substance {
@@ -262,6 +269,10 @@ export const api = {
     invoke<{ patient_id: string; note: string }[]>("list_group_member_notes", { groupSessionId }),
   saveGroupMemberNote: (groupSessionId: string, patientId: string, note: string) =>
     invoke<void>("save_group_member_note", { groupSessionId, patientId, note }),
+
+  askAssistant: (history: { role: "user" | "model"; text: string }[], question: string) =>
+    invoke<AssistantAnswer>("ask_assistant", { history, question }),
+  checkAssistant: () => invoke<void>("check_assistant"),
 
   listMaterials: () => invoke<Material[]>("list_materials"),
   createMaterial: (input: { title: string; category: MaterialCategory; file_path: string; description?: string }) =>

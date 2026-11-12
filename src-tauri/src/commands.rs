@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::error::{AppError, AppResult};
-use crate::{AppState, clinical, db, keystore, recovery, turn};
+use crate::{AppState, assistant, clinical, db, keystore, recovery, turn};
 
 fn new_id() -> String {
     uuid::Uuid::new_v4().to_string()
@@ -1383,15 +1383,49 @@ pub async fn generate_turn_servers(state: State<'_, AppState>) -> AppResult<Opti
     turn::generate(&key_id, &token).await.map(Some)
 }
 
+// ───────────────────────────── Asistan (Gemini) ─────────────────────────────
+
+/// Gemini anahtarı arayüze geri verilmez; `get_settings` yalnızca "kayıtlı mı" bilgisini döndürür.
+const SECRET_SETTINGS: &[&str] = &["gemini_api_key"];
+
+fn assistant_settings(state: &State<AppState>) -> AppResult<(String, String)> {
+    with_conn(state, |c| {
+        let get = |k: &str| -> AppResult<String> {
+            Ok(c.query_row("SELECT value FROM settings WHERE key = ?1", [k], |r| r.get::<_, String>(0)).optional()?.unwrap_or_default())
+        };
+        let model = get("gemini_model")?;
+        Ok((get("gemini_api_key")?, if model.trim().is_empty() { assistant::DEFAULT_MODEL.to_string() } else { model.trim().to_string() }))
+    })
+}
+
+/// Terapistin sorusunu Gemini'ye (Google Search destekli) sorar. Danışan verisi gönderilmez.
+#[tauri::command]
+pub async fn ask_assistant(state: State<'_, AppState>, history: Vec<assistant::Turn>, question: String) -> AppResult<assistant::Answer> {
+    let (key, model) = assistant_settings(&state)?;
+    assistant::ask(&key, &model, &history, &question).await
+}
+
+/// Kayıtlı anahtarı ve modeli küçük bir istekle sınar.
+#[tauri::command]
+pub async fn check_assistant(state: State<'_, AppState>) -> AppResult<()> {
+    let (key, model) = assistant_settings(&state)?;
+    assistant::check(&key, &model).await
+}
+
 // ───────────────────────────── Ayarlar ─────────────────────────────
 
 #[tauri::command]
 pub fn get_settings(state: State<AppState>) -> AppResult<std::collections::HashMap<String, String>> {
     with_conn(&state, |c| {
         let mut st = c.prepare("SELECT key, value FROM settings")?;
-        let rows = st
+        let mut rows: std::collections::HashMap<String, String> = st
             .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?
             .collect::<Result<_, _>>()?;
+        for k in SECRET_SETTINGS {
+            if rows.remove(*k).is_some_and(|v| !v.trim().is_empty()) {
+                rows.insert(format!("{k}_set"), "1".into());
+            }
+        }
         Ok(rows)
     })
 }

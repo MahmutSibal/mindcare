@@ -11,7 +11,7 @@ import { Button, Card, Field, inputCls, Modal } from "../components/ui";
 
 const KEYS = [
   "therapist_name", "therapist_title", "patient_app_url", "invite_ttl_minutes",
-  "cf_turn_key_id", "cf_turn_api_token", "turn_url", "turn_username", "turn_credential",
+  "cf_turn_key_id", "cf_turn_api_token", "turn_url", "turn_username", "turn_credential", "gemini_model",
 ] as const;
 type Form = Record<(typeof KEYS)[number], string>;
 
@@ -23,6 +23,8 @@ export default function Settings() {
   const [recoveryConfirmedAt, setRecoveryConfirmedAt] = useState<string | null>(null);
   const [showRecovery, setShowRecovery] = useState(false);
   const [restoreOther, setRestoreOther] = useState(false);
+  const [geminiKey, setGeminiKey] = useState("");
+  const [geminiSet, setGeminiSet] = useState(false);
 
   const loadRecoveryStatus = () =>
     api.getSettings().then((s) => setRecoveryConfirmedAt(s[RECOVERY_CONFIRMED_KEY] ?? null));
@@ -40,8 +42,10 @@ export default function Settings() {
         turn_url: s.turn_url ?? "",
         turn_username: s.turn_username ?? "",
         turn_credential: s.turn_credential ?? "",
+        gemini_model: s.gemini_model ?? "",
       }),
     );
+    api.getSettings().then((s) => setGeminiSet(s.gemini_api_key_set === "1"));
     api.appStatus().then(setStatus);
   }, []);
 
@@ -76,6 +80,28 @@ export default function Settings() {
     } catch (e) {
       setMsg({ ok: false, text: errorText(e) });
     }
+  };
+
+  const saveGemini = async () => {
+    if (!(await persist())) return;
+    try {
+      if (geminiKey.trim()) await api.setSetting("gemini_api_key", geminiKey.trim());
+      setGeminiKey("");
+      setGeminiSet(true);
+      notifyDataChanged();
+      setMsg({ ok: true, text: "Asistan deneniyor…" });
+      await api.checkAssistant();
+      setMsg({ ok: true, text: "Asistan çalışıyor: anahtar ve model geçerli. Ayarlar kaydedildi." });
+    } catch (e) {
+      setMsg({ ok: false, text: errorText(e) });
+    }
+  };
+
+  const removeGemini = async () => {
+    await api.setSetting("gemini_api_key", "");
+    setGeminiSet(false);
+    notifyDataChanged();
+    setMsg({ ok: true, text: "Gemini anahtarı silindi." });
   };
 
   const backup = async () => {
@@ -151,6 +177,39 @@ export default function Settings() {
             <Button variant="subtle" onClick={testTurn} disabled={!form.cf_turn_key_id.trim() || !form.cf_turn_api_token.trim()}>
               <ShieldCheck size={16} /> Kaydet ve bağlantıyı test et
             </Button>
+          </div>
+        </Card>
+
+        <Card title="Yapay zekâ asistanı (Gemini)">
+          <p className="mb-3 text-xs leading-relaxed text-muted">
+            Terapist için meslek içi bir hatırlatma asistanı. Yanıtları kaynaklarıyla verir. Ücretsiz anahtarı
+            aistudio.google.com/apikey adresinden alabilirsiniz. Anahtar yalnızca bu bilgisayarın şifreli veritabanında durur.
+          </p>
+          <Field label={geminiSet ? "Gemini API anahtarı (kayıtlı; değiştirmek için yenisini yazın)" : "Gemini API anahtarı"}>
+            <input
+              type="password"
+              className={inputCls}
+              value={geminiKey}
+              onChange={(e) => setGeminiKey(e.target.value)}
+              placeholder={geminiSet ? "••••••••••••" : "AIza…"}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </Field>
+          <Field label="Model (boş bırakırsanız varsayılan)" hint="Varsayılan: gemini-3.6-flash">
+            <input className={inputCls} value={form.gemini_model} onChange={set("gemini_model")} autoComplete="off" spellCheck={false} />
+          </Field>
+          <p className="mb-3 rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-xs leading-relaxed text-warn">
+            Ücretsiz Gemini kullanımında Google, gönderilen metni ürünlerini geliştirmek için kullanabilir ve insanlar
+            inceleyebilir. Bu yüzden asistana <b>danışan adı, kimlik ya da tanımlayıcı bilgi yazmayın</b>; uygulama bunları
+            engellemeye çalışır ama garanti edemez. Gerçek danışan bilgisiyle çalışacaksanız ücretli (verisi eğitimde
+            kullanılmayan) Gemini planına geçin.
+          </p>
+          <div className="flex gap-2">
+            <Button variant="subtle" onClick={() => void saveGemini()} disabled={!geminiKey.trim() && !geminiSet}>
+              Kaydet ve sına
+            </Button>
+            {geminiSet && <Button variant="ghost" className="hover:text-danger" onClick={() => void removeGemini()}>Anahtarı sil</Button>}
           </div>
         </Card>
 

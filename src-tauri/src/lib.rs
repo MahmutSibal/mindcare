@@ -1,3 +1,4 @@
+mod assistant;
 mod clinical;
 mod commands;
 mod db;
@@ -80,6 +81,8 @@ pub fn run() {
             commands::get_patient_file,
             commands::export_patient_file,
             commands::delete_patient_file,
+            commands::ask_assistant,
+            commands::check_assistant,
             commands::list_groups,
             commands::save_group,
             commands::delete_group,
