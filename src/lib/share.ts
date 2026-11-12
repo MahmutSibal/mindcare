@@ -5,6 +5,22 @@ export const MAX_FILE_SHARE_BYTES = 25 * 1024 * 1024;
 /** Kanal mesajı başına ham veri; base64 ile ~22 KB olur ve tüm tarayıcıların sınırının altında kalır. */
 export const CHUNK_BYTES = 16 * 1024;
 
+/**
+ * Dosya aktarımı görüşmeyle aynı bağlantıyı kullanır; sınırsız bırakılırsa bant genişliğini
+ * kapıp ses ve görüntüyü geciktirir. Ortalama hız bu değerle sınırlanır (~3,2 Mbit/sn).
+ */
+export const TRANSFER_BYTES_PER_SEC = 400 * 1024;
+/** Gönderilen bayt sayısına göre gerekirse bekleyen bir "hız sınırlayıcı" döndürür. */
+export function makePacer(bytesPerSec = TRANSFER_BYTES_PER_SEC) {
+  const start = performance.now();
+  let sent = 0;
+  return async (n: number) => {
+    sent += n;
+    const wait = (sent / bytesPerSec) * 1000 - (performance.now() - start);
+    if (wait > 5) await new Promise((r) => setTimeout(r, wait));
+  };
+}
+
 // Yalnızca bilinen, tarayıcıda güvenle gösterilebilen türler. Diğer her şey (html, svg vb.)
 // danışan tarafında açılmaz, yalnızca indirilir.
 const MIME: Record<string, string> = {

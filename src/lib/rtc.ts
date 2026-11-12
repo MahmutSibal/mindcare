@@ -249,6 +249,8 @@ export class Call {
   private transport: SignalTransport | null = null;
   private pc: RTCPeerConnection | null = null;
   private dc: RTCDataChannel | null = null;
+  /** Çizim için ikinci kanal: dosya aktarımı `dc`yi doldursa bile çizgiler sırada beklemez. */
+  private live: RTCDataChannel | null = null;
   private pendingIce: RTCIceCandidateInit[] = [];
   private statsTimer: ReturnType<typeof setInterval> | null = null;
   private recoveryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -322,8 +324,9 @@ export class Call {
 
   /** Mesajı veri kanalından gönderir; kanal açık değilse `false` döner. */
   sendMessage(m: ChannelMessage): boolean {
-    if (this.dc?.readyState !== "open") return false;
-    this.dc.send(JSON.stringify(m));
+    const ch = m.type.startsWith("board_") && this.live?.readyState === "open" ? this.live : this.dc;
+    if (ch?.readyState !== "open") return false;
+    ch.send(JSON.stringify(m));
     return true;
   }
 
@@ -334,8 +337,8 @@ export class Call {
   async sendBuffered(m: ChannelMessage): Promise<boolean> {
     const dc = this.dc;
     if (dc?.readyState !== "open") return false;
-    if (dc.bufferedAmount > 4 * 1024 * 1024) {
-      dc.bufferedAmountLowThreshold = 1024 * 1024;
+    if (dc.bufferedAmount > 1024 * 1024) {
+      dc.bufferedAmountLowThreshold = 256 * 1024;
       await new Promise<void>((resolve) => {
         const done = () => {
           dc.removeEventListener("bufferedamountlow", done);
@@ -451,6 +454,8 @@ export class Call {
           await this.createPeer();
           this.dc = this.pc!.createDataChannel("control");
           this.wireDataChannel(this.dc);
+          this.live = this.pc!.createDataChannel("live");
+          this.wireDataChannel(this.live);
           await this.pc!.setLocalDescription(await this.pc!.createOffer());
           this.send({ kind: "offer", sdp: this.pc!.localDescription!.toJSON() });
           this.h.onState("connecting");
@@ -524,7 +529,8 @@ export class Call {
       this.h.onRemoteStream(e.streams[0] ?? new MediaStream([e.track]));
     };
     pc.ondatachannel = (e) => {
-      this.dc = e.channel;
+      if (e.channel.label === "live") this.live = e.channel;
+      else this.dc = e.channel;
       this.wireDataChannel(e.channel);
     };
     pc.onconnectionstatechange = () => this.onConnectionState(pc);
@@ -549,6 +555,8 @@ export class Call {
     this.statsTimer = null;
     this.dc?.close();
     this.dc = null;
+    this.live?.close();
+    this.live = null;
     this.pc?.close();
     this.pc = null;
     this.pendingIce = [];

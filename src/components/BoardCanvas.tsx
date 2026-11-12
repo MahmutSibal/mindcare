@@ -6,7 +6,7 @@ import { cx } from "./ui";
 type Tool = "pen" | "eraser" | "text";
 
 /** Çizgi parçaları bu aralıkla karşıya gönderilir (canlı görünsün, kanal da boğulmasın). */
-const SEND_EVERY_MS = 50;
+const SEND_EVERY_MS = 25;
 
 /**
  * Ortak tuval. Fare, parmak ve kalem aynı "pointer" olaylarıyla çalışır; telefon ve bilgisayar için
@@ -34,7 +34,7 @@ export default function BoardCanvas({ board, rev, sessionId, send, onChange, bac
   const [textVal, setTextVal] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
   const mine = useRef<string[]>([]);
-  const active = useRef<{ id: string; color: string; width: number; erase: boolean; pending: Pt[]; timer: ReturnType<typeof setInterval> } | null>(null);
+  const active = useRef<{ id: string; color: string; width: number; erase: boolean; pending: Pt[]; last: Pt; timer: ReturnType<typeof setInterval> } | null>(null);
   const raf = useRef(0);
   // Görsel bir kez yüklenir ve oturum boyunca korunur; adres sonradan iptal edilse de çizim bozulmaz.
   const [backdrop, setBackdrop] = useState<HTMLImageElement | null>(null);
@@ -67,7 +67,7 @@ export default function BoardCanvas({ board, rev, sessionId, send, onChange, bac
   const redraw = useCallback(() => {
     const c = cv.current;
     if (!c || !size.w) return;
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = Math.min(2, window.devicePixelRatio || 1); // 3x ekranlarda 9 kat piksel gereksiz
     if (c.width !== Math.round(size.w * dpr)) {
       c.width = Math.round(size.w * dpr);
       c.height = Math.round(size.h * dpr);
@@ -121,7 +121,7 @@ export default function BoardCanvas({ board, rev, sessionId, send, onChange, bac
     const s = { id, color: erase ? COLORS[0] : color, width, erase };
     board.addStroke({ ...s, pts: [p] });
     mine.current.push(id);
-    active.current = { ...s, pending: [p], timer: setInterval(flush, SEND_EVERY_MS) };
+    active.current = { ...s, pending: [p], last: p, timer: setInterval(flush, SEND_EVERY_MS) };
     schedule();
   };
 
@@ -133,7 +133,25 @@ export default function BoardCanvas({ board, rev, sessionId, send, onChange, bac
     const pts = (events.length ? events : [native]).map((ev) => point(ev.clientX, ev.clientY));
     board.addStroke({ id: a.id, color: a.color, width: a.width, erase: a.erase, pts });
     a.pending.push(...pts);
-    schedule();
+    if (a.erase || !cv.current) {
+      schedule();
+      return;
+    }
+    // Kalemde yalnızca yeni parçalar çizilir; tüm tuvali her harekette yeniden çizmeye gerek yok.
+    const c = cv.current;
+    const ctx = c.getContext("2d")!;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.strokeStyle = a.color;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = a.width * (Math.min(c.width, c.height) / 800);
+    ctx.beginPath();
+    ctx.moveTo(a.last[0] * c.width, a.last[1] * c.height);
+    for (const [x, y] of pts) ctx.lineTo(x * c.width, y * c.height);
+    ctx.stroke();
+    ctx.restore();
+    a.last = pts[pts.length - 1]!;
   };
 
   const onUp = () => {
@@ -142,6 +160,7 @@ export default function BoardCanvas({ board, rev, sessionId, send, onChange, bac
     flush();
     clearInterval(a.timer);
     active.current = null;
+    redraw();
     onChange();
   };
 

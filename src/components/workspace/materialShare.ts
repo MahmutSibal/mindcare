@@ -3,7 +3,7 @@
 
 import { api, type Material } from "../../lib/api";
 import {
-  CHUNK_BYTES, extensionOf, fmtBytes, httpsUrl, isSafeImage, isWebLink, MAX_FILE_SHARE_BYTES, mimeFor, toBase64,
+  CHUNK_BYTES, extensionOf, fmtBytes, httpsUrl, isSafeImage, isWebLink, makePacer, MAX_FILE_SHARE_BYTES, mimeFor, toBase64,
 } from "../../lib/share";
 import type { MediaState } from "../../lib/rtc";
 import type { CallApi } from "./useCall";
@@ -83,7 +83,9 @@ export async function showMaterial(call: CallApi, m: Material, update: (s: Share
   };
   if (!(await call.sendBuffered({ type: "material_show", id: shareId, title: m.title, kind, mime, size: bytes.byteLength }))) fail();
   let lastReport = 0;
+  const pace = makePacer();
   for (let off = 0; off < bytes.byteLength; off += CHUNK_BYTES) {
+    await pace(CHUNK_BYTES);
     const data = toBase64(bytes.subarray(off, off + CHUNK_BYTES));
     if (!(await call.sendBuffered({ type: "material_chunk", id: shareId, data }))) fail();
     const p = Math.min(1, (off + CHUNK_BYTES) / bytes.byteLength);

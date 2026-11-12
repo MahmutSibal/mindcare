@@ -4,7 +4,7 @@
 import { useCallback, useRef, useState } from "react";
 import { Check, Paperclip, X } from "lucide-react";
 import type { Call, ChannelMessage } from "../src/lib/rtc";
-import { CHUNK_BYTES, fmtBytes, MAX_FILE_SHARE_BYTES, toBase64, uploadMimeFor, UPLOAD_MIMES } from "../src/lib/share";
+import { CHUNK_BYTES, fmtBytes, makePacer, MAX_FILE_SHARE_BYTES, toBase64, uploadMimeFor, UPLOAD_MIMES } from "../src/lib/share";
 
 export interface UploadState {
   name: string;
@@ -38,7 +38,9 @@ export function useUpload(getCall: () => Call | null) {
         };
         if (!(await call.sendBuffered({ type: "upload_start", id, name: file.name, mime, size: bytes.byteLength }))) lost();
         let last = 0;
+        const pace = makePacer();
         for (let off = 0; off < bytes.byteLength; off += CHUNK_BYTES) {
+          await pace(CHUNK_BYTES);
           if (activeId.current !== id) return; // iptal edildi
           const data = toBase64(bytes.subarray(off, off + CHUNK_BYTES));
           if (!(await call.sendBuffered({ type: "upload_chunk", id, data }))) lost();

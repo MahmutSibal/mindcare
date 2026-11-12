@@ -141,6 +141,19 @@ export class BoardState {
   }
 }
 
+// Her karede yeni tuval ayırmak (özellikle telefonlarda) yavaşlatıyordu; tek katman yeniden kullanılır.
+let layerCache: HTMLCanvasElement | null = null;
+function layerCanvas(w: number, h: number): HTMLCanvasElement {
+  if (!layerCache) layerCache = document.createElement("canvas");
+  if (layerCache.width !== w || layerCache.height !== h) {
+    layerCache.width = w;
+    layerCache.height = h;
+  } else {
+    layerCache.getContext("2d")!.clearRect(0, 0, w, h);
+  }
+  return layerCache;
+}
+
 /** Tüm öğeleri tuvale çizer. Silgi çizgileri, altındaki çizimi siler. */
 export function draw(
   ctx: CanvasRenderingContext2D,
@@ -161,10 +174,10 @@ export function draw(
     ctx.drawImage(backdrop, (w - bw) / 2, (h - bh) / 2, bw, bh);
   }
   // Silgi için ayrı bir katman: çizimler orada birleşir, silgi o katmanda "destination-out" ile siler.
-  const layer = document.createElement("canvas");
-  layer.width = w;
-  layer.height = h;
+  const layer = layerCanvas(w, h);
   const lc = layer.getContext("2d")!;
+  lc.setTransform(1, 0, 0, 1, 0, 0);
+  lc.globalCompositeOperation = "source-over";
   lc.lineCap = "round";
   lc.lineJoin = "round";
   const scale = Math.min(w, h);
