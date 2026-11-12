@@ -83,7 +83,9 @@ export default function AssistantChat({ onOpenSettings }: { onOpenSettings: () =
     api.getSettings().then((s) => setConfigured(s.gemini_api_key_set === "1"));
     api.listPatients().then((p) => setNames(p.map((x) => x.full_name)));
   }, [version]);
-  useEffect(() => bottom.current?.scrollIntoView({ behavior: "smooth" }), [msgs, busy]);
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ behavior: "smooth" });
+  }, [msgs, busy]);
 
   const send = async (text: string) => {
     const q = text.trim();
@@ -95,7 +97,10 @@ export default function AssistantChat({ onOpenSettings }: { onOpenSettings: () =
       return;
     }
     setBlocked(null);
-    const history = msgs.filter((m) => !m.error).map((m) => ({ role: m.role, text: m.text }));
+    // Hata alan sorular (ve hata mesajları) sonraki isteklere geçmiş olarak eklenmez.
+    const history = msgs
+      .filter((m, i) => !m.error && !msgs[i + 1]?.error)
+      .map((m) => ({ role: m.role, text: m.text }));
     setMsgs((l) => [...l, { role: "user", text: q }]);
     setInput("");
     setBusy(true);
