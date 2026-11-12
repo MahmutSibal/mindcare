@@ -32,6 +32,53 @@ function VideoEl({ stream, muted, mirrored, className }: {
   );
 }
 
+/**
+ * Mikrofon seviyesi: konuşurken çubuk hareket eder. Mikrofon açıkken bir süre hiç ses
+ * gelmezse uyarır (yanlış giriş cihazı, Windows gizlilik izni, bozuk kulaklık...).
+ */
+function MicLevel({ stream, on }: { stream: MediaStream | null; on: boolean }) {
+  const bar = useRef<HTMLDivElement>(null);
+  const [silent, setSilent] = useState(false);
+  useEffect(() => {
+    setSilent(false);
+    const track = stream?.getAudioTracks()[0];
+    if (!stream || !track || !on) return;
+    const ctx = new AudioContext();
+    const an = ctx.createAnalyser();
+    an.fftSize = 512;
+    ctx.createMediaStreamSource(new MediaStream([track])).connect(an);
+    const buf = new Uint8Array(an.fftSize);
+    let heard = false;
+    const started = performance.now();
+    const timer = setInterval(() => {
+      an.getByteTimeDomainData(buf);
+      let peak = 0;
+      for (const v of buf) peak = Math.max(peak, Math.abs(v - 128));
+      const level = Math.min(1, peak / 64);
+      if (peak > 3) heard = true;
+      if (bar.current) bar.current.style.width = `${Math.round(level * 100)}%`;
+      if (!heard && performance.now() - started > 8000) setSilent(true);
+      else if (heard) setSilent(false);
+    }, 100);
+    return () => {
+      clearInterval(timer);
+      void ctx.close();
+    };
+  }, [stream, on]);
+  if (!stream?.getAudioTracks().length) return null;
+  return (
+    <div className="absolute bottom-4 left-4 w-40 rounded-lg bg-black/60 px-2 py-1.5 text-[11px] text-white">
+      <div className="flex items-center gap-1.5">
+        <Mic size={12} className={on ? "" : "opacity-40"} />
+        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/20">
+          <div ref={bar} className="h-full bg-ok transition-[width] duration-100" style={{ width: 0 }} />
+        </div>
+      </div>
+      {silent && <p className="mt-1 leading-snug text-warn">Mikrofondan ses gelmiyor. Windows'ta giriş cihazını ve mikrofon iznini kontrol edin.</p>}
+    </div>
+  );
+}
+
 export default function CallPanel({ call, patient }: { call: CallApi; patient: Patient | null }) {
   const active = useActiveSession();
   const [confirmEnd, setConfirmEnd] = useState(false);
@@ -102,6 +149,8 @@ export default function CallPanel({ call, patient }: { call: CallApi; patient: P
             </span>
           </div>
         )}
+
+        <MicLevel stream={call.local} on={call.micOn} />
 
         {/* Terapist önizlemesi */}
         {call.local && (

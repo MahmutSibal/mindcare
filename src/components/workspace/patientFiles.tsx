@@ -215,7 +215,7 @@ export function PatientFiles({ files, onDraw }: { files: PatientFileMeta[]; onDr
           ) : isSafeImage(open.mime) && url ? (
             <img src={url} alt={open.name} className="max-h-[65vh] w-full rounded-lg border border-line object-contain" />
           ) : isPdf(open.mime) && url ? (
-            <iframe src={url} title={open.name} sandbox="" className="h-[65vh] w-full rounded-lg border border-line bg-white" />
+            <iframe src={url} title={open.name} className="h-[65vh] w-full rounded-lg border border-line bg-white" />
           ) : open.mime.startsWith("audio/") && url ? (
             <audio src={url} controls className="w-full" />
           ) : text !== null ? (
