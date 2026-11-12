@@ -28,7 +28,7 @@ export function supabase(): SupabaseClient {
   return client;
 }
 
-async function ensureSignedIn(): Promise<void> {
+export async function ensureSignedIn(): Promise<void> {
   const sb = supabase();
   const { data } = await sb.auth.getSession();
   if (!data.session) {
@@ -43,12 +43,12 @@ async function ensureSignedIn(): Promise<void> {
   // Realtime erişim anahtarını supabase-js oturumdan kendisi alır; elle setAuth gerekmez.
 }
 
-function randomToken(bytes: number): string {
+export function randomToken(bytes: number): string {
   const a = crypto.getRandomValues(new Uint8Array(bytes));
   return btoa(String.fromCharCode(...a)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-async function sha256Hex(text: string): Promise<string> {
+export async function sha256Hex(text: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }

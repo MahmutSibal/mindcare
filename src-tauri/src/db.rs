@@ -187,6 +187,43 @@ const MIGRATIONS: &[&str] = &[
     );
     CREATE INDEX idx_patient_files_patient ON patient_files(patient_id, created_at DESC);
     "#,
+    // 8 — Grup terapileri: grup, üyeler, grup seansları ve (isteğe bağlı) üye başına seans notu.
+    r#"
+    CREATE TABLE therapy_groups (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'passive')),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE group_members (
+        group_id TEXT NOT NULL,
+        patient_id TEXT NOT NULL,
+        added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (group_id, patient_id),
+        FOREIGN KEY (group_id) REFERENCES therapy_groups(id) ON DELETE CASCADE,
+        FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+    );
+    CREATE TABLE group_sessions (
+        id TEXT PRIMARY KEY,
+        group_id TEXT NOT NULL,
+        session_number INTEGER NOT NULL,
+        started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        ended_at DATETIME,
+        note TEXT,
+        FOREIGN KEY (group_id) REFERENCES therapy_groups(id) ON DELETE CASCADE
+    );
+    CREATE INDEX idx_group_sessions_group ON group_sessions(group_id, started_at DESC);
+    CREATE TABLE group_member_notes (
+        group_session_id TEXT NOT NULL,
+        patient_id TEXT NOT NULL,
+        note TEXT NOT NULL,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (group_session_id, patient_id),
+        FOREIGN KEY (group_session_id) REFERENCES group_sessions(id) ON DELETE CASCADE,
+        FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+    );
+    "#,
 ];
 
 fn apply_key(conn: &Connection, key: &Zeroizing<String>) -> AppResult<()> {
@@ -508,6 +545,30 @@ mod tests {
         c.execute("DELETE FROM patients WHERE id = 'p'", []).unwrap();
         let n: i64 = c.query_row("SELECT count(*) FROM patient_files", [], |r| r.get(0)).unwrap();
         assert_eq!(n, 0, "danışanla birlikte silinir");
+    }
+
+    #[test]
+    fn groups_cascade_and_notes_follow_members() {
+        let p = tmp("groups.db");
+        let mut c = open_encrypted(&p, &key('9')).unwrap();
+        migrate(&mut c).unwrap();
+        c.execute_batch(
+            "INSERT INTO patients (id, full_name) VALUES ('p1', 'A'), ('p2', 'B');
+             INSERT INTO therapy_groups (id, name) VALUES ('g', 'Kaygı grubu');
+             INSERT INTO group_members (group_id, patient_id) VALUES ('g', 'p1'), ('g', 'p2');
+             INSERT INTO group_sessions (id, group_id, session_number) VALUES ('s', 'g', 1);
+             INSERT INTO group_member_notes (group_session_id, patient_id, note) VALUES ('s', 'p1', 'iyi');",
+        ).unwrap();
+        assert!(c.execute("INSERT INTO group_members (group_id, patient_id) VALUES ('g', 'p1')", []).is_err(), "aynı üye iki kez eklenemez");
+        assert!(c.execute("UPDATE therapy_groups SET status = 'x' WHERE id = 'g'", []).is_err());
+        c.execute("DELETE FROM patients WHERE id = 'p1'", []).unwrap();
+        let (m, n): (i64, i64) = c
+            .query_row("SELECT (SELECT count(*) FROM group_members), (SELECT count(*) FROM group_member_notes)", [], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap();
+        assert_eq!((m, n), (1, 0), "danışan silinince üyeliği ve notu da gider, grup kalır");
+        c.execute("DELETE FROM therapy_groups WHERE id = 'g'", []).unwrap();
+        let k: i64 = c.query_row("SELECT (SELECT count(*) FROM group_sessions) + (SELECT count(*) FROM group_members)", [], |r| r.get(0)).unwrap();
+        assert_eq!(k, 0);
     }
 
     #[test]

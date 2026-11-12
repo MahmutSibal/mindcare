@@ -525,6 +525,235 @@ pub fn delete_patient(state: State<AppState>, id: String) -> AppResult<()> {
     })
 }
 
+// ───────────────────────────── Grup terapileri ─────────────────────────────
+
+#[derive(Serialize)]
+pub struct TherapyGroup {
+    id: String,
+    name: String,
+    description: Option<String>,
+    status: String,
+    member_count: i64,
+    session_count: i64,
+}
+
+#[derive(Deserialize)]
+pub struct GroupInput {
+    name: String,
+    description: Option<String>,
+    status: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct GroupMember {
+    patient_id: String,
+    full_name: String,
+}
+
+#[derive(Serialize)]
+pub struct GroupSession {
+    id: String,
+    group_id: String,
+    session_number: i64,
+    started_at: String,
+    ended_at: Option<String>,
+    note: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct GroupMemberNote {
+    patient_id: String,
+    note: String,
+}
+
+/// Bir gruba en fazla bu kadar üye eklenebilir (görüşme tarafındaki sınırla aynı).
+const MAX_GROUP_MEMBERS: usize = 6;
+
+fn group_session_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<GroupSession> {
+    Ok(GroupSession { id: r.get(0)?, group_id: r.get(1)?, session_number: r.get(2)?, started_at: r.get(3)?, ended_at: r.get(4)?, note: r.get(5)? })
+}
+
+#[tauri::command]
+pub fn list_groups(state: State<AppState>) -> AppResult<Vec<TherapyGroup>> {
+    with_conn(&state, |c| {
+        let mut st = c.prepare(
+            "SELECT g.id, g.name, g.description, g.status,
+                    (SELECT count(*) FROM group_members m WHERE m.group_id = g.id),
+                    (SELECT count(*) FROM group_sessions s WHERE s.group_id = g.id AND s.ended_at IS NOT NULL)
+             FROM therapy_groups g ORDER BY g.status, g.name COLLATE NOCASE",
+        )?;
+        let rows = st
+            .query_map([], |r| {
+                Ok(TherapyGroup { id: r.get(0)?, name: r.get(1)?, description: r.get(2)?, status: r.get(3)?, member_count: r.get(4)?, session_count: r.get(5)? })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    })
+}
+
+/// Yeni grup oluşturur (`id` yoksa) veya mevcut grubu günceller.
+#[tauri::command]
+pub fn save_group(state: State<AppState>, id: Option<String>, input: GroupInput) -> AppResult<String> {
+    let name = non_empty(&input.name, "Grup adı")?;
+    let status = match input.status.as_deref() {
+        None | Some("active") => "active",
+        Some("passive") => "passive",
+        _ => return Err(AppError::Invalid("Geçersiz durum.".into())),
+    };
+    with_conn(&state, |c| match id {
+        Some(id) => {
+            let n = c.execute(
+                "UPDATE therapy_groups SET name = ?2, description = ?3, status = ?4 WHERE id = ?1",
+                params![id, name, opt(&input.description), status],
+            )?;
+            if n == 0 {
+                return Err(AppError::Invalid("Grup bulunamadı.".into()));
+            }
+            Ok(id)
+        }
+        None => {
+            let id = new_id();
+            c.execute(
+                "INSERT INTO therapy_groups (id, name, description, status) VALUES (?1, ?2, ?3, ?4)",
+                params![id, name, opt(&input.description), status],
+            )?;
+            Ok(id)
+        }
+    })
+}
+
+#[tauri::command]
+pub fn delete_group(state: State<AppState>, id: String) -> AppResult<()> {
+    with_conn(&state, |c| {
+        c.execute("DELETE FROM therapy_groups WHERE id = ?1", [id])?;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn list_group_members(state: State<AppState>, group_id: String) -> AppResult<Vec<GroupMember>> {
+    with_conn(&state, |c| {
+        let mut st = c.prepare(
+            "SELECT p.id, p.full_name FROM group_members m JOIN patients p ON p.id = m.patient_id
+             WHERE m.group_id = ?1 ORDER BY p.full_name COLLATE NOCASE",
+        )?;
+        let rows = st
+            .query_map([group_id], |r| Ok(GroupMember { patient_id: r.get(0)?, full_name: r.get(1)? }))?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    })
+}
+
+/// Grubun üyelerini verilen listeyle değiştirir.
+#[tauri::command]
+pub fn set_group_members(state: State<AppState>, group_id: String, patient_ids: Vec<String>) -> AppResult<()> {
+    let mut ids = patient_ids;
+    ids.sort();
+    ids.dedup();
+    if ids.len() > MAX_GROUP_MEMBERS {
+        return Err(AppError::Invalid(format!("Bir gruba en fazla {MAX_GROUP_MEMBERS} danışan eklenebilir.")));
+    }
+    with_conn(&state, |c| {
+        let tx = c.transaction()?;
+        tx.execute("DELETE FROM group_members WHERE group_id = ?1", [&group_id])?;
+        for pid in &ids {
+            tx.execute("INSERT INTO group_members (group_id, patient_id) VALUES (?1, ?2)", params![group_id, pid])?;
+        }
+        tx.commit()?;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn list_group_sessions(state: State<AppState>, group_id: String) -> AppResult<Vec<GroupSession>> {
+    with_conn(&state, |c| {
+        let mut st = c.prepare(
+            "SELECT id, group_id, session_number, started_at, ended_at, note
+             FROM group_sessions WHERE group_id = ?1 ORDER BY started_at DESC",
+        )?;
+        let rows = st.query_map([group_id], group_session_row)?.collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    })
+}
+
+/// Grup seansını başlatır. Bitmemiş bir seans varsa onu döndürür; böylece yarım kalan seans sürdürülür.
+#[tauri::command]
+pub fn start_group_session(state: State<AppState>, group_id: String) -> AppResult<GroupSession> {
+    with_conn(&state, |c| {
+        let open = c
+            .query_row(
+                "SELECT id, group_id, session_number, started_at, ended_at, note
+                 FROM group_sessions WHERE group_id = ?1 AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1",
+                [&group_id],
+                group_session_row,
+            )
+            .optional()?;
+        if let Some(s) = open {
+            return Ok(s);
+        }
+        let n: i64 = c.query_row("SELECT COALESCE(MAX(session_number), 0) + 1 FROM group_sessions WHERE group_id = ?1", [&group_id], |r| r.get(0))?;
+        let id = new_id();
+        c.execute("INSERT INTO group_sessions (id, group_id, session_number) VALUES (?1, ?2, ?3)", params![id, group_id, n])?;
+        Ok(c.query_row(
+            "SELECT id, group_id, session_number, started_at, ended_at, note FROM group_sessions WHERE id = ?1",
+            [&id],
+            group_session_row,
+        )?)
+    })
+}
+
+/// Grup notunu kaydeder; `finish` ise seansı da bitirir.
+#[tauri::command]
+pub fn save_group_session_note(state: State<AppState>, id: String, note: Option<String>, finish: bool) -> AppResult<()> {
+    with_conn(&state, |c| {
+        let n = c.execute(
+            "UPDATE group_sessions SET note = ?2, ended_at = CASE WHEN ?3 THEN COALESCE(ended_at, CURRENT_TIMESTAMP) ELSE ended_at END WHERE id = ?1",
+            params![id, opt(&note), finish],
+        )?;
+        if n == 0 {
+            return Err(AppError::Invalid("Grup seansı bulunamadı.".into()));
+        }
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn list_group_member_notes(state: State<AppState>, group_session_id: String) -> AppResult<Vec<GroupMemberNote>> {
+    with_conn(&state, |c| {
+        let mut st = c.prepare("SELECT patient_id, note FROM group_member_notes WHERE group_session_id = ?1")?;
+        let rows = st
+            .query_map([group_session_id], |r| Ok(GroupMemberNote { patient_id: r.get(0)?, note: r.get(1)? }))?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    })
+}
+
+/// Üyeye özel seans notu; boş metin notu siler. Üye bu grubun üyesi olmalı.
+#[tauri::command]
+pub fn save_group_member_note(state: State<AppState>, group_session_id: String, patient_id: String, note: String) -> AppResult<()> {
+    with_conn(&state, |c| {
+        let ok: i64 = c.query_row(
+            "SELECT count(*) FROM group_sessions s JOIN group_members m ON m.group_id = s.group_id
+             WHERE s.id = ?1 AND m.patient_id = ?2",
+            params![group_session_id, patient_id],
+            |r| r.get(0),
+        )?;
+        if ok == 0 {
+            return Err(AppError::Invalid("Danışan bu grubun üyesi değil.".into()));
+        }
+        if note.trim().is_empty() {
+            c.execute("DELETE FROM group_member_notes WHERE group_session_id = ?1 AND patient_id = ?2", params![group_session_id, patient_id])?;
+        } else {
+            c.execute(
+                "INSERT INTO group_member_notes (group_session_id, patient_id, note) VALUES (?1, ?2, ?3)
+                 ON CONFLICT(group_session_id, patient_id) DO UPDATE SET note = excluded.note, updated_at = CURRENT_TIMESTAMP",
+                params![group_session_id, patient_id, note.trim()],
+            )?;
+        }
+        Ok(())
+    })
+}
+
 // ───────────────────────────── Seanslar ─────────────────────────────
 
 #[derive(Serialize)]

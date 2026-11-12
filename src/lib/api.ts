@@ -53,6 +53,29 @@ export interface PatientFileMeta {
   created_at: string;
 }
 
+export interface TherapyGroup {
+  id: string;
+  name: string;
+  description: string | null;
+  status: "active" | "passive";
+  member_count: number;
+  session_count: number;
+}
+
+export interface GroupMember {
+  patient_id: string;
+  full_name: string;
+}
+
+export interface GroupSession {
+  id: string;
+  group_id: string;
+  session_number: number;
+  started_at: string;
+  ended_at: string | null;
+  note: string | null;
+}
+
 export type SubstanceKind = "medication" | "substance";
 
 export interface Substance {
@@ -224,6 +247,21 @@ export const api = {
   getPatientFile: (id: string) => invoke<ArrayBuffer>("get_patient_file", { id }),
   exportPatientFile: (id: string, dest: string) => invoke<void>("export_patient_file", { id, dest }),
   deletePatientFile: (id: string) => invoke<void>("delete_patient_file", { id }),
+
+  listGroups: () => invoke<TherapyGroup[]>("list_groups"),
+  saveGroup: (id: string | null, input: { name: string; description?: string; status?: "active" | "passive" }) =>
+    invoke<string>("save_group", { id, input }),
+  deleteGroup: (id: string) => invoke<void>("delete_group", { id }),
+  listGroupMembers: (groupId: string) => invoke<GroupMember[]>("list_group_members", { groupId }),
+  setGroupMembers: (groupId: string, patientIds: string[]) => invoke<void>("set_group_members", { groupId, patientIds }),
+  listGroupSessions: (groupId: string) => invoke<GroupSession[]>("list_group_sessions", { groupId }),
+  startGroupSession: (groupId: string) => invoke<GroupSession>("start_group_session", { groupId }),
+  saveGroupSessionNote: (id: string, note: string | null, finish: boolean) =>
+    invoke<void>("save_group_session_note", { id, note, finish }),
+  listGroupMemberNotes: (groupSessionId: string) =>
+    invoke<{ patient_id: string; note: string }[]>("list_group_member_notes", { groupSessionId }),
+  saveGroupMemberNote: (groupSessionId: string, patientId: string, note: string) =>
+    invoke<void>("save_group_member_note", { groupSessionId, patientId, note }),
 
   listMaterials: () => invoke<Material[]>("list_materials"),
   createMaterial: (input: { title: string; category: MaterialCategory; file_path: string; description?: string }) =>

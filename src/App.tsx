@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  CalendarDays, ClipboardList, FolderOpen, HeartHandshake, Home, LockKeyhole, NotebookTabs, Settings as SettingsIcon, Users,
+  CalendarDays, ClipboardList, FolderOpen, HeartHandshake, Home, LockKeyhole, NotebookTabs, Settings as SettingsIcon, Users, UsersRound,
 } from "lucide-react";
 import { api, errorText, RECOVERY_CONFIRMED_KEY, type AppStatus } from "./lib/api";
 import { notifyDataChanged, SessionProvider, useActiveSession, useDataVersion } from "./lib/session";
@@ -8,17 +8,19 @@ import { Button, cx } from "./components/ui";
 import { RecoveryKeyDialog, RecoveryKeyInput, RestoreWithRecoveryKey } from "./components/RecoveryKey";
 import Workspace from "./pages/Workspace";
 import Patients from "./pages/Patients";
+import Groups from "./pages/Groups";
 import Appointments from "./pages/Appointments";
 import Sessions from "./pages/Sessions";
 import Materials from "./pages/Materials";
 import Tests from "./pages/Tests";
 import Settings from "./pages/Settings";
 
-export type Page = "home" | "patients" | "appointments" | "sessions" | "materials" | "tests" | "settings";
+export type Page = "home" | "groups" | "patients" | "appointments" | "sessions" | "materials" | "tests" | "settings";
 
 const NAV: { id: Page; label: string; icon: typeof Home }[] = [
   { id: "home", label: "Ana Sayfa", icon: Home },
   { id: "patients", label: "Danışanlar", icon: Users },
+  { id: "groups", label: "Gruplar", icon: UsersRound },
   { id: "appointments", label: "Randevular", icon: CalendarDays },
   { id: "sessions", label: "Seanslar", icon: NotebookTabs },
   { id: "materials", label: "Materyaller", icon: FolderOpen },
@@ -111,6 +113,10 @@ function Shell() {
         {/* Görüşme başka sayfaya geçilince kopmasın diye Ana Sayfa hep bağlı kalır. */}
         <div className={page === "home" ? "h-full" : "hidden"}>
           <Workspace patientId={patientId} onSelectPatient={setPatientId} onNavigate={setPage} />
+        </div>
+        {/* Grup görüşmesi de sayfa değişince kopmasın diye hep bağlı kalır. */}
+        <div className={page === "groups" ? "h-full" : "hidden"}>
+          <Groups />
         </div>
         {page === "patients" && <Patients onOpen={openPatient} />}
         {page === "appointments" && <Appointments />}
