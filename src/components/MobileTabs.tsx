@@ -7,7 +7,7 @@ export default function MobileTabs<T extends string>({ tabs, value, onChange }: 
   onChange: (id: T) => void;
 }) {
   return (
-    <div className="flex shrink-0 gap-1 rounded-xl border border-line bg-panel p-1 md:hidden" role="tablist">
+    <div className="flex shrink-0 gap-1 rounded-xl border border-line bg-panel p-1 xl:hidden" role="tablist">
       {tabs.map((t) => (
         <button
           key={t.id}

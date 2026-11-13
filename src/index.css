@@ -30,6 +30,13 @@ body,
   height: 100%;
 }
 
+/* Telefon ve tablette durum çubuğu ile çentiğin altında kalmasın (kenardan kenara ekran). */
+#root {
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+}
+
 body {
   margin: 0;
   background: var(--color-bg);

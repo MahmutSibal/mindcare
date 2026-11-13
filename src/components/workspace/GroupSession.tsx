@@ -503,14 +503,14 @@ export function GroupSessionView({ group, call, onClose, onNavigate }: {
   );
 
   return (
-    <div className="flex h-full flex-col gap-2 p-2 md:grid md:grid-cols-[minmax(270px,310px)_minmax(0,1fr)_minmax(300px,360px)] md:gap-2.5 md:p-2.5">
+    <div className="flex h-full flex-col gap-2 p-2 xl:grid xl:grid-cols-[minmax(270px,310px)_minmax(0,1fr)_minmax(300px,360px)] xl:gap-2.5 xl:p-2.5">
       <MobileTabs
         tabs={[{ id: "members", label: "Grup" }, { id: "call", label: "Görüşme" }, { id: "notes", label: "Notlar" }]}
         value={mobileTab}
         onChange={setMobileTab}
       />
       {/* Sol: grup ve sekmeler */}
-      <div className={cx("min-h-0 flex-1 flex-col gap-2.5 md:flex", mobileTab === "members" ? "flex" : "hidden")}>
+      <div className={cx("min-h-0 flex-1 flex-col gap-2.5 xl:flex", mobileTab === "members" ? "flex" : "hidden")}>
         <Card className="shrink-0">
           <div className="flex items-center gap-3">
             <Avatar text={initials(group.name)} size={44} />
@@ -544,7 +544,7 @@ export function GroupSessionView({ group, call, onClose, onNavigate }: {
       </div>
 
       {/* Orta: süre ve görüntü */}
-      <div className={cx("min-h-0 flex-1 flex-col gap-2.5 md:flex", mobileTab === "call" ? "flex" : "hidden")}>
+      <div className={cx("min-h-0 flex-1 flex-col gap-2.5 xl:flex", mobileTab === "call" ? "flex" : "hidden")}>
         <ReceivedFilesToast
           files={incoming.received}
           onOpen={() => {
@@ -604,7 +604,7 @@ export function GroupSessionView({ group, call, onClose, onNavigate }: {
       </div>
 
       {/* Sağ: notlar */}
-      <div className={cx("min-h-0 flex-1 flex-col gap-2 md:flex", mobileTab === "notes" ? "flex" : "hidden")}>
+      <div className={cx("min-h-0 flex-1 flex-col gap-2 xl:flex", mobileTab === "notes" ? "flex" : "hidden")}>
         <div className="flex shrink-0 gap-1 rounded-xl border border-line bg-panel p-1" role="tablist">
           {([["session", "Seans", null], ["assistant", "Asistan", Sparkles]] as const).map(([id, label, Icon]) => (
             <button

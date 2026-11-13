@@ -73,38 +73,43 @@ function Shell() {
 
   return (
     <div className="flex h-full flex-col md:flex-row">
-      <aside className="hidden w-[168px] shrink-0 flex-col border-r border-line bg-rail md:flex">
-        <div className="flex h-14 items-center gap-2 px-4">
+      <aside className="hidden w-14 shrink-0 flex-col border-r border-line bg-rail pl-[env(safe-area-inset-left)] md:flex xl:w-[168px]">
+        <div className="flex h-14 items-center justify-center gap-2 px-2 xl:justify-start xl:px-4">
           <BrandMark size={30} />
-          <span className="font-semibold tracking-tight">{BRAND_NAME}</span>
+          <span className="hidden font-semibold tracking-tight xl:inline">{BRAND_NAME}</span>
         </div>
-        <nav className="flex flex-1 flex-col gap-0.5 px-2 pt-1">
+        <nav className="flex flex-1 flex-col gap-0.5 px-1.5 pt-1 xl:px-2">
           {NAV.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => setPage(id)}
+              title={label}
+              aria-label={label}
               className={cx(
-                "flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] transition-colors",
+                "relative flex items-center justify-center gap-2.5 rounded-lg px-2 py-2.5 text-[13px] transition-colors xl:justify-start xl:px-3 xl:py-2",
                 page === id ? "bg-accent-soft font-medium text-ink" : "text-muted hover:bg-card hover:text-ink",
               )}
             >
               <Icon size={18} className={page === id ? "text-accent" : ""} />
-              {label}
-              {id === "home" && session && <span className="ml-auto h-2 w-2 rounded-full bg-ok" title="Seans sürüyor" />}
+              <span className="hidden xl:inline">{label}</span>
+              {id === "home" && session && (
+                <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-ok xl:static xl:ml-auto" title="Seans sürüyor" />
+              )}
             </button>
           ))}
         </nav>
-        <div className="mx-3 mb-3 flex items-center gap-1.5 rounded-lg bg-card/60 px-3 py-2 text-[11px] text-faint">
+        <div className="mx-3 mb-3 hidden items-center gap-1.5 rounded-lg bg-card/60 px-3 py-2 text-[11px] text-faint xl:flex">
           <LockKeyhole size={12} /> Yerel ve şifreli
         </div>
         <button
           onClick={() => setPage("settings")}
-          className="flex items-center gap-3 border-t border-line px-4 py-4 text-left hover:bg-card"
+          title={therapist.name || "Profil"}
+          className="flex items-center justify-center gap-3 border-t border-line px-2 py-4 text-left hover:bg-card xl:justify-start xl:px-4"
         >
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-card text-sm font-medium text-accent">
             {(therapist.name || "?").slice(0, 1).toLocaleUpperCase("tr-TR")}
           </div>
-          <div className="min-w-0">
+          <div className="hidden min-w-0 xl:block">
             <div className="truncate text-sm">{therapist.name || "Profil ayarla"}</div>
             <div className="truncate text-xs text-faint">{therapist.title || "Ayarlar'dan düzenleyin"}</div>
           </div>
