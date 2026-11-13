@@ -58,6 +58,7 @@ function Answer({ a }: { a: AssistantAnswer }) {
             ))}
           </ol>
           {a.queries.length > 0 && <p className="mt-2 text-[11px] text-faint">Yapılan aramalar: {a.queries.join(" • ")}</p>}
+          {a.model && <p className="mt-1 text-[11px] text-faint">Model: {a.model}</p>}
         </div>
       ) : (
         <p className="mt-3 rounded-lg border border-warn/30 bg-warn/10 px-2.5 py-1.5 text-xs text-warn">

@@ -81,6 +81,7 @@ export interface AssistantAnswer {
   sources: { title: string; uri: string }[];
   queries: string[];
   grounded: boolean;
+  model: string;
 }
 
 export type SubstanceKind = "medication" | "substance";

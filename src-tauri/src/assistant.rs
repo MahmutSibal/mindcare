@@ -13,6 +13,9 @@ use crate::error::{AppError, AppResult};
 
 pub const DEFAULT_MODEL: &str = "gemini-3.6-flash";
 
+/// Seçili model kota ya da bulunamama nedeniyle reddedilirse sırayla denenen hafif modeller.
+const FALLBACK_MODELS: &[&str] = &["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash"];
+
 const SYSTEM_PROMPT: &str = "\
 Sen, psikoloji ve ruh sağlığı alanında çalışan bir klinisyenin (psikolog / terapist) meslek içi yardımcı asistanısın. \
 Terapistin unuttuğu ya da hızlıca doğrulamak istediği bilgileri (kuramlar, teknikler, ölçekler, tanı ölçütleri, \
@@ -50,6 +53,8 @@ pub struct Answer {
     pub queries: Vec<String>,
     /// Google Search ile doğrulanmış mı? Değilse yanıt kaynaksızdır.
     pub grounded: bool,
+    /// Yanıtı üreten model (seçili model reddedilirse yedeği kullanılır).
+    pub model: String,
 }
 
 fn endpoint(model: &str) -> AppResult<String> {
@@ -159,7 +164,17 @@ pub fn parse_answer(resp: &Value) -> AppResult<Answer> {
         .map(|a| a.iter().filter_map(Value::as_str).map(|s| s.chars().take(200).collect()).collect())
         .unwrap_or_default();
 
-    Ok(Answer { grounded: !sources.is_empty(), text, sources, queries })
+    Ok(Answer { grounded: !sources.is_empty(), text, sources, queries, model: String::new() })
+}
+
+/// Google'ın hata gövdesindeki `error.message` metni (kısaltılmış, bağlantısız).
+fn google_message(body: &str) -> String {
+    let msg = serde_json::from_str::<Value>(body)
+        .ok()
+        .and_then(|v| v.pointer("/error/message").and_then(Value::as_str).map(str::to_owned))
+        .unwrap_or_default();
+    let msg: String = msg.split_whitespace().filter(|w| !w.starts_with("http")).collect::<Vec<_>>().join(" ");
+    msg.chars().take(260).collect()
 }
 
 fn http_error(status: u16, body: &str) -> AppError {
@@ -168,8 +183,11 @@ fn http_error(status: u16, body: &str) -> AppError {
         400 if lower.contains("api key") || lower.contains("api_key") => "Gemini API anahtarı geçersiz. Ayarlar'dan kontrol edin.".into(),
         400 => "İstek reddedildi (400). Soruyu kısaltıp yeniden deneyin.".into(),
         401 | 403 => "Gemini API anahtarı geçersiz ya da bu işlem için yetkisiz. Ayarlar'dan kontrol edin.".into(),
-        404 => "Model bulunamadı. Ayarlar'da model adını güncelleyin.".into(),
-        429 => "Ücretsiz kullanım sınırına ulaşıldı. Birkaç dakika bekleyip yeniden deneyin.".into(),
+        404 => format!("Model bulunamadı. Ayarlar'da model adını güncelleyin. Google'ın mesajı: {}", google_message(body)),
+        429 => format!(
+            "Gemini kullanım sınırı hatası verdi (429): ya dakikalık/günlük ücretsiz sınır doldu ya da bu model için ücretsiz kota yok. Google'ın mesajı: {}",
+            google_message(body)
+        ),
         500..=599 => "Gemini servisi şu an yanıt vermiyor. Biraz sonra yeniden deneyin.".into(),
         _ => format!("Gemini beklenmeyen yanıt verdi ({status})."),
     })
@@ -204,17 +222,34 @@ pub async fn ask(api_key: &str, model: &str, history: &[Turn], question: &str) -
         return Err(AppError::Invalid("Soru boş ya da çok uzun (en fazla 4000 karakter).".into()));
     }
     let history = &history[history.len().saturating_sub(10)..];
-    match call(api_key, model, &request_body(history, q, true)).await? {
-        Ok(v) => parse_answer(&v),
+    // Seçili model önce; kota (429) ya da bulunamama (404) durumunda hafif yedek modeller denenir.
+    let mut models: Vec<&str> = vec![model];
+    for m in FALLBACK_MODELS {
+        if !models.contains(m) {
+            models.push(m);
+        }
+    }
+    let mut last: Option<AppError> = None;
+    for m in models {
+        let mut r = call(api_key, m, &request_body(history, q, true)).await?;
         // Arama aracı bu model/anahtar için kullanılamıyorsa kaynaksız dene (arayüz bunu belirtir).
-        Err((400, body)) if body.to_lowercase().contains("search") || body.to_lowercase().contains("tool") => {
-            match call(api_key, model, &request_body(history, q, false)).await? {
-                Ok(v) => parse_answer(&v),
-                Err((s, b)) => Err(http_error(s, &b)),
+        if let Err((400, body)) = &r {
+            let low = body.to_lowercase();
+            if low.contains("search") || low.contains("tool") {
+                r = call(api_key, m, &request_body(history, q, false)).await?;
             }
         }
-        Err((s, b)) => Err(http_error(s, &b)),
+        match r {
+            Ok(v) => {
+                let mut a = parse_answer(&v)?;
+                a.model = m.to_string();
+                return Ok(a);
+            }
+            Err((s @ (429 | 404), b)) => last = Some(http_error(s, &b)),
+            Err((s, b)) => return Err(http_error(s, &b)),
+        }
     }
+    Err(last.unwrap_or_else(|| AppError::Invalid("Asistan yanıt veremedi.".into())))
 }
 
 /// Anahtarı ve modeli küçük bir istekle sınar (arama kotası harcamaz).
@@ -275,6 +310,14 @@ mod tests {
     fn empty_or_blocked_responses_are_errors() {
         assert!(parse_answer(&json!({ "promptFeedback": { "blockReason": "SAFETY" } })).is_err());
         assert!(parse_answer(&json!({ "candidates": [{ "content": { "parts": [] } }] })).is_err());
+    }
+
+    #[test]
+    fn google_error_message_is_extracted_without_links() {
+        let body = r#"{"error":{"code":429,"message":"You exceeded your current quota, limit: 0, model: x. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits.","status":"RESOURCE_EXHAUSTED"}}"#;
+        let m = google_message(body);
+        assert!(m.contains("limit: 0") && !m.contains("https://"));
+        assert_eq!(google_message("not json"), "");
     }
 
     #[test]
