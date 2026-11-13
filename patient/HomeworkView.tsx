@@ -6,6 +6,7 @@ import { Check, Copy, Download, FileSignature, X } from "lucide-react";
 import type { ChannelMessage } from "../src/lib/rtc";
 import { Button } from "../src/components/ui";
 import { saveFile } from "./saveFile";
+import { copyText } from "../src/lib/clipboard";
 
 export type HomeworkMessage = Extract<ChannelMessage, { type: "homework" }>;
 
@@ -37,7 +38,7 @@ export default function HomeworkView({ items, onClose }: { items: HomeworkMessag
   const [copied, setCopied] = useState<string | null>(null);
   const copy = async (h: HomeworkMessage) => {
     try {
-      await navigator.clipboard.writeText(asText(h));
+      if (!(await copyText(asText(h)))) return;
       setCopied(h.id);
       setTimeout(() => setCopied(null), 2000);
     } catch {

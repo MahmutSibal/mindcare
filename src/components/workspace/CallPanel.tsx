@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Check, Copy, Info, Lock, Mic, MicOff, MonitorUp, MoreVertical, PhoneOff, RefreshCw, ShieldAlert, Signal, Video, VideoOff, Wifi,
+  Check, Copy, Info, Lock, MessageCircle, Mic, MicOff, MonitorUp, MoreVertical, PhoneOff, RefreshCw, ShieldAlert, Signal, Video, VideoOff, Wifi,
   WifiOff, Waves,
 } from "lucide-react";
 import type { Patient } from "../../lib/api";
@@ -10,6 +10,8 @@ import { useActiveSession } from "../../lib/session";
 import { Avatar, Button, cx, Modal } from "../ui";
 import QualityPicker from "../QualityPicker";
 import type { CallApi } from "./useCall";
+import { copyText } from "../../lib/clipboard";
+import { shareViaWhatsApp } from "../../lib/shareLink";
 
 function VideoEl({ stream, muted, mirrored, className }: {
   stream: MediaStream | null;
@@ -372,6 +374,7 @@ function ConnectionStatusHeader({ call }: { call: CallApi }) {
 
 function WaitingForPatient({ call, name }: { call: CallApi; name: string }) {
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 15_000);
@@ -379,8 +382,9 @@ function WaitingForPatient({ call, name }: { call: CallApi; name: string }) {
   }, []);
   if (!call.invite || call.renewing) return <p className="text-sm text-muted">Hazırlanıyor…</p>;
   const copy = async () => {
-    await navigator.clipboard.writeText(call.invite!.link);
-    setCopied(true);
+    const ok = await copyText(call.invite!.link);
+    setCopyFailed(!ok);
+    setCopied(ok);
     setTimeout(() => setCopied(false), 2000);
   };
   const exp = call.invite.expiresAt.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
@@ -392,11 +396,19 @@ function WaitingForPatient({ call, name }: { call: CallApi; name: string }) {
         {call.state === "connecting" ? "Danışan katıldı, bağlantı kuruluyor…" : `${name} bekleniyor. Davet bağlantısını danışanla güvenli bir kanaldan paylaşın.`}
       </p>
       <div className="flex items-center gap-2 rounded-lg border border-line bg-card p-2">
-        <code className="min-w-0 flex-1 truncate text-left text-xs text-muted">{call.invite.link}</code>
+        <code className="min-w-0 flex-1 select-all truncate text-left text-xs text-muted">{call.invite.link}</code>
         <Button variant="subtle" className="px-2.5 py-1.5 text-xs" onClick={copy}>
           {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? "Kopyalandı" : "Kopyala"}
         </Button>
+        <Button variant="subtle" className="px-2.5 py-1.5 text-xs" onClick={() => void shareViaWhatsApp(inviteMessage(name, call.invite!.link)).catch(() => setCopyFailed(true))}>
+          <MessageCircle size={14} /> WhatsApp
+        </Button>
       </div>
+      {copyFailed && (
+        <p className="rounded-lg bg-warn/10 px-3 py-2 text-xs text-warn">
+          Kopyalanamadı. Bağlantıya dokunup basılı tutarak seçebilir ya da WhatsApp düğmesiyle gönderebilirsiniz.
+        </p>
+      )}
       {expired ? (
         <p className="rounded-lg bg-warn/10 px-3 py-2 text-xs text-warn">
           Bu bağlantının süresi doldu; danışan artık bununla katılamaz. Yeni bir bağlantı oluşturup gönderin.
@@ -413,4 +425,9 @@ function WaitingForPatient({ call, name }: { call: CallApi; name: string }) {
       )}
     </div>
   );
+}
+
+/** Danışana gönderilecek davet mesajı. */
+function inviteMessage(name: string, link: string): string {
+  return `Merhaba${name ? ` ${name.split(" ")[0]}` : ""}, görüşmemize bu bağlantıdan katılabilirsiniz (tek kullanımlıktır, başkasıyla paylaşmayın):\n${link}`;
 }

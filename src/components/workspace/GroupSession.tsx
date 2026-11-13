@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Check, ChevronDown, ChevronRight, Clock3, Copy, FileSignature, Mic, MicOff, MonitorUp, PhoneOff, Plus, Sparkles, UsersRound, Video, VideoOff,
+  Check, ChevronDown, ChevronRight, Clock3, Copy, FileSignature, MessageCircle, Mic, MicOff, MonitorUp, PhoneOff, Plus, Sparkles, UsersRound, Video, VideoOff,
 } from "lucide-react";
 import {
   api, errorText, type DrawingMeta, type GroupMember, type GroupSession, type Homework, type Material, type PatientFileMeta,
@@ -15,6 +15,8 @@ import type { GroupPeer } from "../../lib/groupRtc";
 import { notifyDataChanged, useDataVersion } from "../../lib/session";
 import { Avatar, Badge, Button, Card, cx, Empty, inputCls, Modal } from "../ui";
 import AssistantChat from "../AssistantChat";
+import { copyText } from "../../lib/clipboard";
+import { shareViaWhatsApp } from "../../lib/shareLink";
 import MobileTabs from "../MobileTabs";
 import { BoardPanel, BoardStartDialog, DrawingsList } from "./BoardPanel";
 import { PatientFiles, ReceivedFilesToast, useIncomingFiles } from "./patientFiles";
@@ -447,7 +449,10 @@ export function GroupSessionView({ group, call, onClose, onNavigate }: {
   };
 
   const copy = async (key: string, text: string) => {
-    await navigator.clipboard.writeText(text);
+    if (!(await copyText(text))) {
+      setError("Kopyalanamadı. Bağlantıyı WhatsApp düğmesiyle gönderebilirsiniz.");
+      return;
+    }
     setCopied(key);
     setTimeout(() => setCopied((c) => (c === key ? null : c)), 2000);
   };
@@ -471,9 +476,22 @@ export function GroupSessionView({ group, call, onClose, onNavigate }: {
               <span className="text-[11px] text-faint">{peer?.state === "connected" ? "bağlı" : peer ? "bağlanıyor" : "katılmadı"}</span>
             </div>
             {invite && (
-              <Button variant="subtle" className="mt-1.5 w-full px-2 py-1 text-xs" onClick={() => void copy(m.patient_id, invite.link)}>
-                {copied === m.patient_id ? <><Check size={13} /> Kopyalandı</> : <><Copy size={13} /> Davet bağlantısını kopyala</>}
-              </Button>
+              <div className="mt-1.5 flex gap-1.5">
+                <Button variant="subtle" className="flex-1 px-2 py-1 text-xs" onClick={() => void copy(m.patient_id, invite.link)}>
+                  {copied === m.patient_id ? <><Check size={13} /> Kopyalandı</> : <><Copy size={13} /> Kopyala</>}
+                </Button>
+                <Button
+                  variant="subtle"
+                  className="flex-1 px-2 py-1 text-xs"
+                  onClick={() =>
+                    void shareViaWhatsApp(`Merhaba ${m.full_name.split(" ")[0]}, grup görüşmemize bu kişiye özel bağlantıyla katılabilirsiniz (tek kullanımlıktır, paylaşmayın):\n${invite.link}`).catch(() =>
+                      setError("WhatsApp açılamadı."),
+                    )
+                  }
+                >
+                  <MessageCircle size={13} /> WhatsApp
+                </Button>
+              </div>
             )}
           </li>
         );

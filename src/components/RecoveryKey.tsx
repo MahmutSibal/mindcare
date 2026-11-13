@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { copyText } from "../lib/clipboard";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Check, Copy, HardDriveDownload, KeyRound } from "lucide-react";
 import { api, errorText } from "../lib/api";
@@ -40,7 +41,7 @@ export function RecoveryKeyDialog({ onClose, onConfirmed }: { onClose: () => voi
 
   const copy = async () => {
     if (!key) return;
-    await navigator.clipboard.writeText(key);
+    await copyText(key);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
