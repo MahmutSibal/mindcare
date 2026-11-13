@@ -38,6 +38,9 @@ adımlarını hatırlat, sonra yasal bildirim ve koruma yükümlülüklerinin hu
 - Grup terapisi sorularında grup dinamiği, gizlilik ve üyeler arası sınırları da düşün.\n\
 - Kişisel veri isteme. Soruda danışanı tanımlayan bilgi varsa kullanıcıyı anonimleştirmesi için uyar.";
 
+/// Asistanın hitap edeceği terapistin adı.
+const THERAPIST_NAME: &str = "Said";
+
 /// Koda gömülü bilgi notları: her soruda ilgili parçalar bulunup isteğe eklenir (bkz. `retrieve`).
 /// Metinler `src-tauri/knowledge/` klasöründedir; düzenleyip uygulamayı yeniden derlemek yeterlidir.
 pub const KNOWLEDGE: &[(&str, &str)] = &[
@@ -253,6 +256,11 @@ fn request_body(history: &[Turn], question: &str, search: bool, chunks: &[Chunk]
     };
     contents.push(json!({ "role": "user", "parts": [{ "text": user_text }] }));
     let mut system = SYSTEM_PROMPT.to_string();
+    system.push_str(&format!(
+        "
+
+Karşındaki terapistin adı {THERAPIST_NAME}. Ona adıyla ve \"siz\" diye, samimi ama saygılı hitap et (ör. \"{THERAPIST_NAME}, ...\"); her cümlede adını tekrarlama, yalnızca selamlaşmada ve önemli uyarılarda kullan."
+    ));
     if !chunks.is_empty() {
         system.push_str(
             "\n- Soruda \"yerleşik bilgi notlarından\" parçalar verilmişse ve ilgiliyse temel olarak kullan; kullandığın bilginin yanına \
@@ -574,7 +582,7 @@ mod tests {
         let chunks = vec![Chunk { label: "K1".into(), title: "Protokol".into(), text: "içerik".into() }];
         let body = request_body(&[], "Soru?", true, &chunks);
         let sys = body.pointer("/systemInstruction/parts/0/text").and_then(Value::as_str).unwrap();
-        assert!(sys.contains("[K1]") && sys.contains("terapist asistanısın"));
+        assert!(sys.contains("[K1]") && sys.contains("terapist asistanısın") && sys.contains("terapistin adı Said"));
         let last = body.pointer("/contents/0/parts/0/text").and_then(Value::as_str).unwrap();
         assert!(last.contains("(Not: Protokol)") && last.ends_with("Soru: Soru?"));
         let plain = request_body(&[], "Soru?", false, &[]);
