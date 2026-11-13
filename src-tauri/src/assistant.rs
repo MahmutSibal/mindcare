@@ -11,10 +11,10 @@ use serde_json::{json, Value};
 
 use crate::error::{AppError, AppResult};
 
-pub const DEFAULT_MODEL: &str = "gemini-3.6-flash";
+pub const DEFAULT_MODEL: &str = "gemini-3.8-flash";
 
 /// Seçili model kota ya da bulunamama nedeniyle reddedilirse sırayla denenen hafif modeller.
-const FALLBACK_MODELS: &[&str] = &["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash"];
+const FALLBACK_MODELS: &[&str] = &["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
 
 const SYSTEM_PROMPT: &str = "\
 Sen, psikoloji ve ruh sağlığı alanında çalışan bir klinisyenin (psikolog / terapist) meslek içi yardımcı asistanısın. \
@@ -180,9 +180,14 @@ fn google_message(body: &str) -> String {
 fn http_error(status: u16, body: &str) -> AppError {
     let lower = body.to_lowercase();
     AppError::Invalid(match status {
-        400 if lower.contains("api key") || lower.contains("api_key") => "Gemini API anahtarı geçersiz. Ayarlar'dan kontrol edin.".into(),
-        400 => "İstek reddedildi (400). Soruyu kısaltıp yeniden deneyin.".into(),
-        401 | 403 => "Gemini API anahtarı geçersiz ya da bu işlem için yetkisiz. Ayarlar'dan kontrol edin.".into(),
+        400 if lower.contains("api key") || lower.contains("api_key") => {
+            format!("Gemini API anahtarı geçersiz. Ayarlar'dan kontrol edin. Google'ın mesajı: {}", google_message(body))
+        }
+        400 => format!("İstek reddedildi (400). Google'ın mesajı: {}", google_message(body)),
+        401 | 403 => format!(
+            "Gemini API anahtarı kabul edilmedi ya da bu işlem için yetkisiz ({status}). Google'ın mesajı: {}",
+            google_message(body)
+        ),
         404 => format!("Model bulunamadı. Ayarlar'da model adını güncelleyin. Google'ın mesajı: {}", google_message(body)),
         429 => format!(
             "Gemini kullanım sınırı hatası verdi (429): ya dakikalık/günlük ücretsiz sınır doldu ya da bu model için ücretsiz kota yok. Google'ın mesajı: {}",
@@ -229,7 +234,7 @@ pub async fn ask(api_key: &str, model: &str, history: &[Turn], question: &str) -
             models.push(m);
         }
     }
-    let mut last: Option<AppError> = None;
+    let mut first: Option<AppError> = None;
     for m in models {
         let mut r = call(api_key, m, &request_body(history, q, true)).await?;
         // Arama aracı bu model/anahtar için kullanılamıyorsa kaynaksız dene (arayüz bunu belirtir).
@@ -245,11 +250,17 @@ pub async fn ask(api_key: &str, model: &str, history: &[Turn], question: &str) -
                 a.model = m.to_string();
                 return Ok(a);
             }
-            Err((s @ (429 | 404), b)) => last = Some(http_error(s, &b)),
+            Err((s @ (429 | 404), b)) => {
+                first.get_or_insert_with(|| http_error(s, &b));
+            }
             Err((s, b)) => return Err(http_error(s, &b)),
         }
     }
-    Err(last.unwrap_or_else(|| AppError::Invalid("Asistan yanıt veremedi.".into())))
+    Err(match first {
+        Some(AppError::Invalid(m)) => AppError::Invalid(format!("{m} (Yedek modeller de denendi, hiçbiri yanıt vermedi.)")),
+        Some(e) => e,
+        None => AppError::Invalid("Asistan yanıt veremedi.".into()),
+    })
 }
 
 /// Anahtarı ve modeli küçük bir istekle sınar (arama kotası harcamaz).
