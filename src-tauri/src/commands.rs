@@ -1411,10 +1411,13 @@ fn assistant_settings(state: &State<AppState>) -> AppResult<(String, String)> {
 }
 
 /// Terapistin sorusunu Gemini'ye (Google Search destekli) sorar. Danışan verisi gönderilmez.
+/// Koda gömülü bilgi notlarından soruyla ilgili parçalar isteğe eklenir (bkz. `assistant::KNOWLEDGE`).
 #[tauri::command]
 pub async fn ask_assistant(state: State<'_, AppState>, history: Vec<assistant::Turn>, question: String) -> AppResult<assistant::Answer> {
     let (key, model) = assistant_settings(&state)?;
-    assistant::ask(&key, &model, &history, &question).await
+    let docs: Vec<(String, String)> = assistant::KNOWLEDGE.iter().map(|(t, c)| ((*t).to_string(), (*c).to_string())).collect();
+    let chunks = assistant::retrieve(&docs, &question, 4);
+    assistant::ask(&key, &model, &history, &question, &chunks).await
 }
 
 /// Kayıtlı anahtarı ve modeli küçük bir istekle sınar.

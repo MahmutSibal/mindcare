@@ -22,11 +22,20 @@ const EXAMPLES = [
 
 /** [1], [2] gibi işaretleri kaynak bağlantısına çevirir. */
 function Answer({ a }: { a: AssistantAnswer }) {
-  const parts = a.text.split(/(\[\d+\])/g);
+  const parts = a.text.split(/(\[K?\d+\])/g);
   return (
     <>
       <div className="whitespace-pre-wrap text-sm leading-relaxed">
         {parts.map((p, i) => {
+          const note = /^\[(K\d+)\]$/.exec(p);
+          if (note) {
+            const d = a.docs.find((x) => x.label === note[1]);
+            return (
+              <span key={i} className="mx-0.5 align-super text-[10px] font-medium text-faint" title={d ? `Yerleşik not: ${d.title}` : "Yerleşik not"}>
+                [{note[1]}]
+              </span>
+            );
+          }
           const m = /^\[(\d+)\]$/.exec(p);
           const src = m ? a.sources[Number(m[1]) - 1] : null;
           return src ? (
@@ -43,6 +52,11 @@ function Answer({ a }: { a: AssistantAnswer }) {
           );
         })}
       </div>
+      {a.docs.some((d) => a.text.includes(`[${d.label}]`)) && (
+        <p className="mt-2 text-[11px] text-faint">
+          Yerleşik notlar: {a.docs.filter((d) => a.text.includes(`[${d.label}]`)).map((d) => `[${d.label}] ${d.title}`).join(" • ")}
+        </p>
+      )}
       {a.sources.length > 0 ? (
         <div className="mt-3 border-t border-line pt-2">
           <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-faint">Kaynaklar</div>

@@ -26,6 +26,10 @@ Terapistler için masaüstü seans ve danışan yönetim sistemi.
   API anahtarı Ayarlar'da girilir, yalnızca şifreli veritabanında durur ve istekler Rust tarafından yapılır. Ücretsiz Gemini
   kullanımında metin Google'ca ürün geliştirmede kullanılabildiği için kayıtlı danışan adı ve kimlik/telefon/e-posta
   kalıpları içeren sorular gönderilmez (`src/lib/privacy.ts`); gerçek danışan bilgisiyle çalışmak için ücretli plan gerekir.
+  Asistanın uzmanlığı koddadır: kimliği ve çalışma kuralları `src-tauri/src/assistant.rs` içindeki sistem komutunda, bilgisi
+  `src-tauri/knowledge/*.md` notlarındadır (ölçekler, risk ve kriz, teknikler, grup terapisi, etik/mevzuat, değerlendirme,
+  tanı özeti). Her soruda ilgili parçalar bulunup isteğe eklenir; yanıtta [K1] gibi anılır. Notları düzenleyip uygulamayı
+  yeniden derlemek yeterlidir; Ayarlar'dan değiştirilen bir şey yoktur.
 - **Danışandan dosya:** Danışan ayarlar menüsünden fotoğraf, PDF, metin, Word veya ses dosyası gönderir (en fazla 25 MB).
   Terapist ekranında bildirim çıkar; dosya şifreli veritabanında danışan dosyasına kaydedilir, uygulama içinde
   görüntülenir (görsel, PDF, metin, ses) ve bilgisayara indirilebilir. Tür listesi hem danışan sayfasında hem

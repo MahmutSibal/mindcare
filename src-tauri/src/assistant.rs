@@ -16,20 +16,39 @@ pub const DEFAULT_MODEL: &str = "gemini-3.8-flash";
 /// Seçili model kota ya da bulunamama nedeniyle reddedilirse sırayla denenen hafif modeller.
 const FALLBACK_MODELS: &[&str] = &["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
 
+/// Asistanın kimliği, çalışma biçimi ve sınırları. Eğitim burada ve `knowledge/` klasöründeki notlardadır.
 const SYSTEM_PROMPT: &str = "\
-Sen, psikoloji ve ruh sağlığı alanında çalışan bir klinisyenin (psikolog / terapist) meslek içi yardımcı asistanısın. \
-Terapistin unuttuğu ya da hızlıca doğrulamak istediği bilgileri (kuramlar, teknikler, ölçekler, tanı ölçütleri, \
-müdahale protokolleri, araştırma bulguları, etik ve mevzuat) kısa ve doğru şekilde hatırlatırsın.\n\
-Kurallar:\n\
-- Yanıtı Türkçe, kısa ve öz, mümkünse maddeler halinde ver.\n\
+Sen MindCare'in terapist asistanısın: Türkiye'de çalışan bir klinik psikoloğun / psikoterapistin seans sırasında ve \
+seanslar arasında başvurduğu meslek içi bir hatırlatma ve hızlı başvuru aracısın. Karşındaki kişi alanın uzmanıdır; \
+ona temel bilgileri anlatma, unuttuğu ya da doğrulamak istediği ayrıntıyı hızlıca ver.\n\
+Çalışma biçimin:\n\
+- Yanıtı Türkçe ver; terimlerin Türkçesini ve gerekirse İngilizcesini parantezle yaz (ör. maruz bırakma, exposure).\n\
+- Önce 1-2 cümlelik doğrudan yanıt, sonra gerekiyorsa kısa maddeler. Seans sırasında okunacağı için kısa ve taranabilir ol; \
+gereksiz giriş, tekrar ve genel geçer uyarı yazma.\n\
+- Ölçek, kesme puanı, tanı ölçütü, doz, süre gibi sayısal bilgilerde emin değilsen tahmin etme; \"emin değilim, kaynağı doğrulayın\" de.\n\
 - Güvenilir ve güncel kaynaklara dayan (APA, WHO, NICE, DSM-5-TR, ICD-11, hakemli dergiler, Türk Psikologlar Derneği, \
-Türkiye Psikiyatri Derneği). Önemli her iddia için arama sonuçlarındaki kaynağı kullan.\n\
-- Güvenilir kaynak bulamazsan bunu açıkça söyle. Kaynak, makale adı, yazar, yıl veya DOI UYDURMA.\n\
-- Belirli bir kişiye tanı koyma, ilaç ve doz önerme; ilaçla ilgili sorularda psikiyatriste yönlendir.\n\
-- Soruda intihar, kendine zarar verme, istismar ya da başkasına zarar riski varsa, risk değerlendirmesini ve \
-yasal bildirim/koruma yükümlülüklerini hatırlat.\n\
-- Klinik karar her zaman terapistindir; sen hatırlatır ve seçenek sunarsın. Emin olmadığında bunu söyle.\n\
+Türkiye Psikiyatri Derneği). Önemli her iddia için arama sonuçlarındaki kaynağı kullan. Kaynak, makale adı, yazar, yıl veya \
+DOI UYDURMA; bulamazsan bunu açıkça söyle.\n\
+- Belirli bir kişiye tanı koyma, ilaç ve doz önerme; ilaçla ilgili sorularda psikiyatriste yönlendir. Tıbbi bir neden \
+(tiroid, ilaç etkisi, nörolojik) olasılığı varsa tıbbi değerlendirme öner.\n\
+- Soruda intihar, kendine zarar verme, istismar ya da başkasına zarar riski varsa, önce risk değerlendirmesini ve güvenlik \
+adımlarını hatırlat, sonra yasal bildirim ve koruma yükümlülüklerinin hukuki danışmanlık gerektirdiğini belirt.\n\
+- Klinik karar her zaman terapistindir; sen hatırlatır, seçenekleri ve gerekçelerini sunarsın. Terapistin yaklaşımını \
+(ör. bilişsel davranışçı, şema, EMDR, bireysel ya da grup) sorudan anla ve yanıtını ona göre uyarla.\n\
+- Grup terapisi sorularında grup dinamiği, gizlilik ve üyeler arası sınırları da düşün.\n\
 - Kişisel veri isteme. Soruda danışanı tanımlayan bilgi varsa kullanıcıyı anonimleştirmesi için uyar.";
+
+/// Koda gömülü bilgi notları: her soruda ilgili parçalar bulunup isteğe eklenir (bkz. `retrieve`).
+/// Metinler `src-tauri/knowledge/` klasöründedir; düzenleyip uygulamayı yeniden derlemek yeterlidir.
+pub const KNOWLEDGE: &[(&str, &str)] = &[
+    ("Ölçekler ve kesme puanları", include_str!("../knowledge/olcekler.md")),
+    ("Risk değerlendirmesi ve kriz", include_str!("../knowledge/risk.md")),
+    ("Terapi teknikleri", include_str!("../knowledge/teknikler.md")),
+    ("Grup terapisi", include_str!("../knowledge/grup_terapisi.md")),
+    ("Etik, gizlilik ve mevzuat", include_str!("../knowledge/etik_mevzuat.md")),
+    ("Değerlendirme ve formülasyon", include_str!("../knowledge/degerlendirme.md")),
+    ("Tanı ölçütlerinin özeti", include_str!("../knowledge/tani_ozet.md")),
+];
 
 #[derive(Deserialize)]
 pub struct Turn {
@@ -44,6 +63,98 @@ pub struct Source {
     pub uri: String,
 }
 
+/// Yerleşik bilgi notlarından getirilen bir parça; yanıtta [K1], [K2] ile anılır.
+#[derive(Serialize, Debug, PartialEq, Clone)]
+pub struct Chunk {
+    pub label: String,
+    pub title: String,
+    pub text: String,
+}
+
+#[derive(Serialize, Debug, PartialEq)]
+pub struct DocRef {
+    pub label: String,
+    pub title: String,
+}
+
+const MAX_CHUNK_CHARS: usize = 1200;
+const STOP: &[&str] = &[
+    "nedir", "nasıl", "neden", "hangi", "için", "olan", "olarak", "gibi", "kadar", "daha", "çok", "bir", "ile", "ama", "veya",
+    "nelerdir", "midir", "mıdır", "yapılır", "uygulanır", "anlat", "açıkla", "bana", "bunu", "şunu",
+];
+
+fn tokens(s: &str) -> Vec<String> {
+    s.to_lowercase()
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|t| t.chars().count() >= 3 && !STOP.contains(t))
+        .map(str::to_owned)
+        .collect()
+}
+
+/// Belgeyi paragraf sınırlarında en çok `MAX_CHUNK_CHARS` karakterlik parçalara böler.
+pub fn split_chunks(text: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut cur = String::new();
+    for para in text.split("\n\n") {
+        let para = para.trim();
+        if para.is_empty() {
+            continue;
+        }
+        // Çok uzun paragraflar karakter sınırından bölünür.
+        let pieces: Vec<String> = if para.chars().count() > MAX_CHUNK_CHARS {
+            para.chars().collect::<Vec<_>>().chunks(MAX_CHUNK_CHARS).map(|c| c.iter().collect()).collect()
+        } else {
+            vec![para.to_string()]
+        };
+        for piece in pieces {
+            if !cur.is_empty() && cur.chars().count() + piece.chars().count() + 2 > MAX_CHUNK_CHARS {
+                out.push(std::mem::take(&mut cur));
+            }
+            if !cur.is_empty() {
+                cur.push_str("\n\n");
+            }
+            cur.push_str(&piece);
+        }
+    }
+    if !cur.trim().is_empty() {
+        out.push(cur);
+    }
+    out
+}
+
+/// Soruyla en çok örtüşen en fazla `k` parçayı seçer. Türkçe ekler için ilk 5 harf eşleştirilir.
+pub fn retrieve(docs: &[(String, String)], question: &str, k: usize) -> Vec<Chunk> {
+    let qt: Vec<String> = {
+        let mut v = tokens(question);
+        v.sort();
+        v.dedup();
+        v
+    };
+    if qt.is_empty() {
+        return vec![];
+    }
+    let keys: Vec<String> = qt.iter().map(|t| if t.chars().count() > 5 { t.chars().take(5).collect() } else { t.clone() }).collect();
+    let mut scored: Vec<(usize, String, String)> = Vec::new();
+    for (title, content) in docs {
+        for chunk in split_chunks(content) {
+            let low = chunk.to_lowercase();
+            let score: usize = keys.iter().map(|k| low.matches(k.as_str()).count().min(5)).sum();
+            // Başlık eşleşmesi de değerlidir.
+            let tscore: usize = keys.iter().filter(|k| title.to_lowercase().contains(k.as_str())).count() * 3;
+            if score + tscore > 0 {
+                scored.push((score + tscore, title.clone(), chunk));
+            }
+        }
+    }
+    scored.sort_by(|a, b| b.0.cmp(&a.0));
+    scored
+        .into_iter()
+        .take(k)
+        .enumerate()
+        .map(|(i, (_, title, text))| Chunk { label: format!("K{}", i + 1), title, text })
+        .collect()
+}
+
 #[derive(Serialize, Debug, PartialEq)]
 pub struct Answer {
     /// Yanıt metni; kaynaklı cümlelerin sonunda [1], [2] gibi işaretler bulunur.
@@ -55,6 +166,8 @@ pub struct Answer {
     pub grounded: bool,
     /// Yanıtı üreten model (seçili model reddedilirse yedeği kullanılır).
     pub model: String,
+    /// Yanıta eklenen yerleşik bilgi notları ([K1] gibi anılanlar).
+    pub docs: Vec<DocRef>,
 }
 
 /// "models/3.8-flash", "3.8-flash" ya da "gemini-3.8-flash" yazılsa da doğru adı üretir.
@@ -121,15 +234,34 @@ fn endpoint(model: &str) -> AppResult<String> {
     Ok(format!("https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"))
 }
 
-fn request_body(history: &[Turn], question: &str, search: bool) -> Value {
+fn request_body(history: &[Turn], question: &str, search: bool, chunks: &[Chunk]) -> Value {
     let mut contents: Vec<Value> = history
         .iter()
         .filter(|t| (t.role == "user" || t.role == "model") && !t.text.trim().is_empty())
         .map(|t| json!({ "role": t.role, "parts": [{ "text": t.text }] }))
         .collect();
-    contents.push(json!({ "role": "user", "parts": [{ "text": question }] }));
+    // Terapistin belgelerinden gelen parçalar soruyla birlikte, "kaynak" olarak işaretlenerek verilir.
+    let user_text = if chunks.is_empty() {
+        question.to_string()
+    } else {
+        let ctx: Vec<String> = chunks.iter().map(|c| format!("[{}] (Not: {})\n{}", c.label, c.title, c.text)).collect();
+        format!(
+            "Asistanın yerleşik bilgi notlarından ilgili olabilecek parçalar:\n\n{}\n\n---\nSoru: {}",
+            ctx.join("\n\n"),
+            question
+        )
+    };
+    contents.push(json!({ "role": "user", "parts": [{ "text": user_text }] }));
+    let mut system = SYSTEM_PROMPT.to_string();
+    if !chunks.is_empty() {
+        system.push_str(
+            "\n- Soruda \"yerleşik bilgi notlarından\" parçalar verilmişse ve ilgiliyse temel olarak kullan; kullandığın bilginin yanına \
+[K1], [K2] gibi parça etiketini yaz. Notlar özet hatırlatmadır: sayısal ya da hukuki ayrıntıyı arama sonuçlarıyla doğrulamaya çalış, \
+çelişki varsa arama sonucuna güven ve bunu belirt. İlgisizse notları yok say.",
+        );
+    }
     let mut body = json!({
-        "systemInstruction": { "parts": [{ "text": SYSTEM_PROMPT }] },
+        "systemInstruction": { "parts": [{ "text": system }] },
         "contents": contents,
         "generationConfig": { "temperature": 0.3, "maxOutputTokens": 2048 },
     });
@@ -220,7 +352,7 @@ pub fn parse_answer(resp: &Value) -> AppResult<Answer> {
         .map(|a| a.iter().filter_map(Value::as_str).map(|s| s.chars().take(200).collect()).collect())
         .unwrap_or_default();
 
-    Ok(Answer { grounded: !sources.is_empty(), text, sources, queries, model: String::new() })
+    Ok(Answer { grounded: !sources.is_empty(), text, sources, queries, model: String::new(), docs: vec![] })
 }
 
 /// Google'ın hata gövdesindeki `error.message` metni (kısaltılmış, bağlantısız).
@@ -274,7 +406,7 @@ async fn call(api_key: &str, model: &str, body: &Value) -> AppResult<Result<Valu
 }
 
 /// Soruyu Google Search destekli olarak sorar. Arama aracı reddedilirse kaynaksız yanıt verir.
-pub async fn ask(api_key: &str, model: &str, history: &[Turn], question: &str) -> AppResult<Answer> {
+pub async fn ask(api_key: &str, model: &str, history: &[Turn], question: &str, chunks: &[Chunk]) -> AppResult<Answer> {
     if api_key.trim().is_empty() {
         return Err(AppError::Invalid("Gemini API anahtarı girilmemiş. Ayarlar'dan ekleyin.".into()));
     }
@@ -298,18 +430,19 @@ pub async fn ask(api_key: &str, model: &str, history: &[Turn], question: &str) -
         let m = models[i].clone();
         let m = m.as_str();
         i += 1;
-        let mut r = call(api_key, m, &request_body(history, q, true)).await?;
+        let mut r = call(api_key, m, &request_body(history, q, true, chunks)).await?;
         // Arama aracı bu model/anahtar için kullanılamıyorsa kaynaksız dene (arayüz bunu belirtir).
         if let Err((400, body)) = &r {
             let low = body.to_lowercase();
             if low.contains("search") || low.contains("tool") {
-                r = call(api_key, m, &request_body(history, q, false)).await?;
+                r = call(api_key, m, &request_body(history, q, false, chunks)).await?;
             }
         }
         match r {
             Ok(v) => {
                 let mut a = parse_answer(&v)?;
                 a.model = m.to_string();
+                a.docs = chunks.iter().map(|c| DocRef { label: c.label.clone(), title: c.title.clone() }).collect();
                 return Ok(a);
             }
             Err((s @ (429 | 404), b)) => {
@@ -411,6 +544,61 @@ mod tests {
         let m = google_message(body);
         assert!(m.contains("limit: 0") && !m.contains("https://"));
         assert_eq!(google_message("not json"), "");
+    }
+
+    #[test]
+    fn retrieval_finds_relevant_chunks_with_turkish_suffixes() {
+        let docs = vec![
+            ("Panik protokolü".to_string(), "Panik bozukluğunda enterosepsiyon maruz bırakma: hızlı nefes, baş döndürme egzersizi.\n\nBaşka bir paragraf.".to_string()),
+            ("Yas rehberi".to_string(), "Karmaşık yas ölçütleri ve yas sürecinde destek.".to_string()),
+        ];
+        let r = retrieve(&docs, "Panik atakta enterosepsiyon nasıl uygulanır?", 3);
+        assert!(!r.is_empty());
+        assert_eq!(r[0].title, "Panik protokolü");
+        assert_eq!(r[0].label, "K1");
+        assert!(retrieve(&docs, "tamamen alakasız kuantum fiziği", 3).is_empty());
+        assert!(retrieve(&docs, "nasıl neden için", 3).is_empty(), "yalnızca ortak sözcükler");
+    }
+
+    #[test]
+    fn long_documents_are_split_into_bounded_chunks() {
+        let text = format!("{}\n\n{}\n\n{}", "a".repeat(900), "b".repeat(900), "c".repeat(3000));
+        let chunks = split_chunks(&text);
+        assert!(chunks.len() >= 4);
+        assert!(chunks.iter().all(|c| c.chars().count() <= MAX_CHUNK_CHARS));
+        assert!(split_chunks("  \n\n ").is_empty());
+    }
+
+    #[test]
+    fn notes_reach_the_prompt() {
+        let chunks = vec![Chunk { label: "K1".into(), title: "Protokol".into(), text: "içerik".into() }];
+        let body = request_body(&[], "Soru?", true, &chunks);
+        let sys = body.pointer("/systemInstruction/parts/0/text").and_then(Value::as_str).unwrap();
+        assert!(sys.contains("[K1]") && sys.contains("terapist asistanısın"));
+        let last = body.pointer("/contents/0/parts/0/text").and_then(Value::as_str).unwrap();
+        assert!(last.contains("(Not: Protokol)") && last.ends_with("Soru: Soru?"));
+        let plain = request_body(&[], "Soru?", false, &[]);
+        assert_eq!(plain.pointer("/contents/0/parts/0/text").and_then(Value::as_str), Some("Soru?"));
+        assert!(plain.get("tools").is_none());
+    }
+
+    #[test]
+    fn builtin_knowledge_is_retrievable() {
+        let docs: Vec<(String, String)> = KNOWLEDGE.iter().map(|(t, c)| ((*t).to_string(), (*c).to_string())).collect();
+        assert!(docs.iter().all(|(_, c)| c.len() > 500), "her not dolu olmalı");
+        let cases = [
+            ("PHQ-9 kesme puanları nedir?", "Ölçekler ve kesme puanları"),
+            ("İntihar riski değerlendirmesi ve güvenlik planı", "Risk değerlendirmesi ve kriz"),
+            ("Maruz bırakma hiyerarşisi nasıl kurulur", "Terapi teknikleri"),
+            ("Grup terapisinde Yalom iyileştirici faktörler", "Grup terapisi"),
+            ("Terapide gizliliğin sınırları ve KVKK", "Etik, gizlilik ve mevzuat"),
+            ("Mental durum muayenesi başlıkları", "Değerlendirme ve formülasyon"),
+            ("Panik bozukluğu tanı ölçütleri", "Tanı ölçütlerinin özeti"),
+        ];
+        for (q, title) in cases {
+            let r = retrieve(&docs, q, 4);
+            assert!(r.iter().any(|c| c.title == title), "{q} → {title} bulunamadı: {:?}", r.iter().map(|c| &c.title).collect::<Vec<_>>());
+        }
     }
 
     #[test]
