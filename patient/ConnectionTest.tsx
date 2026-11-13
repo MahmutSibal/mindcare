@@ -3,7 +3,8 @@
 // Hız ölçümü için Cloudflare'in herkese açık hız test sunucusu kullanılır (yalnızca rastgele bayt).
 
 import { useRef, useState } from "react";
-import { Check, CircleAlert, HeartHandshake, Loader2, TriangleAlert, X } from "lucide-react";
+import { Check, CircleAlert, Loader2, TriangleAlert, X } from "lucide-react";
+import BrandMark from "../src/components/BrandMark";
 import { Button, cx } from "../src/components/ui";
 import { DEFAULT_STUN } from "../src/lib/config";
 
@@ -210,7 +211,7 @@ export default function ConnectionTest({ onClose }: { onClose?: () => void }) {
   return (
     <div className="w-full max-w-md rounded-2xl border border-line bg-panel p-6 sm:p-8">
       <div className="mb-4 flex items-center gap-2">
-        <HeartHandshake className="text-accent" size={26} />
+        <BrandMark size={32} />
         <span className="text-lg font-semibold">Bağlantı testi</span>
         {onClose && (
           <button onClick={onClose} className="ml-auto rounded-md p-1 text-muted hover:text-ink" aria-label="Kapat">

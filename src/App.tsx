@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import {
-  CalendarDays, ClipboardList, FolderOpen, HeartHandshake, Home, LockKeyhole, Menu, NotebookTabs, Settings as SettingsIcon, Users, UsersRound,
+  CalendarDays, ClipboardList, FolderOpen, Home, LockKeyhole, Menu, NotebookTabs, Settings as SettingsIcon, Users, UsersRound,
 } from "lucide-react";
 import { api, errorText, RECOVERY_CONFIRMED_KEY, type AppStatus } from "./lib/api";
 import { BRAND_NAME } from "./lib/brand";
+import BrandMark from "./components/BrandMark";
 import { notifyDataChanged, SessionProvider, useActiveSession, useDataVersion } from "./lib/session";
 import { Button, cx } from "./components/ui";
 import { RecoveryKeyDialog, RecoveryKeyInput, RestoreWithRecoveryKey } from "./components/RecoveryKey";
@@ -74,7 +75,7 @@ function Shell() {
     <div className="flex h-full flex-col md:flex-row">
       <aside className="hidden w-[168px] shrink-0 flex-col border-r border-line bg-rail md:flex">
         <div className="flex h-14 items-center gap-2 px-4">
-          <HeartHandshake className="text-accent" size={24} strokeWidth={2.2} />
+          <BrandMark size={30} />
           <span className="font-semibold tracking-tight">{BRAND_NAME}</span>
         </div>
         <nav className="flex flex-1 flex-col gap-0.5 px-2 pt-1">

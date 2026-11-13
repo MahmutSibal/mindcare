@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  FileSignature, FileText, HeartHandshake, Lock, Maximize2, Mic, MicOff, MoreVertical, Pencil, PhoneOff, Smartphone, SwitchCamera,
+  FileSignature, FileText, Lock, Maximize2, Mic, MicOff, MoreVertical, Pencil, PhoneOff, Smartphone, SwitchCamera,
   Video, VideoOff,
 } from "lucide-react";
 import { Call, type CallState, type CallStats, type ChannelMessage, getLocalMedia, joinRoom, type JoinResult } from "../src/lib/rtc";
@@ -19,6 +19,7 @@ import { useBoard } from "../src/lib/useBoard";
 import type { QualityPreset } from "../src/lib/rtc";
 import WaitingRoom from "./WaitingRoom";
 import { BRAND_NAME } from "../src/lib/brand";
+import BrandMark from "../src/components/BrandMark";
 import ConnectionTest from "./ConnectionTest";
 
 type Phase = "invalid" | "consent" | "joining" | "rejected" | "call" | "left";
@@ -450,7 +451,7 @@ export default function PatientApp() {
     <div className="flex h-full items-center justify-center overflow-y-auto p-4">
       <div className="w-full max-w-md rounded-2xl border border-line bg-panel p-6 sm:p-8">
         <div className="mb-5 flex items-center gap-2">
-          <HeartHandshake className="text-accent" size={28} />
+          <BrandMark size={36} />
           <span className="text-lg font-semibold">{BRAND_NAME}</span>
         </div>
 
