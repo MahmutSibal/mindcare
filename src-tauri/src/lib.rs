@@ -132,5 +132,5 @@ pub fn run() {
             commands::restore_with_recovery_key,
         ])
         .run(tauri::generate_context!())
-        .expect("MindCare başlatılamadı");
+        .expect("Mavi Ruh başlatılamadı");
 }

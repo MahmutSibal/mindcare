@@ -643,7 +643,7 @@ function FirstRun({ onNavigate, onCreated }: { onNavigate: (p: Page) => void; on
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-accent-soft text-accent">
           <Users size={30} />
         </div>
-        <h1 className="text-xl font-semibold">MindCare'e hoş geldiniz</h1>
+        <h1 className="text-xl font-semibold">Mavi Ruh'a hoş geldiniz</h1>
         <p className="mt-2 text-sm text-muted">
           Danışan kayıtları, seans geçmişi ve klinik notlar yalnızca bu bilgisayarda, şifreli veritabanında tutulur.
           Başlamak için ilk danışanınızı ekleyin.

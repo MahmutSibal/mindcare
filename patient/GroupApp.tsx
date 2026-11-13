@@ -8,6 +8,7 @@ import { Button, cx } from "../src/components/ui";
 import { GroupCall, joinGroupRoom, type GroupPeer } from "../src/lib/groupRtc";
 import { getLocalMedia, type CallState, type JoinResult } from "../src/lib/rtc";
 import ConnectionTest from "./ConnectionTest";
+import { BRAND_NAME } from "../src/lib/brand";
 import HomeworkView, { type HomeworkMessage } from "./HomeworkView";
 import MaterialView, { useIncomingMaterial } from "./MaterialView";
 import TestForm from "./TestForm";
@@ -339,7 +340,7 @@ export default function GroupApp() {
       <div className="w-full max-w-md rounded-2xl border border-line bg-panel p-6 sm:p-8">
         <div className="mb-5 flex items-center gap-2">
           <HeartHandshake className="text-accent" size={28} />
-          <span className="text-lg font-semibold">MindCare</span>
+          <span className="text-lg font-semibold">{BRAND_NAME}</span>
         </div>
         {phase === "invalid" && <p className="text-sm text-muted">Bağlantı eksik veya hatalı. Lütfen terapistinizin gönderdiği bağlantıyı eksiksiz açın.</p>}
         {phase === "left" && <p className="text-sm text-muted">Grup görüşmesi sona erdi. Bu pencereyi kapatabilirsiniz.</p>}

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "MindCare",
+  "productName": "Mavi Ruh",
   "version": "1.0.0",
   "identifier": "com.mindcare.desktop",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "MindCare",
+        "title": "Mavi Ruh",
         "width": 1280,
         "height": 760,
         "minWidth": 1024,
@@ -30,8 +30,8 @@
     "targets": [
       "nsis"
     ],
-    "publisher": "MindCare",
-    "copyright": "© 2026 MindCare",
+    "publisher": "Mavi Ruh",
+    "copyright": "© 2026 Mavi Ruh",
     "category": "Medical",
     "shortDescription": "Seans ve Danışan Yönetim Sistemi",
     "longDescription": "Terapistler için yerel ve şifreli danışan, seans, klinik not ve randevu yönetimi; güvenli görüntülü görüşme.",
@@ -55,7 +55,7 @@
         ],
         "displayLanguageSelector": false,
         "installerIcon": "icons/icon.ico",
-        "startMenuFolder": "MindCare"
+        "startMenuFolder": "Mavi Ruh"
       }
     }
   }

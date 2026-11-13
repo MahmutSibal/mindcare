@@ -106,7 +106,7 @@ export default function Settings() {
 
   const backup = async () => {
     const stamp = new Date().toISOString().slice(0, 10);
-    const dest = await save({ defaultPath: `mindcare-yedek-${stamp}.mcbak`, filters: [{ name: "MindCare yedeği", extensions: ["mcbak"] }] });
+    const dest = await save({ defaultPath: `maviruh-yedek-${stamp}.mcbak`, filters: [{ name: "Mavi Ruh yedeği", extensions: ["mcbak"] }] });
     if (!dest) return;
     try {
       await api.backupDatabase(dest);
@@ -117,7 +117,7 @@ export default function Settings() {
   };
 
   const pickRestore = async () => {
-    const src = await open({ multiple: false, filters: [{ name: "MindCare yedeği", extensions: ["mcbak", "db"] }] });
+    const src = await open({ multiple: false, filters: [{ name: "Mavi Ruh yedeği", extensions: ["mcbak", "db"] }] });
     if (typeof src === "string") setConfirmRestore(src);
   };
 

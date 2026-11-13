@@ -18,6 +18,7 @@ import BoardOverlay from "./BoardOverlay";
 import { useBoard } from "../src/lib/useBoard";
 import type { QualityPreset } from "../src/lib/rtc";
 import WaitingRoom from "./WaitingRoom";
+import { BRAND_NAME } from "../src/lib/brand";
 import ConnectionTest from "./ConnectionTest";
 
 type Phase = "invalid" | "consent" | "joining" | "rejected" | "call" | "left";
@@ -450,7 +451,7 @@ export default function PatientApp() {
       <div className="w-full max-w-md rounded-2xl border border-line bg-panel p-6 sm:p-8">
         <div className="mb-5 flex items-center gap-2">
           <HeartHandshake className="text-accent" size={28} />
-          <span className="text-lg font-semibold">MindCare</span>
+          <span className="text-lg font-semibold">{BRAND_NAME}</span>
         </div>
 
         {phase === "invalid" && <p className="text-sm text-muted">Bağlantı eksik veya hatalı. Lütfen terapistinizin gönderdiği bağlantıyı eksiksiz açın.</p>}

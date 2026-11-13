@@ -298,7 +298,7 @@ pub fn restore_from(conn: &mut Connection, src: &Path, key: &Zeroizing<String>) 
     let src_conn = open_encrypted(src, key)?;
     let v: i64 = src_conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
     if v == 0 || v > MIGRATIONS.len() as i64 {
-        return Err(AppError::Invalid("Seçilen dosya geçerli bir MindCare yedeği değil.".into()));
+        return Err(AppError::Invalid("Seçilen dosya geçerli bir Mavi Ruh yedeği değil.".into()));
     }
     {
         let b = Backup::new(&src_conn, conn)?;
@@ -309,14 +309,14 @@ pub fn restore_from(conn: &mut Connection, src: &Path, key: &Zeroizing<String>) 
 }
 
 /// Başka bir anahtarla (kurtarma anahtarı) şifrelenmiş yedeği `prepared` geçici dosyasına hazırlar.
-/// Yedek bu anahtarla açılabilmeli ve geçerli bir MindCare yedeği olmalıdır; kopya migration'dan
+/// Yedek bu anahtarla açılabilmeli ve geçerli bir Mavi Ruh yedeği olmalıdır; kopya migration'dan
 /// geçirilip yeniden açılarak doğrulanır. Ana veritabanına dokunulmaz.
 pub fn prepare_restore(src: &Path, prepared: &Path, key: &Zeroizing<String>) -> AppResult<()> {
     let src_conn = open_encrypted(src, key)
         .map_err(|_| AppError::Key("Bu kurtarma anahtarı seçilen yedeğe ait değil.".into()))?;
     let v: i64 = src_conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
     if v == 0 || v > MIGRATIONS.len() as i64 {
-        return Err(AppError::Invalid("Seçilen dosya geçerli bir MindCare yedeği değil.".into()));
+        return Err(AppError::Invalid("Seçilen dosya geçerli bir Mavi Ruh yedeği değil.".into()));
     }
     remove_with_sidecars(prepared)?;
     backup_to(&src_conn, prepared, key)?;

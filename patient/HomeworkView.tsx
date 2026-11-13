@@ -16,7 +16,7 @@ function fmtDay(iso: string): string {
 
 function asText(h: HomeworkMessage): string {
   const lines = [
-    "MindCare – Ödev",
+    "Mavi Ruh – Ödev",
     "",
     h.title,
     `Verilme tarihi: ${new Date().toLocaleDateString("tr-TR")}`,
@@ -29,7 +29,7 @@ function asText(h: HomeworkMessage): string {
 
 function download(h: HomeworkMessage) {
   const blob = new Blob([asText(h)], { type: "text/plain;charset=utf-8" });
-  const name = `odev-${h.title.toLocaleLowerCase("tr-TR").replace(/[^a-z0-9çğıöşü]+/g, "-").replace(/^-|-$/g, "") || "mindcare"}.txt`;
+  const name = `odev-${h.title.toLocaleLowerCase("tr-TR").replace(/[^a-z0-9çğıöşü]+/g, "-").replace(/^-|-$/g, "") || "maviruh"}.txt`;
   void saveFile(blob, name);
 }
 

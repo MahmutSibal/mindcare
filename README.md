@@ -1,4 +1,4 @@
-# MindCare
+# Mavi Ruh
 
 Terapistler için masaüstü seans ve danışan yönetim sistemi.
 
@@ -64,6 +64,11 @@ cd src-tauri && cargo test # şifreleme ve yedekleme testleri
 ## Dağıtım
 
 ```bash
-npm run tauri build        # NSIS kurulum sihirbazı (MindCare_x.y.z_x64-setup.exe)
+npm run tauri build        # NSIS kurulum sihirbazı (Mavi Ruh_x.y.z_x64-setup.exe)
 npm run patient:build      # danışan istemcisi → dist-patient/ (HTTPS üzerinden yayınlanmalı)
 ```
+
+## Marka
+Görünen ad `src/lib/brand.ts` içindedir (`BRAND_NAME`). Teknik adlar (`com.mindcare.desktop` kimliği, `mindcare.db`, anahtar deposu
+adı) bilerek değiştirilmedi: değişirse uygulama mevcut şifreli veritabanını bulamaz. Logo gelince `npx tauri icon <logo.png>` ile
+masaüstü ve Android simgeleri yeniden üretilir; ekrandaki küçük simge `HeartHandshake` yerine logo ile değiştirilir.

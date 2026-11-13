@@ -111,7 +111,7 @@ export function RestoreWithRecoveryKey({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null);
 
   const pick = async () => {
-    const f = await open({ multiple: false, filters: [{ name: "MindCare yedeği", extensions: ["mcbak", "db"] }] });
+    const f = await open({ multiple: false, filters: [{ name: "Mavi Ruh yedeği", extensions: ["mcbak", "db"] }] });
     if (typeof f === "string") setSrc(f);
   };
 
