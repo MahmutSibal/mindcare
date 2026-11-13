@@ -91,6 +91,7 @@ pub fn run() {
             commands::list_group_sessions,
             commands::start_group_session,
             commands::save_group_session_note,
+            commands::finish_group_session,
             commands::list_group_member_notes,
             commands::save_group_member_note,
             commands::list_sessions,

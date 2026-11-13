@@ -3,11 +3,12 @@
 // doğrudan bağlanır; terapistin yerel veritabanına erişim yoktur.
 
 import { useEffect, useRef, useState } from "react";
-import { HeartHandshake, Lock, Mic, MicOff, PhoneOff, Video, VideoOff } from "lucide-react";
+import { FileSignature, HeartHandshake, Lock, Mic, MicOff, PhoneOff, Video, VideoOff } from "lucide-react";
 import { Button, cx } from "../src/components/ui";
 import { GroupCall, joinGroupRoom, type GroupPeer } from "../src/lib/groupRtc";
 import { getLocalMedia, type CallState, type JoinResult } from "../src/lib/rtc";
 import ConnectionTest from "./ConnectionTest";
+import HomeworkView, { type HomeworkMessage } from "./HomeworkView";
 
 type Phase = "invalid" | "consent" | "joining" | "rejected" | "call" | "left";
 
@@ -113,6 +114,8 @@ export default function GroupApp() {
   const [camOn, setCamOn] = useState(true);
   const [consented, setConsented] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
+  const [homework, setHomework] = useState<HomeworkMessage[]>([]);
+  const [homeworkOpen, setHomeworkOpen] = useState(false);
   const callRef = useRef<GroupCall | null>(null);
   const consentSent = useRef(false);
 
@@ -175,6 +178,14 @@ export default function GroupApp() {
           }
         },
         onPeers: setPeers,
+        onMessage: (m, from) => {
+          // Ödevi yalnızca terapist gönderebilir; başka katılımcıdan gelen mesajlar yok sayılır.
+          if (m.type === "homework" && from === "host" && typeof m.id === "string" && typeof m.title === "string") {
+            setHomework((list) => [m, ...list.filter((h) => h.id !== m.id)]);
+            setHomeworkOpen(true);
+            callRef.current?.sendMessage({ type: "homework_received", id: m.id });
+          }
+        },
       });
       callRef.current = call;
       setPhase("call");
@@ -195,10 +206,19 @@ export default function GroupApp() {
     const host = peers.find((p) => p.id === "host");
     const others = peers.filter((p) => p.id !== "host");
     return (
-      <div className="flex h-full flex-col bg-bg">
-        <div className="relative min-h-0 flex-1 overflow-y-auto p-2.5">
+      <div className="relative flex h-full flex-col bg-bg">
+        {homework.length > 0 && homeworkOpen && <HomeworkView items={homework} onClose={() => setHomeworkOpen(false)} />}
+        <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
           <div className="mb-2 flex items-center gap-2 text-xs text-muted">
             <Lock size={12} /> Şifreli grup görüşmesi
+            {homework.length > 0 && !homeworkOpen && (
+              <button
+                onClick={() => setHomeworkOpen(true)}
+                className="ml-auto flex items-center gap-1.5 rounded-lg border border-line bg-card px-2.5 py-1 text-ink hover:bg-line"
+              >
+                <FileSignature size={13} /> Ödevlerim ({homework.length})
+              </button>
+            )}
             {state !== "connected" && <span className="rounded bg-warn/90 px-1.5 py-0.5 text-black">{state === "reconnecting" ? "Yeniden bağlanılıyor…" : "Bağlanıyor…"}</span>}
           </div>
           <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-2">

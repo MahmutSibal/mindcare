@@ -266,6 +266,7 @@ export const api = {
   startGroupSession: (groupId: string) => invoke<GroupSession>("start_group_session", { groupId }),
   saveGroupSessionNote: (id: string, note: string | null, finish: boolean) =>
     invoke<void>("save_group_session_note", { id, note, finish }),
+  markGroupSessionFinished: (id: string) => invoke<void>("finish_group_session", { id }),
   listGroupMemberNotes: (groupSessionId: string) =>
     invoke<{ patient_id: string; note: string }[]>("list_group_member_notes", { groupSessionId }),
   saveGroupMemberNote: (groupSessionId: string, patientId: string, note: string) =>

@@ -717,6 +717,18 @@ pub fn save_group_session_note(state: State<AppState>, id: String, note: Option<
     })
 }
 
+/// Grup seansını bitirir; notu değiştirmez.
+#[tauri::command]
+pub fn finish_group_session(state: State<AppState>, id: String) -> AppResult<()> {
+    with_conn(&state, |c| {
+        let n = c.execute("UPDATE group_sessions SET ended_at = COALESCE(ended_at, CURRENT_TIMESTAMP) WHERE id = ?1", [id])?;
+        if n == 0 {
+            return Err(AppError::Invalid("Grup seansı bulunamadı.".into()));
+        }
+        Ok(())
+    })
+}
+
 #[tauri::command]
 pub fn list_group_member_notes(state: State<AppState>, group_session_id: String) -> AppResult<Vec<GroupMemberNote>> {
     with_conn(&state, |c| {
