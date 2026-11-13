@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 export default function PageHeader({ title, subtitle, children }: { title: string; subtitle?: string; children?: ReactNode }) {
   return (
-    <header className="mb-5 flex items-end justify-between gap-4">
+    <header className="mb-5 flex flex-wrap items-end justify-between gap-3 md:gap-4">
       <div>
         <h1 className="text-2xl font-semibold">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
@@ -14,7 +14,7 @@ export default function PageHeader({ title, subtitle, children }: { title: strin
 
 export function Table({ head, children }: { head: string[]; children: ReactNode }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-line bg-panel">
+    <div className="overflow-x-auto rounded-xl border border-line bg-panel">
       <table className="w-full text-sm">
         <thead className="bg-card/60 text-left text-[13px] text-muted">
           <tr>{head.map((h) => <th key={h} className="px-4 py-3 font-medium">{h}</th>)}</tr>

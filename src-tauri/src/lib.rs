@@ -49,6 +49,7 @@ pub fn run() {
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
+            keystore::init(&dir);
             let db_path = dir.join("mindcare.db");
             let (conn, err) = match init_database(&db_path) {
                 Ok(c) => (Some(c), None),

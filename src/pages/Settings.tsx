@@ -134,7 +134,7 @@ export default function Settings() {
   };
 
   return (
-    <div className="h-full overflow-y-auto p-8">
+    <div className="h-full overflow-y-auto p-4 md:p-8">
       <PageHeader title="Ayarlar">
         <Button onClick={() => void persist()}><Save size={16} /> Kaydet</Button>
       </PageHeader>
@@ -142,7 +142,7 @@ export default function Settings() {
         <p className={`mb-4 rounded-lg px-3 py-2 text-sm ${msg.ok ? "bg-ok/10 text-ok" : "bg-danger/10 text-danger"}`}>{msg.text}</p>
       )}
 
-      <div className="grid max-w-5xl grid-cols-2 gap-4">
+      <div className="grid max-w-5xl grid-cols-1 gap-4 md:grid-cols-2">
         <Card title="Profil">
           <div className="space-y-4">
             <Field label="Ad Soyad"><input className={inputCls} value={form.therapist_name} onChange={set("therapist_name")} placeholder="Dr. …" /></Field>

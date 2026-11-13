@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  CalendarDays, ClipboardList, FolderOpen, HeartHandshake, Home, LockKeyhole, NotebookTabs, Settings as SettingsIcon, Users, UsersRound,
+  CalendarDays, ClipboardList, FolderOpen, HeartHandshake, Home, LockKeyhole, Menu, NotebookTabs, Settings as SettingsIcon, Users, UsersRound,
 } from "lucide-react";
 import { api, errorText, RECOVERY_CONFIRMED_KEY, type AppStatus } from "./lib/api";
 import { notifyDataChanged, SessionProvider, useActiveSession, useDataVersion } from "./lib/session";
@@ -70,8 +70,8 @@ function Shell() {
   };
 
   return (
-    <div className="flex h-full">
-      <aside className="flex w-[168px] shrink-0 flex-col border-r border-line bg-rail">
+    <div className="flex h-full flex-col md:flex-row">
+      <aside className="hidden w-[168px] shrink-0 flex-col border-r border-line bg-rail md:flex">
         <div className="flex h-14 items-center gap-2 px-4">
           <HeartHandshake className="text-accent" size={24} strokeWidth={2.2} />
           <span className="font-semibold tracking-tight">MindCare</span>
@@ -109,7 +109,7 @@ function Shell() {
         </button>
       </aside>
 
-      <main className="min-w-0 flex-1">
+      <main className="min-h-0 min-w-0 flex-1">
         {/* Görüşme başka sayfaya geçilince kopmasın diye Ana Sayfa hep bağlı kalır. */}
         <div className={page === "home" ? "h-full" : "hidden"}>
           <Workspace patientId={patientId} onSelectPatient={setPatientId} onNavigate={setPage} />
@@ -126,6 +126,8 @@ function Shell() {
         {page === "settings" && <Settings />}
       </main>
 
+      <MobileNav page={page} onPage={setPage} sessionActive={!!session} />
+
       {askRecovery && (
         <RecoveryKeyDialog
           onClose={() => setAskRecovery(false)}
@@ -136,6 +138,57 @@ function Shell() {
         />
       )}
     </div>
+  );
+}
+
+/** Telefonda soldaki menünün yerine geçen alt gezinme çubuğu. */
+function MobileNav({ page, onPage, sessionActive }: { page: Page; onPage: (p: Page) => void; sessionActive: boolean }) {
+  const [more, setMore] = useState(false);
+  const main = NAV.filter((n) => ["home", "patients", "groups", "appointments"].includes(n.id));
+  const rest = NAV.filter((n) => !["home", "patients", "groups", "appointments"].includes(n.id));
+  const restActive = rest.some((n) => n.id === page);
+  return (
+    <nav className="relative shrink-0 border-t border-line bg-rail pb-[env(safe-area-inset-bottom)] md:hidden" aria-label="Ana gezinme">
+      {more && (
+        <>
+          <button className="fixed inset-0 z-30 cursor-default" aria-label="Menüyü kapat" onClick={() => setMore(false)} />
+          <div className="absolute bottom-full right-2 z-40 mb-2 w-52 overflow-hidden rounded-2xl border border-line bg-panel shadow-2xl">
+            {rest.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => {
+                  onPage(id);
+                  setMore(false);
+                }}
+                className={cx("flex w-full items-center gap-3 px-4 py-3 text-left text-sm", page === id ? "bg-accent-soft text-ink" : "text-muted hover:bg-card")}
+              >
+                <Icon size={18} className={page === id ? "text-accent" : ""} /> {label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      <div className="flex">
+        {main.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => onPage(id)}
+            className={cx("relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px]", page === id ? "text-accent" : "text-muted")}
+          >
+            <Icon size={20} />
+            {label}
+            {id === "home" && sessionActive && <span className="absolute right-[28%] top-1.5 h-2 w-2 rounded-full bg-ok" />}
+          </button>
+        ))}
+        <button
+          onClick={() => setMore(!more)}
+          className={cx("flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px]", restActive || more ? "text-accent" : "text-muted")}
+        >
+          <Menu size={20} />
+          Diğer
+        </button>
+      </div>
+    </nav>
   );
 }
 

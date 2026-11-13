@@ -36,7 +36,7 @@ export default function Patients({ onOpen }: { onOpen: (id: string) => void }) {
   };
 
   return (
-    <div className="h-full overflow-y-auto p-8">
+    <div className="h-full overflow-y-auto p-4 md:p-8">
       <PageHeader title="Danışanlar" subtitle={`${list.length} kayıtlı danışan`}>
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint" />

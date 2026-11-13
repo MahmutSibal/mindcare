@@ -22,7 +22,7 @@ export default function Sessions({ onOpenPatient }: { onOpenPatient: (id: string
   const total = list.filter((s) => s.status === "completed").reduce((a, s) => a + s.duration_seconds, 0);
 
   return (
-    <div className="h-full overflow-y-auto p-8">
+    <div className="h-full overflow-y-auto p-4 md:p-8">
       <PageHeader
         title="Seanslar"
         subtitle={`${list.filter((s) => s.status === "completed").length} tamamlanmış seans • toplam ${Math.round(total / 3600)} saat`}

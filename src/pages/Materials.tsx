@@ -68,7 +68,7 @@ export default function Materials() {
   };
 
   return (
-    <div className="h-full overflow-y-auto p-8">
+    <div className="h-full overflow-y-auto p-4 md:p-8">
       <PageHeader title="Materyaller" subtitle="Seanslarda kullandığınız dosyalar. Dosyalar yerinde kalır; burada yalnızca kayıtları tutulur.">
         <Button variant="subtle" onClick={() => { setMode("link"); setDraft({ title: "", category: "video", file_path: "", description: "" }); }}>
           <Link2 size={16} /> Bağlantı Ekle

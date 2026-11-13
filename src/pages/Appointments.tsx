@@ -41,7 +41,7 @@ export default function Appointments() {
   };
 
   return (
-    <div className="h-full overflow-y-auto p-8">
+    <div className="h-full overflow-y-auto p-4 md:p-8">
       <PageHeader title="Randevular" subtitle="Planlanan ve geçmiş randevular">
         <div className="flex rounded-lg border border-line bg-panel p-0.5">
           {([["upcoming", "Yaklaşan"], ["past", "Geçmiş"], ["all", "Tümü"]] as const).map(([id, l]) => (
@@ -118,7 +118,7 @@ function AppointmentForm({ patients, onClose }: { patients: Patient[]; onClose: 
             {patients.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
           </select>
         </Field>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Tarih ve saat">
             <input type="datetime-local" className={inputCls} value={form.appointment_date} required
               onChange={(e) => setForm({ ...form, appointment_date: e.target.value })} />

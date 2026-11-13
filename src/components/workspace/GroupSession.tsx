@@ -15,6 +15,7 @@ import type { GroupPeer } from "../../lib/groupRtc";
 import { notifyDataChanged, useDataVersion } from "../../lib/session";
 import { Avatar, Badge, Button, Card, cx, Empty, inputCls, Modal } from "../ui";
 import AssistantChat from "../AssistantChat";
+import MobileTabs from "../MobileTabs";
 import { BoardPanel, BoardStartDialog, DrawingsList } from "./BoardPanel";
 import { PatientFiles, ReceivedFilesToast, useIncomingFiles } from "./patientFiles";
 import { EditorContent, NoteViewer, Toolbar, useNotesEditor } from "../NotesEditor";
@@ -345,6 +346,7 @@ export function GroupSessionView({ group, call, onClose, onNavigate }: {
   const version = useDataVersion();
   const [materials, setMaterials] = useState<Material[]>([]);
   const [rightView, setRightView] = useState<"session" | "assistant">("session");
+  const [mobileTab, setMobileTab] = useState<"members" | "call" | "notes">("call");
   const [tabRequest, setTabRequest] = useState<{ tab: string; n: number } | null>(null);
   const adapter = useGroupCallAdapter(call);
   const material = useGroupMaterial(adapter);
@@ -483,9 +485,14 @@ export function GroupSessionView({ group, call, onClose, onNavigate }: {
   );
 
   return (
-    <div className="grid h-full grid-cols-[minmax(270px,310px)_minmax(0,1fr)_minmax(300px,360px)] gap-2.5 p-2.5">
+    <div className="flex h-full flex-col gap-2 p-2 md:grid md:grid-cols-[minmax(270px,310px)_minmax(0,1fr)_minmax(300px,360px)] md:gap-2.5 md:p-2.5">
+      <MobileTabs
+        tabs={[{ id: "members", label: "Grup" }, { id: "call", label: "Görüşme" }, { id: "notes", label: "Notlar" }]}
+        value={mobileTab}
+        onChange={setMobileTab}
+      />
       {/* Sol: grup ve sekmeler */}
-      <div className="flex min-h-0 flex-col gap-2.5">
+      <div className={cx("min-h-0 flex-1 flex-col gap-2.5 md:flex", mobileTab === "members" ? "flex" : "hidden")}>
         <Card className="shrink-0">
           <div className="flex items-center gap-3">
             <Avatar text={initials(group.name)} size={44} />
@@ -519,7 +526,7 @@ export function GroupSessionView({ group, call, onClose, onNavigate }: {
       </div>
 
       {/* Orta: süre ve görüntü */}
-      <div className="flex min-h-0 flex-col gap-2.5">
+      <div className={cx("min-h-0 flex-1 flex-col gap-2.5 md:flex", mobileTab === "call" ? "flex" : "hidden")}>
         <ReceivedFilesToast
           files={incoming.received}
           onOpen={() => {
@@ -579,7 +586,7 @@ export function GroupSessionView({ group, call, onClose, onNavigate }: {
       </div>
 
       {/* Sağ: notlar */}
-      <div className="flex min-h-0 flex-col gap-2">
+      <div className={cx("min-h-0 flex-1 flex-col gap-2 md:flex", mobileTab === "notes" ? "flex" : "hidden")}>
         <div className="flex shrink-0 gap-1 rounded-xl border border-line bg-panel p-1" role="tablist">
           {([["session", "Seans", null], ["assistant", "Asistan", Sparkles]] as const).map(([id, label, Icon]) => (
             <button

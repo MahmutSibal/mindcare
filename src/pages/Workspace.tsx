@@ -16,6 +16,7 @@ import { errorText } from "../lib/api";
 import { maxScore, parseAnswers, parseDefinition } from "../lib/tests";
 import { Avatar, Button, Card, cx, Empty, LinkButton, Modal } from "../components/ui";
 import PatientForm from "../components/PatientForm";
+import MobileTabs from "../components/MobileTabs";
 import { NoteViewer } from "../components/NotesEditor";
 import CallPanel from "../components/workspace/CallPanel";
 import SessionPanel, { SessionTimer } from "../components/workspace/SessionPanel";
@@ -40,6 +41,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
   const [shared, setShared] = useState<SharedMaterial | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   const call = useCall();
+  const [mobileTab, setMobileTab] = useState<"client" | "call" | "session">("call");
   const { session } = useActiveSession();
   const sessionRef = useRef(session);
   sessionRef.current = session;
@@ -218,9 +220,14 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
   ];
 
   return (
-    <div className="grid h-full grid-cols-[minmax(270px,310px)_minmax(0,1fr)_minmax(300px,360px)] gap-2.5 p-2.5">
+    <div className="flex h-full flex-col gap-2 p-2 md:grid md:grid-cols-[minmax(270px,310px)_minmax(0,1fr)_minmax(300px,360px)] md:gap-2.5 md:p-2.5">
+      <MobileTabs
+        tabs={[{ id: "client", label: "Danışan" }, { id: "call", label: "Görüşme" }, { id: "session", label: "Seans" }]}
+        value={mobileTab}
+        onChange={setMobileTab}
+      />
       {/* Sol panel — danışan ve geçmişi */}
-      <div className="flex min-h-0 flex-col gap-2.5">
+      <div className={cx("min-h-0 flex-1 flex-col gap-2.5 md:flex", mobileTab === "client" ? "flex" : "hidden")}>
         <PatientProfileCard
           patient={patient}
           patients={patients}
@@ -232,7 +239,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
       </div>
 
       {/* Orta panel — seans süresi ve görüntülü görüşme */}
-      <div className="flex min-h-0 flex-col gap-2.5">
+      <div className={cx("min-h-0 flex-1 flex-col gap-2.5 md:flex", mobileTab === "call" ? "flex" : "hidden")}>
         <ReceivedFilesToast
           files={incoming.received}
           onOpen={() => {
@@ -246,6 +253,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
       </div>
 
       {/* Sağ panel — canlı notlar ve seans araçları */}
+      <div className={cx("min-h-0 flex-1 flex-col md:flex", mobileTab === "session" ? "flex" : "hidden")}>
       <SessionPanel
         call={call}
         patient={patient}
@@ -264,6 +272,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
         onOpenBoard={() => setBoardStarting(true)}
         onOpenSettings={() => onNavigate("settings")}
       />
+      </div>
 
       {boardStarting && (
         <BoardStartDialog
