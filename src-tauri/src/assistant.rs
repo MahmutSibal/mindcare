@@ -57,6 +57,62 @@ pub struct Answer {
     pub model: String,
 }
 
+/// "models/3.8-flash", "3.8-flash" ya da "gemini-3.8-flash" yazılsa da doğru adı üretir.
+pub fn normalize_model(m: &str) -> String {
+    let m = m.trim().trim_start_matches("models/").trim();
+    if m.is_empty() || m.starts_with("gemini") || m.starts_with("gemma") {
+        m.to_string()
+    } else {
+        format!("gemini-{m}")
+    }
+}
+
+/// Üretim için kullanılamayacak model türleri (görsel, ses, gömme, canlı vb.).
+fn is_text_model(name: &str) -> bool {
+    let n = name.to_lowercase();
+    n.contains("flash")
+        && !["image", "tts", "live", "embedding", "audio", "native", "robotics", "computer", "thinking-exp"].iter().any(|x| n.contains(x))
+}
+
+/// Google'dan `generateContent` destekleyen metin modellerini ister; en yeni sürümler önde döner.
+async fn discover_models(api_key: &str) -> Vec<String> {
+    let resp = reqwest::Client::new()
+        .get("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200")
+        .header("x-goog-api-key", api_key.trim())
+        .timeout(Duration::from_secs(15))
+        .send()
+        .await;
+    let Ok(resp) = resp else { return vec![] };
+    let Ok(bytes) = resp.bytes().await else { return vec![] };
+    let Ok(v) = serde_json::from_slice::<Value>(&bytes) else { return vec![] };
+    let mut names: Vec<String> = v
+        .get("models")
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .filter(|m| {
+                    m.get("supportedGenerationMethods")
+                        .and_then(Value::as_array)
+                        .is_some_and(|x| x.iter().any(|y| y.as_str() == Some("generateContent")))
+                })
+                .filter_map(|m| m.get("name").and_then(Value::as_str))
+                .map(|n| n.trim_start_matches("models/").to_string())
+                .filter(|n| is_text_model(n))
+                .collect()
+        })
+        .unwrap_or_default();
+    // Sürüm numarası büyük olan önce; aynı sürümde hafif ("lite") modeller sona.
+    let key = |n: &str| -> (u32, u32, bool) {
+        let digits: Vec<u32> = n.split(|c: char| !c.is_ascii_digit()).filter(|s| !s.is_empty()).filter_map(|s| s.parse().ok()).collect();
+        (digits.first().copied().unwrap_or(0), digits.get(1).copied().unwrap_or(0), n.contains("lite"))
+    };
+    names.sort_by(|a, b| {
+        let (ka, kb) = (key(a), key(b));
+        kb.0.cmp(&ka.0).then(kb.1.cmp(&ka.1)).then(ka.2.cmp(&kb.2))
+    });
+    names
+}
+
 fn endpoint(model: &str) -> AppResult<String> {
     let ok = !model.is_empty() && model.len() <= 60 && model.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '.' | '_'));
     if !ok {
@@ -228,14 +284,20 @@ pub async fn ask(api_key: &str, model: &str, history: &[Turn], question: &str) -
     }
     let history = &history[history.len().saturating_sub(10)..];
     // Seçili model önce; kota (429) ya da bulunamama (404) durumunda hafif yedek modeller denenir.
-    let mut models: Vec<&str> = vec![model];
+    let model = normalize_model(model);
+    let mut models: Vec<String> = vec![model.clone()];
     for m in FALLBACK_MODELS {
-        if !models.contains(m) {
-            models.push(m);
+        if !models.iter().any(|x| x == m) {
+            models.push((*m).to_string());
         }
     }
     let mut first: Option<AppError> = None;
-    for m in models {
+    let mut discovered = false;
+    let mut i = 0;
+    while i < models.len() {
+        let m = models[i].clone();
+        let m = m.as_str();
+        i += 1;
         let mut r = call(api_key, m, &request_body(history, q, true)).await?;
         // Arama aracı bu model/anahtar için kullanılamıyorsa kaynaksız dene (arayüz bunu belirtir).
         if let Err((400, body)) = &r {
@@ -252,6 +314,15 @@ pub async fn ask(api_key: &str, model: &str, history: &[Turn], question: &str) -
             }
             Err((s @ (429 | 404), b)) => {
                 first.get_or_insert_with(|| http_error(s, &b));
+                // Hazır liste tükenince Google'dan kullanılabilir modeller sorulur ve en yeni birkaçı denenir.
+                if i >= models.len() && !discovered {
+                    discovered = true;
+                    for n in discover_models(api_key).await.into_iter().take(4) {
+                        if !models.contains(&n) {
+                            models.push(n);
+                        }
+                    }
+                }
             }
             Err((s, b)) => return Err(http_error(s, &b)),
         }
@@ -269,9 +340,20 @@ pub async fn check(api_key: &str, model: &str) -> AppResult<()> {
         return Err(AppError::Invalid("Gemini API anahtarı girilmemiş.".into()));
     }
     let body = json!({ "contents": [{ "role": "user", "parts": [{ "text": "Sadece 'tamam' yaz." }] }], "generationConfig": { "maxOutputTokens": 16 } });
-    match call(api_key, model, &body).await? {
+    match call(api_key, &normalize_model(model), &body).await? {
         Ok(_) => Ok(()),
-        Err((s, b)) => Err(http_error(s, &b)),
+        Err((s, b)) => {
+            let e = http_error(s, &b);
+            // Model bulunamadıysa kullanılabilir olanları göstererek çözümü kolaylaştır.
+            if s == 404 {
+                let list = discover_models(api_key).await;
+                if !list.is_empty() {
+                    let shown: Vec<String> = list.into_iter().take(5).collect();
+                    return Err(AppError::Invalid(format!("{e} Kullanılabilir modeller: {}.", shown.join(", "))));
+                }
+            }
+            Err(e)
+        }
     }
 }
 
@@ -329,6 +411,18 @@ mod tests {
         let m = google_message(body);
         assert!(m.contains("limit: 0") && !m.contains("https://"));
         assert_eq!(google_message("not json"), "");
+    }
+
+    #[test]
+    fn model_names_are_normalized() {
+        assert_eq!(normalize_model("3.8-flash"), "gemini-3.8-flash");
+        assert_eq!(normalize_model("models/gemini-3.8-flash"), "gemini-3.8-flash");
+        assert_eq!(normalize_model("  gemini-3.5-flash-lite "), "gemini-3.5-flash-lite");
+        assert_eq!(normalize_model(""), "");
+        assert!(is_text_model("gemini-3.8-flash"));
+        assert!(!is_text_model("gemini-3.8-flash-image"));
+        assert!(!is_text_model("gemini-2.5-flash-preview-tts"));
+        assert!(!is_text_model("gemini-3.8-pro"));
     }
 
     #[test]

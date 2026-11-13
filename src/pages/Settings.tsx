@@ -196,7 +196,7 @@ export default function Settings() {
               spellCheck={false}
             />
           </Field>
-          <Field label="Model (boş bırakırsanız varsayılan)" hint="Varsayılan: gemini-3.8-flash">
+          <Field label="Model (önerilen: boş bırakın)" hint="Boşsa otomatik seçilir. Yazarsanız tam ad: gemini-3.8-flash">
             <input className={inputCls} value={form.gemini_model} onChange={set("gemini_model")} autoComplete="off" spellCheck={false} />
           </Field>
           <p className="mb-3 rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-xs leading-relaxed text-warn">
