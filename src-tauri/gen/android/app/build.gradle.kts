@@ -39,6 +39,9 @@ android {
             }
         }
         getByName("release") {
+            // Deneme dağıtımı: Android'in hata ayıklama anahtarıyla imzalanır (telefona doğrudan kurulabilsin diye).
+            // Mağazaya yüklemeden önce kendi anahtarımızla imzalanacak.
+            signingConfig = signingConfigs.getByName("debug")
             optimization {
                enable = true
             }

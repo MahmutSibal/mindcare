@@ -25,3 +25,4 @@ dist-ssr
 
 # Danışan istemcisi derleme çıktısı
 dist-patient
+dist-android/
