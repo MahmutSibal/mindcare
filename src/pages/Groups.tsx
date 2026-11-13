@@ -8,7 +8,7 @@ import { initials } from "../lib/format";
 import { useGroupCall } from "../components/workspace/useGroupCall";
 import { GroupSessionView } from "../components/workspace/GroupSession";
 
-export default function Groups() {
+export default function Groups({ onNavigate }: { onNavigate: (p: "materials" | "settings") => void }) {
   const version = useDataVersion();
   const [groups, setGroups] = useState<TherapyGroup[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -28,6 +28,7 @@ export default function Groups() {
         key={active.id}
         group={active}
         call={call}
+        onNavigate={onNavigate}
         onClose={() => {
           setActive(null);
           notifyDataChanged();

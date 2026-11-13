@@ -17,6 +17,9 @@ Terapistler için masaüstü seans ve danışan yönetim sistemi.
 - **Grup terapisi:** "Gruplar" sayfasında grup ve üyeler tanımlanır (en fazla 6 danışan). Her üyeye özel, tek kullanımlık
   davet bağlantısı üretilir; görüşme herkesin herkesi gördüğü doğrudan (mesh) bağlantıdır, bağlantı sayısına göre
   kalite otomatik düşer. Grup notu ve üye başına not tutulur. Tablolar `supabase/migrations/20261112120000_group_rooms.sql`.
+  Grup seansı ekranı ana sayfayla aynı düzendedir: zengin grup notu, üye notları, gruba test (her cevap kendi üyenin dosyasına),
+  materyal gösterimi, ortak çizim (tek tuval; kayıt tüm üyelerin dosyasına), gruba ödev (yalnızca ilgili üyenin ekranına),
+  üyelerin gönderdiği dosyalar (gönderen üyenin dosyasına), geçmiş seanslar ve Asistan sekmesi. Materyal videosu grupta henüz yok.
 - **Bağlantı testi:** Danışan sayfası `/#test` (ve katılma ekranındaki bağlantı) kamera, mikrofon, doğrudan bağlantı imkânı,
   gecikme ve hızı ölçer, sorun varsa ne yapılacağını söyler.
 - **Terapist asistanı (Gemini):** "Asistan" sayfası, Google Search ile kaynaklı yanıt verir (kaynaklar numaralı bağlantılardır).

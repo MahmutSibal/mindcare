@@ -532,7 +532,7 @@ function TestResultView({ result, onClose }: { result: TestResult; onClose: () =
 
 // ───────────────────────────── Materyaller ─────────────────────────────
 
-function MaterialLibrary({ materials, onShow, onDraw, onAll, connected, error }: {
+export function MaterialLibrary({ materials, onShow, onDraw, onAll, connected, error }: {
   materials: Material[];
   onShow: (m: Material) => void;
   /** Görselin üzerine ortak çizim açar. */

@@ -116,7 +116,7 @@ function Shell() {
         </div>
         {/* Grup görüşmesi de sayfa değişince kopmasın diye hep bağlı kalır. */}
         <div className={page === "groups" ? "h-full" : "hidden"}>
-          <Groups />
+          <Groups onNavigate={setPage} />
         </div>
         {page === "patients" && <Patients onOpen={openPatient} />}
         {page === "appointments" && <Appointments />}

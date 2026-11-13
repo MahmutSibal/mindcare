@@ -3,7 +3,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { Check, Paperclip, X } from "lucide-react";
-import type { Call, ChannelMessage } from "../src/lib/rtc";
+import type { ChannelMessage } from "../src/lib/rtc";
 import { CHUNK_BYTES, fmtBytes, makePacer, MAX_FILE_SHARE_BYTES, toBase64, uploadMimeFor, UPLOAD_MIMES } from "../src/lib/share";
 
 export interface UploadState {
@@ -13,7 +13,7 @@ export interface UploadState {
   error?: string;
 }
 
-export function useUpload(getCall: () => Call | null) {
+export function useUpload(getCall: () => { sendBuffered: (m: ChannelMessage) => Promise<boolean> } | null) {
   const [state, setState] = useState<UploadState | null>(null);
   const activeId = useRef<string | null>(null);
 

@@ -81,8 +81,8 @@ export default function AssistantChat({ onOpenSettings }: { onOpenSettings: () =
   const version = useDataVersion();
 
   useEffect(() => {
-    api.getSettings().then((s) => setConfigured(s.gemini_api_key_set === "1"));
-    api.listPatients().then((p) => setNames(p.map((x) => x.full_name)));
+    api.getSettings().then((s) => setConfigured(s.gemini_api_key_set === "1")).catch(() => setConfigured(false));
+    api.listPatients().then((p) => setNames(p.map((x) => x.full_name))).catch(() => {});
   }, [version]);
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth" });

@@ -9,7 +9,7 @@ import { fmtDate } from "../../lib/format";
 import { notifyDataChanged } from "../../lib/session";
 import { fmtBytes, fromBase64, isPdf, isSafeImage, isViewable, MAX_FILE_SHARE_BYTES, UPLOAD_MIMES } from "../../lib/share";
 import { Button, Modal } from "../ui";
-import type { CallApi } from "./useCall";
+import type { ChannelMessage } from "../../lib/rtc";
 
 export interface ReceivedFile {
   id: string;
@@ -30,54 +30,63 @@ interface Incoming {
  * Danışandan gelen dosyaları toplar ve kaydeder. `target` görüşmenin ait olduğu danışan ve
  * seansı verir; seans başlamamışsa dosya reddedilir (yanlış dosyaya düşmesin).
  */
-export function useIncomingFiles(call: CallApi, target: () => { patientId: string; sessionId: string } | null) {
+export function useIncomingFiles(
+  call: {
+    onMessage: (fn: (m: ChannelMessage, from?: string) => void) => () => void;
+    sendMessage: (m: ChannelMessage, to?: string) => boolean;
+  },
+  /** Gönderene göre hedef danışan ve seans (`from`: grup görüşmesinde gönderenin kimliği). */
+  target: (from?: string) => { patientId: string; sessionId: string | null } | null,
+) {
   const [received, setReceived] = useState<ReceivedFile[]>([]);
-  const cur = useRef<Incoming | null>(null);
+  // Gönderen başına ayrı aktarım: grupta iki kişi aynı anda dosya yollayabilir.
+  const cur = useRef(new Map<string, Incoming>());
   const targetRef = useRef(target);
   targetRef.current = target;
   const { onMessage, sendMessage } = call;
 
   useEffect(
     () =>
-      onMessage((m) => {
+      onMessage((m, from) => {
+        const key = from ?? "";
         const reject = (id: string, error: string) => {
-          sendMessage({ type: "upload_result", id, ok: false, error });
+          sendMessage({ type: "upload_result", id, ok: false, error }, from);
         };
         switch (m.type) {
           case "upload_start": {
-            cur.current = null;
+            cur.current.delete(key);
             if (typeof m.id !== "string" || typeof m.name !== "string" || typeof m.mime !== "string") return;
             if (!UPLOAD_MIMES.includes(m.mime)) return reject(m.id, "Bu dosya türü kabul edilmiyor.");
             if (!Number.isFinite(m.size) || m.size <= 0 || m.size > MAX_FILE_SHARE_BYTES) {
               return reject(m.id, "Dosya boş veya 25 MB'tan büyük.");
             }
-            if (!targetRef.current()) return reject(m.id, "Terapist henüz seansı başlatmadı; biraz sonra tekrar deneyin.");
-            cur.current = { id: m.id, name: m.name.slice(0, 200), mime: m.mime, size: m.size, chunks: [], received: 0 };
+            if (!targetRef.current(from)) return reject(m.id, "Terapist henüz seansı başlatmadı; biraz sonra tekrar deneyin.");
+            cur.current.set(key, { id: m.id, name: m.name.slice(0, 200), mime: m.mime, size: m.size, chunks: [], received: 0 });
             return;
           }
           case "upload_chunk": {
-            const c = cur.current;
+            const c = cur.current.get(key);
             if (!c || c.id !== m.id || typeof m.data !== "string") return;
             let bytes: Uint8Array;
             try {
               bytes = fromBase64(m.data);
             } catch {
-              cur.current = null;
+              cur.current.delete(key);
               return reject(m.id, "Aktarım bozuldu.");
             }
             c.received += bytes.byteLength;
             if (c.received > c.size) {
-              cur.current = null;
+              cur.current.delete(key);
               return reject(m.id, "Dosya bildirilen boyutu aştı.");
             }
             c.chunks.push(bytes);
             return;
           }
           case "upload_end": {
-            const c = cur.current;
+            const c = cur.current.get(key);
             if (!c || c.id !== m.id) return;
-            cur.current = null;
-            const t = targetRef.current();
+            cur.current.delete(key);
+            const t = targetRef.current(from);
             if (!t) return reject(c.id, "Seans sona erdi.");
             if (c.received !== c.size) return reject(c.id, "Dosya eksik ulaştı; tekrar gönderin.");
             const all = new Uint8Array(c.size);
@@ -89,7 +98,7 @@ export function useIncomingFiles(call: CallApi, target: () => { patientId: strin
             api
               .savePatientFile(t.patientId, t.sessionId, c.name, c.mime, all)
               .then((fileId) => {
-                sendMessage({ type: "upload_result", id: c.id, ok: true });
+                sendMessage({ type: "upload_result", id: c.id, ok: true }, from);
                 setReceived((l) => [...l, { id: fileId, name: c.name, at: Date.now() }]);
                 notifyDataChanged();
               })

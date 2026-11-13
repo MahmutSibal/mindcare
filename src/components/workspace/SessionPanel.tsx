@@ -395,7 +395,7 @@ function QuickTools({ call, patient, materials, onOpenBoard }: {
   );
 }
 
-function TestPicker({ onClose, onSend }: { onClose: () => void; onSend: (t: Test) => void }) {
+export function TestPicker({ onClose, onSend }: { onClose: () => void; onSend: (t: Test) => void }) {
   const [tests, setTests] = useState<Test[] | null>(null);
   useEffect(() => {
     api.listTests().then(setTests);

@@ -115,11 +115,23 @@ export function useGroupCall() {
     return () => window.removeEventListener("pagehide", bye);
   }, []);
 
+  // Terapist ekran paylaşıyorsa üyelerin görüntüsü kırpmadan sığdırılır (yeni katılanlara da bildirilir).
+  const connectedCount = peers.filter((p) => p.state === "connected").length;
+  const contentShared = !!screen;
+  useEffect(() => {
+    if (connectedCount === 0) return;
+    const send = () => callRef.current?.sendMessage({ type: "content_share", active: contentShared }) ?? false;
+    if (send()) return;
+    const t = setTimeout(send, 1500);
+    return () => clearTimeout(t);
+  }, [contentShared, connectedCount]);
+
   const inCall = state !== "idle" && state !== "ended" && state !== "failed";
   return {
     state, peers, local, screen, invites, error, micOn, camOn, inCall,
     start, hangup, toggleMic, toggleCam, shareScreen, onMessage,
     sendMessage: (m: ChannelMessage, to?: string) => callRef.current?.sendMessage(m, to) ?? false,
+    sendBuffered: (m: ChannelMessage, to?: string) => callRef.current?.sendBuffered(m, to) ?? Promise.resolve(false),
   };
 }
 

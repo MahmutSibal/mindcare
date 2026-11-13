@@ -54,9 +54,12 @@ function RemoteThumb({ stream }: { stream: MediaStream | null }) {
 }
 
 /** Terapist: ortak tuval, kaydetme ve kapatma. Ses ve görüntü açık kalır. */
-export function BoardPanel({ boardApi, patient, sessionId, remote, backdropUrl }: {
+export function BoardPanel({ boardApi, patient, sessionId, remote, backdropUrl, saveFor, label }: {
   boardApi: BoardApi;
   patient: Patient | null;
+  /** Grup görüşmesi: çizim bu danışanların hepsinin dosyasına kaydedilir. */
+  saveFor?: string[];
+  label?: string;
   sessionId: string | null;
   remote: MediaStream | null;
   /** Arka plan görseli (üzerine çizilen materyal). */
@@ -71,20 +74,24 @@ export function BoardPanel({ boardApi, patient, sessionId, remote, backdropUrl }
   const dirty = !empty && savedRev !== boardApi.rev;
 
   const save = async (): Promise<boolean> => {
-    if (!patient) return false;
+    const targets = saveFor ?? (patient ? [patient.id] : []);
+    if (targets.length === 0) return false;
     if (empty) {
       setMessage({ ok: false, text: "Tuval boş; kaydedilecek bir şey yok." });
       return false;
     }
     try {
       const img = backdropUrl ? await loadImage(backdropUrl).catch(() => null) : null;
-      await api.saveDrawing({
-        patient_id: patient.id,
-        session_id: sessionId,
-        title: title.trim() || "Çizim",
-        prompt: session.prompt ?? undefined,
-        png_base64: renderPngBase64(boardApi.board.elements, BACKGROUND, img),
-      });
+      const png = renderPngBase64(boardApi.board.elements, BACKGROUND, img);
+      for (const pid of targets) {
+        await api.saveDrawing({
+          patient_id: pid,
+          session_id: sessionId,
+          title: title.trim() || "Çizim",
+          prompt: session.prompt ?? undefined,
+          png_base64: png,
+        });
+      }
       setSavedRev(boardApi.rev);
       setMessage({ ok: true, text: "Danışan dosyasına kaydedildi (Klinik → Testler)." });
       notifyDataChanged();
@@ -100,7 +107,7 @@ export function BoardPanel({ boardApi, patient, sessionId, remote, backdropUrl }
       <div className="flex shrink-0 items-center gap-3">
         <RemoteThumb stream={remote} />
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-medium">Ortak çizim{patient ? ` • ${patient.full_name}` : ""}</div>
+          <div className="text-sm font-medium">Ortak çizim{label ? ` • ${label}` : patient ? ` • ${patient.full_name}` : ""}</div>
           {session.prompt && <p className="truncate text-xs text-muted" title={session.prompt}>Yönerge: {session.prompt}</p>}
         </div>
         <input
@@ -111,8 +118,8 @@ export function BoardPanel({ boardApi, patient, sessionId, remote, backdropUrl }
           aria-label="Kayıt başlığı"
           placeholder="Kayıt başlığı"
         />
-        <Button variant="outline" onClick={() => void save()} disabled={!patient}>
-          <Save size={15} /> Danışan dosyasına kaydet
+        <Button variant="outline" onClick={() => void save()} disabled={!patient && !saveFor?.length}>
+          <Save size={15} /> {saveFor ? "Üyelerin dosyasına kaydet" : "Danışan dosyasına kaydet"}
         </Button>
         <Button variant="ghost" onClick={() => (dirty ? setConfirmClose(true) : boardApi.close())} aria-label="Tahtayı kapat" title="Tahtayı iki taraf için kapat">
           <X size={18} />

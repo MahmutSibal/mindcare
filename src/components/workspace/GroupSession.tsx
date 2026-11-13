@@ -3,17 +3,23 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Check, ChevronDown, ChevronRight, Clock3, Copy, FileSignature, Mic, MicOff, MonitorUp, PhoneOff, Plus, Send, UsersRound, Video, VideoOff,
+  Check, ChevronDown, ChevronRight, Clock3, Copy, FileSignature, Mic, MicOff, MonitorUp, PhoneOff, Plus, Sparkles, UsersRound, Video, VideoOff,
 } from "lucide-react";
 import {
-  api, errorText, type GroupMember, type GroupSession, type Homework, type TherapyGroup,
+  api, errorText, type DrawingMeta, type GroupMember, type GroupSession, type Homework, type Material, type PatientFileMeta,
+  type TestResult, type TherapyGroup,
 } from "../../lib/api";
+import { useBoard } from "../../lib/useBoard";
 import { clock, fmtDate, fmtDateTime, initials } from "../../lib/format";
 import type { GroupPeer } from "../../lib/groupRtc";
 import { notifyDataChanged, useDataVersion } from "../../lib/session";
-import { Avatar, Badge, Button, Card, cx, Empty, Field, inputCls, Modal } from "../ui";
+import { Avatar, Badge, Button, Card, cx, Empty, inputCls, Modal } from "../ui";
+import AssistantChat from "../AssistantChat";
+import { BoardPanel, BoardStartDialog, DrawingsList } from "./BoardPanel";
+import { PatientFiles, ReceivedFilesToast, useIncomingFiles } from "./patientFiles";
 import { EditorContent, NoteViewer, Toolbar, useNotesEditor } from "../NotesEditor";
 import { HOMEWORK_STATUS } from "./Homework";
+import { GroupHomeworkDialog, GroupTools, sentHomework, useGroupCallAdapter, useGroupMaterial } from "./GroupExtras";
 import type { GroupCallApi } from "./useGroupCall";
 
 const TARGET_SECONDS = 50 * 60;
@@ -126,7 +132,7 @@ function MemberNotes({ session, members }: { session: GroupSession; members: Gro
   }, [session.id]);
 
   return (
-    <Card title="Üye notları" className="flex max-h-[34%] min-h-[90px] shrink-0 flex-col">
+    <Card title="Üye notları" className="flex max-h-[22%] min-h-[80px] shrink-0 flex-col">
       <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto">
         {members.map((m) => (
           <li key={m.patient_id} className="rounded-lg bg-card/70">
@@ -156,85 +162,6 @@ function MemberNotes({ session, members }: { session: GroupSession; members: Gro
 }
 
 // ───────────────────────────── Ödev ─────────────────────────────
-
-function GroupHomeworkDialog({ members, call, onClose }: { members: GroupMember[]; call: GroupCallApi; onClose: () => void }) {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [due, setDue] = useState("");
-  const [selected, setSelected] = useState<Set<string>>(new Set(members.map((m) => m.patient_id)));
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const connected = call.inCall;
-
-  const toggle = (id: string) =>
-    setSelected((s) => {
-      const n = new Set(s);
-      if (n.has(id)) n.delete(id);
-      else n.add(id);
-      return n;
-    });
-
-  const save = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (selected.size === 0) return setError("En az bir üye seçin.");
-    setBusy(true);
-    setError(null);
-    try {
-      for (const m of members.filter((x) => selected.has(x.patient_id))) {
-        const hw = await api.createHomework({ patient_id: m.patient_id, session_id: null, title, description, due_date: due });
-        // Ödev yalnızca o üyenin ekranına gider (diğer katılımcılar görmez).
-        const peer = call.peers.find((p) => p.memberId === m.patient_id && p.state === "connected");
-        if (peer && call.sendMessage({ type: "homework", id: hw.id, title: hw.title, description: hw.description, due: hw.due_date }, peer.id)) {
-          sentHomework.add(hw.id);
-        }
-      }
-      notifyDataChanged();
-      onClose();
-    } catch (err) {
-      setError(errorText(err));
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Modal title="Gruba ödev ver" onClose={onClose}>
-      <form onSubmit={save} className="space-y-4">
-        <Field label="Başlık">
-          <input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} autoFocus required placeholder="Örn. Düşünce kaydı tutmak" />
-        </Field>
-        <Field label="Açıklama" hint="Üyenin ekranında görünür; üye indirip saklayabilir.">
-          <textarea className={inputCls} rows={4} value={description} onChange={(e) => setDescription(e.target.value)} />
-        </Field>
-        <Field label="Son tarih (isteğe bağlı)">
-          <input type="date" className={inputCls} value={due} onChange={(e) => setDue(e.target.value)} />
-        </Field>
-        <Field label="Kimlere" hint="Her üyenin dosyasına ayrı ödev olarak kaydedilir.">
-          <div className="space-y-0.5 rounded-lg border border-line bg-bg p-1.5">
-            {members.map((m) => (
-              <label key={m.patient_id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-card">
-                <input type="checkbox" checked={selected.has(m.patient_id)} onChange={() => toggle(m.patient_id)} />
-                <span className="truncate">{m.full_name}</span>
-              </label>
-            ))}
-          </div>
-        </Field>
-        <p className={cx("rounded-lg px-3 py-2 text-xs", connected ? "bg-accent-soft text-accent" : "bg-card text-muted")}>
-          {connected
-            ? "Kaydedince bağlı üyelerin ekranına da gönderilecek."
-            : "Görüşme açık değil: ödevler kaydedilir, üyelerin dosyasından sonra gönderilebilir."}
-        </p>
-        {error && <p className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={onClose}>Vazgeç</Button>
-          <Button type="submit" disabled={busy}>{connected ? <><Send size={15} /> Kaydet ve gönder</> : "Kaydet"}</Button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-// Bu ekranda gönderilen ödevler; üyelerden gelen "ulaştı" onayı yalnızca bunlar için kabul edilir.
-const sentHomework = new Set<string>();
 
 function HomeworkTab({ members, call }: { members: GroupMember[]; call: GroupCallApi }) {
   const version = useDataVersion();
@@ -287,6 +214,58 @@ function HomeworkTab({ members, call }: { members: GroupMember[]; call: GroupCal
   );
 }
 
+// ───────────────────────────── Çalışmalar ─────────────────────────────
+
+function WorkTab({ members, onDraw }: { members: GroupMember[]; onDraw?: (f: PatientFileMeta) => void }) {
+  const version = useDataVersion();
+  const [data, setData] = useState<Record<string, { results: TestResult[]; drawings: DrawingMeta[]; files: PatientFileMeta[] }>>({});
+
+  useEffect(() => {
+    Promise.all(
+      members.map(async (m) => {
+        const [results, drawings, files] = await Promise.all([
+          api.listTestResults(m.patient_id), api.listDrawings(m.patient_id), api.listPatientFiles(m.patient_id),
+        ]);
+        return [m.patient_id, { results, drawings, files }] as const;
+      }),
+    )
+      .then((e) => setData(Object.fromEntries(e)))
+      .catch(() => {});
+  }, [members, version]);
+
+  const empty = members.every((m) => {
+    const d = data[m.patient_id];
+    return !d || d.results.length + d.drawings.length + d.files.length === 0;
+  });
+  if (empty) return <Empty text="Henüz test sonucu, çizim ya da dosya yok." />;
+  return (
+    <div className="space-y-4">
+      {members.map((m) => {
+        const d = data[m.patient_id];
+        if (!d || d.results.length + d.drawings.length + d.files.length === 0) return null;
+        return (
+          <section key={m.patient_id}>
+            <h4 className="mb-1 text-xs font-semibold text-muted">{m.full_name}</h4>
+            {d.results.length > 0 && (
+              <ul className="space-y-0.5">
+                {d.results.slice(0, 5).map((r) => (
+                  <li key={r.id} className="flex items-center gap-2 px-1 py-1 text-[13px]">
+                    <span className="min-w-0 flex-1 truncate">{r.test_title}</span>
+                    {r.total_score !== null && <Badge tone="accent">{r.total_score} puan</Badge>}
+                    <span className="shrink-0 text-faint">{fmtDate(r.completed_at, true)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <DrawingsList drawings={d.drawings} />
+            <PatientFiles files={d.files} onDraw={onDraw} />
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
 // ───────────────────────────── Geçmiş ─────────────────────────────
 
 function HistoryTab({ group, current }: { group: TherapyGroup; current: GroupSession | null }) {
@@ -321,8 +300,11 @@ function HistoryTab({ group, current }: { group: TherapyGroup; current: GroupSes
 
 // ───────────────────────────── Ekran ─────────────────────────────
 
-function LeftTabs({ tabs }: { tabs: { id: string; label: string; body: React.ReactNode }[] }) {
+function LeftTabs({ tabs, request }: { tabs: { id: string; label: string; body: React.ReactNode }[]; request?: { tab: string; n: number } | null }) {
   const [active, setActive] = useState(tabs[0]!.id);
+  useEffect(() => {
+    if (request) setActive(request.tab);
+  }, [request]);
   const current = tabs.find((t) => t.id === active) ?? tabs[0]!;
   return (
     <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-line bg-panel">
@@ -345,7 +327,12 @@ function LeftTabs({ tabs }: { tabs: { id: string; label: string; body: React.Rea
   );
 }
 
-export function GroupSessionView({ group, call, onClose }: { group: TherapyGroup; call: GroupCallApi; onClose: () => void }) {
+export function GroupSessionView({ group, call, onClose, onNavigate }: {
+  group: TherapyGroup;
+  call: GroupCallApi;
+  onClose: () => void;
+  onNavigate: (p: "materials" | "settings") => void;
+}) {
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [session, setSession] = useState<GroupSession | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
@@ -355,6 +342,48 @@ export function GroupSessionView({ group, call, onClose }: { group: TherapyGroup
   const [now, setNow] = useState(Date.now());
   const memberIds = useRef(new Set<string>());
   memberIds.current = new Set(members.map((m) => m.patient_id));
+  const version = useDataVersion();
+  const [materials, setMaterials] = useState<Material[]>([]);
+  const [rightView, setRightView] = useState<"session" | "assistant">("session");
+  const [tabRequest, setTabRequest] = useState<{ tab: string; n: number } | null>(null);
+  const adapter = useGroupCallAdapter(call);
+  const material = useGroupMaterial(adapter);
+
+  useEffect(() => {
+    api.listMaterials().then(setMaterials).catch(() => {});
+  }, [version]);
+
+  // Ortak çizim: herkes için tek tuval; gösterilen görsel arka plan olabilir.
+  const boardApi = useBoard("host", call.sendMessage, call.state === "connected");
+  const [boardStarting, setBoardStarting] = useState(false);
+  const [boardBackdrop, setBoardBackdrop] = useState<string | null>(null);
+  useEffect(() => call.onMessage((m) => void boardApi.handle(m)), [call.onMessage, boardApi.handle]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!call.inCall && boardApi.session) boardApi.close();
+  }, [call.inCall]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const drawOnMaterial = async (m: Material, bytes?: Uint8Array<ArrayBuffer>) => {
+    const s = await material.show(m, bytes);
+    if (!s?.shareId || !s.previewUrl) return;
+    setBoardBackdrop(s.previewUrl);
+    boardApi.open(null, s.shareId);
+  };
+
+  /** Üyenin gönderdiği görseli gruba gösterip üzerine ortak çizim açar. */
+  const drawOnFile = async (f: PatientFileMeta) => {
+    try {
+      const bytes = new Uint8Array(await api.getPatientFile(f.id));
+      await drawOnMaterial({ id: `file:${f.id}`, title: f.name, category: "image", file_path: f.name, description: null, created_at: f.created_at }, bytes);
+    } catch (e) {
+      setError(errorText(e));
+    }
+  };
+
+  // Üyelerin gönderdiği dosyalar, gönderen üyenin dosyasına kaydedilir.
+  const incoming = useIncomingFiles({ onMessage: call.onMessage, sendMessage: call.sendMessage }, (from) => {
+    const memberId = call.peers.find((p) => p.id === from)?.memberId;
+    return memberId && memberIds.current.has(memberId) ? { patientId: memberId, sessionId: null } : null;
+  });
 
   useEffect(() => {
     let live = true;
@@ -479,8 +508,10 @@ export function GroupSessionView({ group, call, onClose }: { group: TherapyGroup
           {error && <p className="mt-3 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
         </Card>
         <LeftTabs
+          request={tabRequest}
           tabs={[
             { id: "members", label: "Üyeler", body: membersTab },
+            { id: "work", label: "Çalışmalar", body: <WorkTab members={members} onDraw={call.state === "connected" ? (f) => void drawOnFile(f) : undefined} /> },
             { id: "homework", label: "Ödevler", body: <HomeworkTab members={members} call={call} /> },
             { id: "history", label: "Geçmiş", body: <HistoryTab group={group} current={session} /> },
           ]}
@@ -489,6 +520,14 @@ export function GroupSessionView({ group, call, onClose }: { group: TherapyGroup
 
       {/* Orta: süre ve görüntü */}
       <div className="flex min-h-0 flex-col gap-2.5">
+        <ReceivedFilesToast
+          files={incoming.received}
+          onOpen={() => {
+            setTabRequest({ tab: "work", n: Date.now() });
+            incoming.dismiss();
+          }}
+          onDismiss={incoming.dismiss}
+        />
         <section className="shrink-0 overflow-hidden rounded-xl border border-line bg-panel">
           <div className="flex items-center gap-3 px-3 py-2">
             <Clock3 size={18} className="shrink-0 text-accent" />
@@ -540,10 +579,65 @@ export function GroupSessionView({ group, call, onClose }: { group: TherapyGroup
       </div>
 
       {/* Sağ: notlar */}
-      <div className="flex min-h-0 flex-col gap-2.5">
-        {session ? <GroupNotes key={session.id} session={session} /> : <Card title="Grup Seans Notları"><Empty text="Yükleniyor…" /></Card>}
-        {session && <MemberNotes session={session} members={members} />}
+      <div className="flex min-h-0 flex-col gap-2">
+        <div className="flex shrink-0 gap-1 rounded-xl border border-line bg-panel p-1" role="tablist">
+          {([["session", "Seans", null], ["assistant", "Asistan", Sparkles]] as const).map(([id, label, Icon]) => (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={rightView === id}
+              onClick={() => setRightView(id)}
+              className={cx(
+                "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] transition-colors",
+                rightView === id ? "bg-accent-soft font-medium text-ink" : "text-muted hover:text-ink",
+              )}
+            >
+              {Icon && <Icon size={14} className={rightView === id ? "text-accent" : ""} />}
+              {label}
+            </button>
+          ))}
+        </div>
+        {/* İkisi de bağlı kalır: görünüm değişince not ve konuşma kaybolmaz. */}
+        <div className={cx("min-h-0 flex-1 flex-col gap-2.5", rightView === "session" ? "flex" : "hidden")}>
+          {session ? <GroupNotes key={session.id} session={session} /> : <Card title="Grup Seans Notları"><Empty text="Yükleniyor…" /></Card>}
+          {session && <MemberNotes session={session} members={members} />}
+          <GroupTools
+            call={call}
+            members={members}
+            materials={materials}
+            material={material}
+            onOpenBoard={() => setBoardStarting(true)}
+            onDrawMaterial={(m) => void drawOnMaterial(m)}
+            onNavigate={onNavigate}
+          />
+        </div>
+        <div className={cx("min-h-0 flex-1 overflow-hidden rounded-xl border border-line bg-panel", rightView === "assistant" ? "block" : "hidden")}>
+          <AssistantChat onOpenSettings={() => onNavigate("settings")} />
+        </div>
       </div>
+
+      {boardStarting && (
+        <BoardStartDialog
+          onClose={() => setBoardStarting(false)}
+          onStart={(prompt) => {
+            setBoardStarting(false);
+            setBoardBackdrop(null);
+            boardApi.open(prompt);
+          }}
+        />
+      )}
+      {boardApi.session && (
+        <BoardPanel
+          key={boardApi.session.id}
+          boardApi={boardApi}
+          patient={null}
+          sessionId={null}
+          remote={call.peers[0]?.stream ?? null}
+          backdropUrl={boardBackdrop}
+          saveFor={members.map((m) => m.patient_id)}
+          label={group.name}
+        />
+      )}
 
       {confirmEnd && (
         <Modal title="Grup seansı bitirilsin mi?" onClose={() => setConfirmEnd(false)}>
