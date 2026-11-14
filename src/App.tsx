@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useBackClose, useBackGuard } from "./lib/backStack";
 import {
   CalendarDays, ClipboardList, FolderOpen, Home, LockKeyhole, Menu, NotebookTabs, Settings as SettingsIcon, Users, UsersRound,
 } from "lucide-react";
@@ -54,6 +55,18 @@ function Shell() {
   const [patientId, setPatientId] = useState<string | null>(null);
   const [therapist, setTherapist] = useState({ name: "", title: "" });
   const [askRecovery, setAskRecovery] = useState(false);
+  const [backHint, setBackHint] = useState(false);
+  const pageRef = useRef(page);
+  pageRef.current = page;
+  // Geri tuşu: başka sayfadaysa ana sayfaya döner; ana sayfada uygulamadan çıkmaz, kısa bir uyarı verir.
+  useBackGuard(true, () => {
+    if (pageRef.current !== "home") {
+      setPage("home");
+      return;
+    }
+    setBackHint(true);
+    setTimeout(() => setBackHint(false), 2500);
+  });
   const { session } = useActiveSession();
   const version = useDataVersion();
 
@@ -119,11 +132,11 @@ function Shell() {
       <main className="min-h-0 min-w-0 flex-1">
         {/* Görüşme başka sayfaya geçilince kopmasın diye Ana Sayfa hep bağlı kalır. */}
         <div className={page === "home" ? "h-full" : "hidden"}>
-          <Workspace patientId={patientId} onSelectPatient={setPatientId} onNavigate={setPage} />
+          <Workspace patientId={patientId} onSelectPatient={setPatientId} onNavigate={setPage} visible={page === "home"} />
         </div>
         {/* Grup görüşmesi de sayfa değişince kopmasın diye hep bağlı kalır. */}
         <div className={page === "groups" ? "h-full" : "hidden"}>
-          <Groups onNavigate={setPage} />
+          <Groups onNavigate={setPage} visible={page === "groups"} />
         </div>
         {page === "patients" && <Patients onOpen={openPatient} />}
         {page === "appointments" && <Appointments />}
@@ -134,6 +147,11 @@ function Shell() {
       </main>
 
       <MobileNav page={page} onPage={setPage} sessionActive={!!session} />
+      {backHint && (
+        <div className="pointer-events-none fixed inset-x-0 top-6 z-[70] mx-auto w-fit max-w-[90%] rounded-lg bg-black/85 px-4 py-2 text-center text-xs text-white shadow-lg">
+          Uygulamadan çıkmak için telefonun ana ekran tuşunu kullanın
+        </div>
+      )}
 
       {askRecovery && (
         <RecoveryKeyDialog
@@ -151,6 +169,7 @@ function Shell() {
 /** Telefonda soldaki menünün yerine geçen alt gezinme çubuğu. */
 function MobileNav({ page, onPage, sessionActive }: { page: Page; onPage: (p: Page) => void; sessionActive: boolean }) {
   const [more, setMore] = useState(false);
+  useBackClose(more, () => setMore(false));
   const main = NAV.filter((n) => ["home", "patients", "groups", "appointments"].includes(n.id));
   const rest = NAV.filter((n) => !["home", "patients", "groups", "appointments"].includes(n.id));
   const restActive = rest.some((n) => n.id === page);

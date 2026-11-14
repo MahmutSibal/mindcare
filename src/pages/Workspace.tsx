@@ -17,16 +17,21 @@ import { maxScore, parseAnswers, parseDefinition } from "../lib/tests";
 import { Avatar, Button, Card, cx, Empty, LinkButton, Modal } from "../components/ui";
 import PatientForm from "../components/PatientForm";
 import MobileTabs from "../components/MobileTabs";
+import FloatingVideo from "../components/workspace/FloatingVideo";
+import { useIsWide } from "../lib/useIsMobile";
+import { useBackClose } from "../lib/backStack";
 import { NoteViewer } from "../components/NotesEditor";
 import CallPanel from "../components/workspace/CallPanel";
 import SessionPanel, { SessionTimer } from "../components/workspace/SessionPanel";
 import { useCall } from "../components/workspace/useCall";
 import type { Page } from "../App";
 
-export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
+export default function Workspace({ patientId, onSelectPatient, onNavigate, visible = true }: {
   patientId: string | null;
   onSelectPatient: (id: string | null) => void;
   onNavigate: (p: Page) => void;
+  /** Ana sayfa şu an ekranda mı (başka sayfaya geçilince küçük görüntü açılır). */
+  visible?: boolean;
 }) {
   const version = useDataVersion();
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -42,6 +47,10 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
   const [shareError, setShareError] = useState<string | null>(null);
   const call = useCall();
   const [mobileTab, setMobileTab] = useState<"client" | "call" | "session">("call");
+  const wide = useIsWide();
+  // Tablet ve telefonda geri tuşu önce görüşme sekmesine döndürür.
+  useBackClose(visible && !wide && mobileTab !== "call", () => setMobileTab("call"));
+  const showFloating = !!call.remote && (!visible || (!wide && mobileTab !== "call"));
   const { session } = useActiveSession();
   const sessionRef = useRef(session);
   sessionRef.current = session;
@@ -226,6 +235,16 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate }: {
         value={mobileTab}
         onChange={setMobileTab}
       />
+      {showFloating && call.remote && (
+        <FloatingVideo
+          stream={call.remote}
+          label={patient?.full_name ?? "Danışan"}
+          onOpen={() => {
+            onNavigate("home");
+            setMobileTab("call");
+          }}
+        />
+      )}
       {/* Sol panel — danışan ve geçmişi */}
       <div className={cx("min-h-0 flex-1 flex-col gap-2.5 xl:flex", mobileTab === "client" ? "flex" : "hidden")}>
         <PatientProfileCard

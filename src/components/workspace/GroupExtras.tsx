@@ -205,7 +205,7 @@ export function GroupTools({ call, members, materials, material, onOpenBoard, on
   material: ReturnType<typeof useGroupMaterial>;
   onOpenBoard: () => void;
   onDrawMaterial: (m: Material) => void;
-  onNavigate: (p: "materials") => void;
+  onNavigate: (p: "materials" | "settings" | "groups") => void;
 }) {
   const [tab, setTab] = useState<"tools" | "materials">("tools");
   const [picking, setPicking] = useState(false);
@@ -287,7 +287,7 @@ export function GroupTools({ call, members, materials, material, onOpenBoard, on
   const total = call.peers.filter((p) => p.memberId).length;
 
   return (
-    <section className="flex max-h-[44%] shrink-0 flex-col rounded-xl border border-line bg-panel">
+    <section className="flex max-h-[50%] min-w-0 shrink-0 flex-col rounded-xl border border-line bg-panel md:max-h-none md:flex-1 xl:max-h-[44%] xl:flex-none">
       <div className="flex shrink-0 gap-0.5 border-b border-line px-2 pt-1.5">
         {([["tools", "Test ve Ödev"], ["materials", "Materyaller"]] as const).map(([id, label]) => (
           <button

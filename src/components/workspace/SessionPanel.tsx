@@ -26,7 +26,7 @@ export default function SessionPanel({ call, patient, shared, onClearShared, mat
   // Önizleme yalnızca danışana bir şey gösterilirken yer kaplar.
   const sharing = !!call.screen || !!shared;
   return (
-    <div className="flex min-h-0 flex-col gap-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
       <div className="flex shrink-0 gap-1 rounded-xl border border-line bg-panel p-1" role="tablist">
         {([["session", "Seans", null], ["assistant", "Asistan", Sparkles]] as const).map(([id, label, Icon]) => (
           <button
@@ -45,7 +45,7 @@ export default function SessionPanel({ call, patient, shared, onClearShared, mat
         ))}
       </div>
       {/* İkisi de bağlı kalır: görünüm değişince not ve konuşma kaybolmaz. */}
-      <div className={cx("min-h-0 flex-1 flex-col gap-2.5", view === "session" ? "flex" : "hidden")}>
+      <div className={cx("min-h-0 flex-1 flex-col gap-2.5 md:flex-row xl:flex-col", view === "session" ? "flex" : "hidden")}>
         <LiveNotesEditor />
         {sharing && <PatientScreenPreview call={call} shared={shared} onClearShared={onClearShared} />}
         <QuickTools call={call} patient={patient} materials={materials} onOpenBoard={onOpenBoard} />
@@ -194,7 +194,7 @@ function NotesForSession({ sessionId }: { sessionId: string | null }) {
     : "";
 
   return (
-    <Card title="Seans Notları" className="flex min-h-[170px] flex-1 flex-col">
+    <Card title="Seans Notları" className="flex min-h-[170px] min-w-0 flex-1 flex-col">
       <Toolbar editor={editor} />
       <div
         className={cx("mt-2 min-h-0 flex-1 overflow-y-auto rounded-lg border border-line bg-bg/60 p-3", !sessionId && "opacity-60")}
@@ -309,7 +309,7 @@ function QuickTools({ call, patient, materials, onOpenBoard }: {
   const homeworkSession = session && session.patient_id === patient?.id ? session.id : null;
 
   return (
-    <section className="flex max-h-[42%] shrink-0 flex-col rounded-xl border border-line bg-panel">
+    <section className="flex max-h-[50%] min-w-0 shrink-0 flex-col rounded-xl border border-line bg-panel md:max-h-none md:flex-1 xl:max-h-[42%] xl:flex-none">
       <div className="flex shrink-0 gap-0.5 border-b border-line px-2 pt-1.5">
         {([["tools", "Test ve Ödev"], ["materials", "Materyaller"]] as const).map(([id, label]) => (
           <button

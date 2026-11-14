@@ -11,6 +11,7 @@ import { Avatar, Button, cx, Modal } from "../ui";
 import QualityPicker from "../QualityPicker";
 import type { CallApi } from "./useCall";
 import { copyText } from "../../lib/clipboard";
+import { isTouchDevice } from "../../lib/useIsMobile";
 import { shareViaWhatsApp } from "../../lib/shareLink";
 
 function VideoEl({ stream, muted, mirrored, className }: {
@@ -152,7 +153,7 @@ export default function CallPanel({ call, patient }: { call: CallApi; patient: P
           </div>
         )}
 
-        <MicLevel stream={call.local} on={call.micOn} />
+        {!isTouchDevice() && <MicLevel stream={call.local} on={call.micOn} />}
 
         {/* Terapist önizlemesi */}
         {call.local && (

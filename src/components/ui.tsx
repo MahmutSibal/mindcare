@@ -1,4 +1,5 @@
 import { type ButtonHTMLAttributes, type ReactNode, useEffect } from "react";
+import { useBackClose } from "../lib/backStack";
 import { X } from "lucide-react";
 
 export function cx(...c: (string | false | null | undefined)[]) {
@@ -78,6 +79,8 @@ export function Modal({ title, onClose, children, width = "max-w-lg" }: {
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
   }, [onClose]);
+  // Telefon ve tablette geri tuşu diyaloğu kapatır (uygulamadan çıkmaz).
+  useBackClose(true, onClose);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6" onMouseDown={onClose}>
       <div

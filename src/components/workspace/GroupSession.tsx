@@ -18,6 +18,9 @@ import AssistantChat from "../AssistantChat";
 import { copyText } from "../../lib/clipboard";
 import { shareViaWhatsApp } from "../../lib/shareLink";
 import MobileTabs from "../MobileTabs";
+import FloatingVideo from "./FloatingVideo";
+import { useIsWide } from "../../lib/useIsMobile";
+import { useBackClose } from "../../lib/backStack";
 import { BoardPanel, BoardStartDialog, DrawingsList } from "./BoardPanel";
 import { PatientFiles, ReceivedFilesToast, useIncomingFiles } from "./patientFiles";
 import { EditorContent, NoteViewer, Toolbar, useNotesEditor } from "../NotesEditor";
@@ -330,11 +333,12 @@ function LeftTabs({ tabs, request }: { tabs: { id: string; label: string; body: 
   );
 }
 
-export function GroupSessionView({ group, call, onClose, onNavigate }: {
+export function GroupSessionView({ group, call, onClose, onNavigate, visible = true }: {
   group: TherapyGroup;
   call: GroupCallApi;
   onClose: () => void;
-  onNavigate: (p: "materials" | "settings") => void;
+  onNavigate: (p: "materials" | "settings" | "groups") => void;
+  visible?: boolean;
 }) {
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [session, setSession] = useState<GroupSession | null>(null);
@@ -349,6 +353,10 @@ export function GroupSessionView({ group, call, onClose, onNavigate }: {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [rightView, setRightView] = useState<"session" | "assistant">("session");
   const [mobileTab, setMobileTab] = useState<"members" | "call" | "notes">("call");
+  const wide = useIsWide();
+  useBackClose(visible && !wide && mobileTab !== "call", () => setMobileTab("call"));
+  const firstPeer = call.peers.find((p) => p.stream && p.state === "connected");
+  const showFloating = !!firstPeer && (!visible || (!wide && mobileTab !== "call"));
   const [tabRequest, setTabRequest] = useState<{ tab: string; n: number } | null>(null);
   const adapter = useGroupCallAdapter(call);
   const material = useGroupMaterial(adapter);
@@ -509,6 +517,16 @@ export function GroupSessionView({ group, call, onClose, onNavigate }: {
         value={mobileTab}
         onChange={setMobileTab}
       />
+      {showFloating && firstPeer?.stream && (
+        <FloatingVideo
+          stream={firstPeer.stream}
+          label={`${group.name} • ${call.peers.filter((p) => p.state === "connected").length} kişi`}
+          onOpen={() => {
+            onNavigate("groups");
+            setMobileTab("call");
+          }}
+        />
+      )}
       {/* Sol: grup ve sekmeler */}
       <div className={cx("min-h-0 flex-1 flex-col gap-2.5 xl:flex", mobileTab === "members" ? "flex" : "hidden")}>
         <Card className="shrink-0">
@@ -623,9 +641,11 @@ export function GroupSessionView({ group, call, onClose, onNavigate }: {
           ))}
         </div>
         {/* İkisi de bağlı kalır: görünüm değişince not ve konuşma kaybolmaz. */}
-        <div className={cx("min-h-0 flex-1 flex-col gap-2.5", rightView === "session" ? "flex" : "hidden")}>
-          {session ? <GroupNotes key={session.id} session={session} /> : <Card title="Grup Seans Notları"><Empty text="Yükleniyor…" /></Card>}
-          {session && <MemberNotes session={session} members={members} />}
+        <div className={cx("min-h-0 flex-1 flex-col gap-2.5 md:flex-row xl:flex-col", rightView === "session" ? "flex" : "hidden")}>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2.5">
+            {session ? <GroupNotes key={session.id} session={session} /> : <Card title="Grup Seans Notları"><Empty text="Yükleniyor…" /></Card>}
+            {session && <MemberNotes session={session} members={members} />}
+          </div>
           <GroupTools
             call={call}
             members={members}
