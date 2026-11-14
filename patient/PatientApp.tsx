@@ -19,6 +19,7 @@ import { useBoard } from "../src/lib/useBoard";
 import type { QualityPreset } from "../src/lib/rtc";
 import WaitingRoom from "./WaitingRoom";
 import { BRAND_NAME } from "../src/lib/brand";
+import { useBackClose, useBackGuard } from "../src/lib/backStack";
 import BrandMark from "../src/components/BrandMark";
 import ConnectionTest from "./ConnectionTest";
 
@@ -170,6 +171,21 @@ export default function PatientApp() {
     const cur = material.current;
     if (id && cur && cur.id === id && cur.url) setBackdropUrl(cur.url);
   }, [board.session?.backdropId, material.current?.id, material.current?.url]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Geri tuşu: açık ekranı kapatır, görüşmeden çıkarmaz (bkz. backStack.ts).
+  const [backHint, setBackHint] = useState(false);
+  useBackClose(homework.length > 0 && homeworkOpen, () => setHomeworkOpen(false));
+  useBackClose(!!material.current, material.clear);
+  useBackClose(!!board.session && boardVisible, () => setBoardVisible(false));
+  useBackClose(!!test, () => {
+    /* Test doldurulurken geri tuşu testi kapatmaz (cevaplar kaybolmasın). */
+  });
+  useBackClose(menu, () => setMenu(false));
+  useBackClose(testOpen, () => setTestOpen(false));
+  useBackGuard(phase === "call", () => {
+    setBackHint(true);
+    setTimeout(() => setBackHint(false), 3000);
+  });
 
   // Davet anahtarını adres çubuğundan ve geçmişten kaldır.
   useEffect(() => {
@@ -340,6 +356,11 @@ export default function PatientApp() {
   if (phase === "call") {
     return (
       <div className="relative flex h-full flex-col bg-bg">
+        {backHint && (
+          <div className="pointer-events-none fixed inset-x-0 top-3 z-50 mx-auto w-fit max-w-[90%] rounded-lg bg-black/85 px-4 py-2 text-center text-xs text-white shadow-lg">
+            Görüşmeden ayrılmak için kırmızı düğmeye basın
+          </div>
+        )}
         <div ref={stage} className="relative min-h-0 flex-1 bg-black">
           {remote ? (
             <VideoEl

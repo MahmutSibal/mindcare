@@ -9,6 +9,7 @@ import { GroupCall, joinGroupRoom, type GroupPeer } from "../src/lib/groupRtc";
 import { getLocalMedia, type CallState, type JoinResult } from "../src/lib/rtc";
 import ConnectionTest from "./ConnectionTest";
 import { BRAND_NAME } from "../src/lib/brand";
+import { useBackClose, useBackGuard } from "../src/lib/backStack";
 import BrandMark from "../src/components/BrandMark";
 import HomeworkView, { type HomeworkMessage } from "./HomeworkView";
 import MaterialView, { useIncomingMaterial } from "./MaterialView";
@@ -154,6 +155,21 @@ export default function GroupApp() {
     const cur = material.current;
     if (id && cur && cur.id === id && cur.url) setBackdropUrl(cur.url);
   }, [board.session?.backdropId, material.current?.id, material.current?.url]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Geri tuşu: açık ekranı kapatır, görüşmeden çıkarmaz (bkz. backStack.ts).
+  const [backHint, setBackHint] = useState(false);
+  useBackClose(homework.length > 0 && homeworkOpen, () => setHomeworkOpen(false));
+  useBackClose(!!material.current, material.clear);
+  useBackClose(!!board.session && boardVisible, () => setBoardVisible(false));
+  useBackClose(!!test, () => {
+    /* Test doldurulurken geri tuşu testi kapatmaz (cevaplar kaybolmasın). */
+  });
+  useBackClose(menu, () => setMenu(false));
+  useBackClose(testOpen, () => setTestOpen(false));
+  useBackGuard(phase === "call", () => {
+    setBackHint(true);
+    setTimeout(() => setBackHint(false), 3000);
+  });
   const consentSent = useRef(false);
 
   // Davet anahtarını adres çubuğundan ve geçmişten kaldır.
@@ -263,6 +279,11 @@ export default function GroupApp() {
     const others = peers.filter((p) => p.id !== "host");
     return (
       <div className="relative flex h-full flex-col bg-bg">
+        {backHint && (
+          <div className="pointer-events-none fixed inset-x-0 top-3 z-50 mx-auto w-fit max-w-[90%] rounded-lg bg-black/85 px-4 py-2 text-center text-xs text-white shadow-lg">
+            Görüşmeden ayrılmak için kırmızı düğmeye basın
+          </div>
+        )}
         <div className="relative min-h-0 flex-1">
           <div className="h-full overflow-y-auto p-2.5">
             <div className="mb-2 flex items-center gap-2 text-xs text-muted">
