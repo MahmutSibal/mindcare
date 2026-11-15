@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mavi Ruh – Gizlilik Politikası ve Aydınlatma Metni</title>
+<link rel="icon" href="./icon.png" />
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #0f1b1d; color: #e6f0ee; font: 16px/1.65 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 18px 64px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  h2 { font-size: 1.15rem; margin: 32px 0 8px; color: #4fb3a5; }
+  p, li { color: #cfdedb; }
+  .muted { color: #9bb3b0; font-size: .9rem; }
+  .box { border: 1px solid #27403f; background: #152629; border-radius: 12px; padding: 14px 16px; }
+  a { color: #4fb3a5; }
+  td, th { border-bottom: 1px solid #27403f; padding: 8px 6px; text-align: left; vertical-align: top; }
+  table { border-collapse: collapse; width: 100%; font-size: .95rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Gizlilik Politikası ve Aydınlatma Metni</h1>
+  <p class="muted">Mavi Ruh terapist uygulaması (Windows, Android) ve danışan görüşme sayfası • Son güncelleme: 15 Kasım 2026</p>
+
+  <div class="box">
+    <p><b>Kısaca:</b> Danışan dosyaları, seans notları, test sonuçları ve ödevler yalnızca terapistin kendi cihazında, şifreli olarak saklanır; hiçbir sunucuya gönderilmez. Görüntülü görüşmeler uçtan uca şifrelidir ve kaydedilmez.</p>
+  </div>
+
+  <h2>1. Veri sorumlusu</h2>
+  <p>6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) kapsamında veri sorumlusu: <b>[KLİNİĞİN / TERAPİSTİN TİCARİ UNVANI]</b>, [AÇIK ADRES], [E-POSTA], [TELEFON]. Bu metindeki sorularınız ve başvurularınız için bu adrese yazabilirsiniz.</p>
+
+  <h2>2. Hangi veriler, nerede işlenir?</h2>
+  <table>
+    <tr><th>Veri</th><th>Nerede</th><th>Amaç</th></tr>
+    <tr><td>Danışan kimlik ve iletişim bilgileri, başvuru nedeni, kullanılan ilaç ve maddeler, seans notları, test sonuçları, ödevler, çizimler, danışanın gönderdiği dosyalar (sağlık verisi dâhil)</td><td>Yalnızca terapistin cihazında; AES-256 ile şifrelenmiş veritabanında (SQLCipher). Sunucuya gönderilmez, uygulama verisi bulut yedeklemesine alınmaz.</td><td>Psikoterapi hizmetinin yürütülmesi ve kayıt tutma yükümlülüğü</td></tr>
+    <tr><td>Görüntü ve ses (görüntülü görüşme)</td><td>Taraflar arasında doğrudan, uçtan uca şifreli (WebRTC, DTLS-SRTP). Doğrudan bağlantı kurulamazsa Cloudflare'in aktarma (TURN) sunucusu şifreli paketleri iletir; içeriği göremez. <b>Görüşmeler kaydedilmez.</b></td><td>Çevrim içi seans</td></tr>
+    <tr><td>Görüşmeyi kurmak için teknik bilgiler: rastgele oda kimliği, davet anahtarının özeti (SHA-256), anonim oturum kimliği, IP adresi</td><td>Supabase (Avrupa Birliği, Frankfurt veri merkezi). Ad, not veya görüşme içeriği tutulmaz.</td><td>Bağlantı kurma ve davetin tek kullanımlık olmasını sağlama</td></tr>
+    <tr><td>Danışan görüşme sayfasının sunulması: IP adresi, tarayıcı bilgisi</td><td>Render (barındırma sağlayıcısı) sunucu günlükleri</td><td>Sayfanın sunulması ve güvenliği</td></tr>
+    <tr><td>Bağlantı testi (isteğe bağlı): yalnızca rastgele test verisi</td><td>Cloudflare hız ölçüm sunucusu</td><td>İnternet hızının ölçülmesi</td></tr>
+    <tr><td>Yapay zekâ asistanına yazılan meslek içi sorular (yalnızca terapist kullanır)</td><td>Google Gemini API. Uygulama, kayıtlı danışan adı, T.C. kimlik no, telefon ve e-posta içeren soruların gönderilmesini engeller; danışan bilgisi gönderilmez.</td><td>Terapiste kaynaklı bilgi hatırlatma</td></tr>
+  </table>
+
+  <h2>3. Kamera ve mikrofon</h2>
+  <p>Kamera ve mikrofon yalnızca görüntülü görüşme ve isteğe bağlı bağlantı testi sırasında, sizin izninizle kullanılır. Görüntü ve ses kaydedilmez, herhangi bir sunucuda saklanmaz.</p>
+
+  <h2>4. Hukuki sebep</h2>
+  <p>Sağlık verileri KVKK m.6 uyarınca açık rızanıza dayanarak ve/veya sır saklama yükümlülüğü altındaki sağlık meslek mensubu tarafından tıbbi teşhis ve tedavi hizmetlerinin yürütülmesi amacıyla işlenir. Görüşmeye katılırken çevrim içi görüşme onamı ayrıca alınır.</p>
+
+  <h2>5. Aktarım</h2>
+  <p>Danışan dosyası ve seans içeriği kimseye aktarılmaz. Yukarıdaki teknik hizmet sağlayıcılarına (Supabase, Cloudflare, Render, Google) yalnızca tabloda yazan teknik veriler, hizmetin sunulması için aktarılır; bu sağlayıcıların bir kısmının sunucuları yurt dışındadır.</p>
+
+  <h2>6. Saklama süresi</h2>
+  <p>Danışan kayıtları terapistin cihazında, mevzuattaki kayıt tutma süreleri boyunca saklanır ve süre sonunda silinir. Görüşme kurma bilgileri görüşme bittikten sonra işe yaramaz hâle gelir; davetler süreli ve tek kullanımlıktır.</p>
+
+  <h2>7. Güvenlik</h2>
+  <ul>
+    <li>Terapist cihazındaki veritabanı AES-256 ile şifrelidir; anahtar işletim sisteminin güvenli deposunda ya da uygulamaya özel korumalı alanda tutulur.</li>
+    <li>Yedekler şifrelidir ve yalnızca kurtarma anahtarıyla açılabilir.</li>
+    <li>Görüşme bağlantıları süreli, tek kullanımlık ve kişiye özeldir.</li>
+  </ul>
+
+  <h2>8. Haklarınız (KVKK m.11)</h2>
+  <p>Kişisel verilerinizin işlenip işlenmediğini öğrenme, bilgi talep etme, düzeltilmesini veya silinmesini isteme, itiraz etme ve zararın giderilmesini talep etme haklarına sahipsiniz. Başvurularınızı 1. maddedeki iletişim bilgilerine yapabilirsiniz.</p>
+
+  <h2>9. Çocuklar</h2>
+  <p>18 yaşından küçük danışanlarla yapılan görüşmeler veli veya vasinin bilgisi ve onayıyla yürütülür.</p>
+
+  <h2>10. Acil durumlar</h2>
+  <p>Bu uygulama acil yardım hattı değildir. Kendinize veya başkasına zarar verme düşünceniz varsa ya da acil bir durumdaysanız <b>112</b>'yi arayın.</p>
+
+  <h2>11. Değişiklikler</h2>
+  <p>Bu metin güncellenebilir; güncel sürüm her zaman bu adreste yayımlanır.</p>
+</main>
+</body>
+</html>

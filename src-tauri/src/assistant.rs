@@ -149,7 +149,7 @@ pub fn retrieve(docs: &[(String, String)], question: &str, k: usize) -> Vec<Chun
             }
         }
     }
-    scored.sort_by(|a, b| b.0.cmp(&a.0));
+    scored.sort_by_key(|s| std::cmp::Reverse(s.0));
     scored
         .into_iter()
         .take(k)
@@ -349,7 +349,7 @@ pub fn parse_answer(resp: &Value) -> AppResult<Answer> {
             inserts.push((end, marks));
         }
     }
-    inserts.sort_by(|a, b| b.0.cmp(&a.0));
+    inserts.sort_by_key(|i| std::cmp::Reverse(i.0));
     for (at, marks) in inserts {
         text.insert_str(at, &marks);
     }

@@ -26,3 +26,13 @@ dist-ssr
 # Danışan istemcisi derleme çıktısı
 dist-patient
 dist-android/
+
+# Geçici çalışma dosyaları
+logo/_work/
+preview.html
+src/_preview.tsx
+patient/_test-*
+# Android imza anahtarı ve şifresi ASLA depoya girmez
+*.jks
+*.keystore
+keystore.properties

@@ -418,7 +418,7 @@ export default function GroupApp() {
               durumdaysanız <b>112</b>'yi arayın.
             </p>
             <p className="mt-3 text-xs leading-relaxed text-faint">
-              Bu bağlantı size özeldir ve tek kullanımlıktır; başkalarıyla paylaşmayın.
+              Bu bağlantı size özeldir ve tek kullanımlıktır; başkalarıyla paylaşmayın. <a href="./gizlilik.html" target="_blank" rel="noopener" className="underline hover:text-ink">Gizlilik politikası ve aydınlatma metni</a>.
             </p>
           </>
         )}

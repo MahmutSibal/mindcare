@@ -536,7 +536,7 @@ export default function PatientApp() {
             <p className="mt-3 text-xs leading-relaxed text-faint">
               Bu bağlantı size özeldir ve tek kullanımlıktır; başkalarıyla paylaşmayın. Bağlantı bilgileri yalnızca görüşmeyi
               kurmak için kullanılır. Terapistinizin gönderdiği test cevapları şifreli görüşme bağlantısıyla doğrudan
-              terapistinize iletilir; bu sayfada veya bir sunucuda saklanmaz.
+              terapistinize iletilir; bu sayfada veya bir sunucuda saklanmaz. <a href="./gizlilik.html" target="_blank" rel="noopener" className="underline hover:text-ink">Gizlilik politikası ve aydınlatma metni</a>.
             </p>
           </>
         )}

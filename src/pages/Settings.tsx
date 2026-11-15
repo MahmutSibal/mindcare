@@ -3,6 +3,8 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { AlertTriangle, DatabaseBackup, HardDriveDownload, KeyRound, Save, ShieldCheck } from "lucide-react";
 import { api, errorText, RECOVERY_CONFIRMED_KEY, type AppStatus } from "../lib/api";
 import { DEFAULT_PATIENT_APP_URL } from "../lib/config";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { APP_VERSION, BRAND_NAME } from "../lib/brand";
 import { fmtDate } from "../lib/format";
 import { notifyDataChanged } from "../lib/session";
 import PageHeader from "../components/PageHeader";
@@ -227,6 +229,22 @@ export default function Settings() {
               <Field label="Parola"><input type="password" className={inputCls} value={form.turn_credential} onChange={set("turn_credential")} /></Field>
             </div>
           </div>
+        </Card>
+
+        <Card title="Hakkında">
+          <p className="text-sm text-muted">
+            {BRAND_NAME} • sürüm {APP_VERSION}
+          </p>
+          <p className="mt-2 text-xs leading-relaxed text-faint">
+            Danışan verileri yalnızca bu cihazda, şifreli olarak saklanır. Görüşmeler uçtan uca şifrelidir ve kaydedilmez.
+          </p>
+          <Button
+            variant="subtle"
+            className="mt-3"
+            onClick={() => void openUrl(`${(form.patient_app_url || DEFAULT_PATIENT_APP_URL).replace(/\/+$/, "")}/gizlilik.html`)}
+          >
+            Gizlilik politikası ve aydınlatma metni
+          </Button>
         </Card>
 
         <Card title="Veri Güvenliği ve Yedekleme">

@@ -7,6 +7,17 @@ plugins {
     id("rust")
 }
 
+// Yükleme (upload) anahtarı: src-tauri/gen/android/keystore.properties dosyasında tutulur, depoya girmez.
+//   storeFile=C:/Users/.../maviruh-upload.jks
+//   storePassword=...
+//   keyAlias=maviruh
+//   keyPassword=...
+val keystoreProperties = Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val hasUploadKey = keystoreProperties.getProperty("storeFile") != null
+
 val tauriProperties = Properties().apply {
     val propFile = file("tauri.properties")
     if (propFile.exists()) {
@@ -25,6 +36,16 @@ android {
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
     }
+    signingConfigs {
+        if (hasUploadKey) {
+            create("upload") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
     buildTypes {
         getByName("debug") {
             manifestPlaceholders["usesCleartextTraffic"] = "true"
@@ -39,9 +60,8 @@ android {
             }
         }
         getByName("release") {
-            // Deneme dağıtımı: Android'in hata ayıklama anahtarıyla imzalanır (telefona doğrudan kurulabilsin diye).
-            // Mağazaya yüklemeden önce kendi anahtarımızla imzalanacak.
-            signingConfig = signingConfigs.getByName("debug")
+            // Yükleme anahtarı varsa onunla (Play Store), yoksa deneme anahtarıyla imzalanır.
+            signingConfig = if (hasUploadKey) signingConfigs.getByName("upload") else signingConfigs.getByName("debug")
             optimization {
                enable = true
             }
