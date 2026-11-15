@@ -30,7 +30,8 @@ android {
     namespace = "com.mindcare.desktop"
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
-        applicationId = "com.mindcare.desktop"
+        // Play Store kimliği (kalıcı). Kotlin paket adı (namespace) değişmeden kalır.
+        applicationId = "com.maviruh.terapist"
         minSdk = 24
         targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
