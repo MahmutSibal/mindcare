@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FileSignature, Lock, Mic, MicOff, MoreVertical, Pencil, PhoneOff, Video, VideoOff } from "lucide-react";
+import { LangSwitch, t, useLang } from "./i18n";
 import { Button, cx } from "../src/components/ui";
 import { GroupCall, joinGroupRoom, type GroupPeer } from "../src/lib/groupRtc";
 import { getLocalMedia, type CallState, type JoinResult } from "../src/lib/rtc";
@@ -91,7 +92,7 @@ function Tile({ stream, name, muted, mirrored, off, big, state, fit = "cover" }:
       {(!stream || off) && <div className="absolute inset-0 flex items-center justify-center text-faint"><VideoOff size={26} /></div>}
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2.5 pb-1.5 pt-5 text-xs text-white">
         {name}
-        {state && state !== "connected" && <span className="ml-1.5 rounded bg-warn/80 px-1 text-[10px] text-black">bağlanıyor</span>}
+        {state && state !== "connected" && <span className="ml-1.5 rounded bg-warn/80 px-1 text-[10px] text-black">{t("bağlanıyor")}</span>}
       </div>
     </div>
   );
@@ -122,6 +123,7 @@ function Round({ on, onClick, icon: Icon, label }: { on: boolean; onClick: () =>
 }
 
 export default function GroupApp() {
+  useLang();
   const invite = useRef(readInvite()).current;
   const [phase, setPhase] = useState<Phase>(invite ? "consent" : "invalid");
   const [error, setError] = useState<string | null>(null);
@@ -218,7 +220,7 @@ export default function GroupApp() {
     try {
       const result = await joinGroupRoom(invite.room, invite.token);
       if (result !== "ok") {
-        setError(REJECT_TEXT[result] ?? "Görüşmeye katılınamadı.");
+        setError(t(REJECT_TEXT[result] ?? "Görüşmeye katılınamadı."));
         setPhase("rejected");
         return;
       }
@@ -281,20 +283,20 @@ export default function GroupApp() {
       <div className="relative flex h-full flex-col bg-bg">
         {backHint && (
           <div className="pointer-events-none fixed inset-x-0 top-3 z-50 mx-auto w-fit max-w-[90%] rounded-lg bg-black/85 px-4 py-2 text-center text-xs text-white shadow-lg">
-            Görüşmeden ayrılmak için kırmızı düğmeye basın
+            {t("Görüşmeden ayrılmak için kırmızı düğmeye basın")}
           </div>
         )}
         <div className="relative min-h-0 flex-1">
           <div className="h-full overflow-y-auto p-2.5">
             <div className="mb-2 flex items-center gap-2 text-xs text-muted">
-              <Lock size={12} /> Şifreli grup görüşmesi
-              {state !== "connected" && <span className="rounded bg-warn/90 px-1.5 py-0.5 text-black">{state === "reconnecting" ? "Yeniden bağlanılıyor…" : "Bağlanıyor…"}</span>}
+              <Lock size={12} /> {t("Şifreli grup görüşmesi")}
+              {state !== "connected" && <span className="rounded bg-warn/90 px-1.5 py-0.5 text-black">{state === "reconnecting" ? t("Yeniden bağlanılıyor…") : t("Bağlanıyor…")}</span>}
               {homework.length > 0 && !homeworkOpen && (
                 <button
                   onClick={() => setHomeworkOpen(true)}
                   className="ml-auto flex items-center gap-1.5 rounded-lg border border-line bg-card px-2.5 py-1 text-ink hover:bg-line"
                 >
-                  <FileSignature size={13} /> Ödevlerim ({homework.length})
+                  <FileSignature size={13} /> {t("Ödevlerim")} ({homework.length})
                 </button>
               )}
             </div>
@@ -320,7 +322,7 @@ export default function GroupApp() {
               onClick={() => setBoardVisible(true)}
               className="absolute left-3 top-10 z-20 flex items-center gap-1.5 rounded-lg bg-accent-strong px-3 py-1.5 text-xs font-medium text-white shadow-lg"
             >
-              <Pencil size={14} /> Çizime dön
+              <Pencil size={14} /> {t("Çizime dön")}
             </button>
           )}
           {material.current && <MaterialView item={material.current} onClose={material.clear} control={material.control} />}
@@ -337,19 +339,19 @@ export default function GroupApp() {
         <div className="relative flex shrink-0 items-center justify-center gap-4 border-t border-line bg-panel px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           {menu && (
             <>
-              <button className="fixed inset-0 z-30 cursor-default" aria-label="Menüyü kapat" onClick={() => setMenu(false)} />
+              <button className="fixed inset-0 z-30 cursor-default" aria-label={t("Menüyü kapat")} onClick={() => setMenu(false)} />
               <div className="absolute bottom-full left-1/2 z-40 mb-2 w-[min(92vw,340px)] -translate-x-1/2 rounded-2xl border border-line bg-panel p-4 shadow-2xl">
                 <UploadSection upload={upload} />
                 <p className="text-[11px] leading-relaxed text-faint">
-                  Gönderdiğiniz dosyayı yalnızca terapistiniz görür; gruptaki diğer kişilere gitmez.
+                  {t("Gönderdiğiniz dosyayı yalnızca terapistiniz görür; gruptaki diğer kişilere gitmez.")}
                 </p>
               </div>
             </>
           )}
-          <Round on={micOn} onClick={() => toggle("audio")} icon={micOn ? Mic : MicOff} label={micOn ? "Mikrofonu kapat" : "Mikrofonu aç"} />
-          <Round on={camOn} onClick={() => toggle("video")} icon={camOn ? Video : VideoOff} label={camOn ? "Kamerayı kapat" : "Kamerayı aç"} />
+          <Round on={micOn} onClick={() => toggle("audio")} icon={micOn ? Mic : MicOff} label={micOn ? t("Mikrofonu kapat") : t("Mikrofonu aç")} />
+          <Round on={camOn} onClick={() => toggle("video")} icon={camOn ? Video : VideoOff} label={camOn ? t("Kamerayı kapat") : t("Kamerayı aç")} />
           <Round on onClick={() => setMenu(!menu)} icon={MoreVertical} label="Daha fazla" />
-          <button onClick={leave} className="flex h-12 w-12 items-center justify-center rounded-full bg-danger text-white hover:bg-danger/80" aria-label="Görüşmeden ayrıl">
+          <button onClick={leave} className="flex h-12 w-12 items-center justify-center rounded-full bg-danger text-white hover:bg-danger/80" aria-label={t("Görüşmeden ayrıl")}>
             <PhoneOff size={20} />
           </button>
         </div>
@@ -363,9 +365,10 @@ export default function GroupApp() {
         <div className="mb-5 flex items-center gap-2">
           <BrandMark size={36} />
           <span className="text-lg font-semibold">{BRAND_NAME}</span>
+          <LangSwitch className="ml-auto" />
         </div>
-        {phase === "invalid" && <p className="text-sm text-muted">Bağlantı eksik veya hatalı. Lütfen terapistinizin gönderdiği bağlantıyı eksiksiz açın.</p>}
-        {phase === "left" && <p className="text-sm text-muted">Grup görüşmesi sona erdi. Bu pencereyi kapatabilirsiniz.</p>}
+        {phase === "invalid" && <p className="text-sm text-muted">{t("Bağlantı eksik veya hatalı. Lütfen terapistinizin gönderdiği bağlantıyı eksiksiz açın.")}</p>}
+        {phase === "left" && <p className="text-sm text-muted">{t("Grup görüşmesi sona erdi. Bu pencereyi kapatabilirsiniz.")}</p>}
         {phase === "rejected" && <p className="text-sm text-danger">{error}</p>}
         {testOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4">
@@ -374,17 +377,16 @@ export default function GroupApp() {
         )}
         {(phase === "consent" || phase === "joining") && (
           <>
-            <h1 className="text-xl font-semibold">Grup görüşmesine katıl</h1>
+            <h1 className="text-xl font-semibold">{t("Grup görüşmesine katıl")}</h1>
             <p className="mt-2 text-sm text-muted">
-              Bu bir grup görüşmesidir; terapistin yanında gruptaki diğer katılımcılar da sizi görür ve duyar. Görüşme
-              uçtan uca şifrelenir ve kaydedilmez.
+              {t("Bu bir grup görüşmesidir; terapistin yanında gruptaki diğer katılımcılar da sizi görür ve duyar. Görüşme uçtan uca şifrelenir ve kaydedilmez.")}
             </p>
             <div className="mt-5 aspect-video overflow-hidden rounded-xl border border-line bg-bg">
               {local ? (
                 <Tile stream={local} name={invite?.name || "Siz"} muted mirrored off={!camOn} />
               ) : (
                 <div className="flex h-full items-center justify-center">
-                  <Button variant="subtle" onClick={prepareMedia}><Video size={16} /> Kamera ve mikrofonu aç</Button>
+                  <Button variant="subtle" onClick={prepareMedia}><Video size={16} /> {t("Kamera ve mikrofonu aç")}</Button>
                 </div>
               )}
             </div>
@@ -403,22 +405,20 @@ export default function GroupApp() {
                 onChange={(e) => setConsented(e.target.checked)}
               />
               <span>
-                Görüşmenin çevrim içi, görüntülü ve sesli bir <b>grup</b> görüşmesi olarak yapılmasını, diğer katılımcıların beni
-                görüp duyacağını kabul ediyorum. Gruptaki diğer kişilerin paylaştıklarını gizli tutacağım. Görüşme kaydedilmez.
+                {t("Görüşmenin çevrim içi, görüntülü ve sesli bir grup görüşmesi olarak yapılmasını, diğer katılımcıların beni görüp duyacağını kabul ediyorum. Gruptaki diğer kişilerin paylaştıklarını gizli tutacağım. Görüşme kaydedilmez.")}
               </span>
             </label>
             <Button className="mt-4 w-full py-2.5" onClick={join} disabled={!local || !consented || phase === "joining"}>
-              {phase === "joining" ? "Katılınıyor…" : "Görüşmeye Katıl"}
+              {phase === "joining" ? t("Katılınıyor…") : t("Görüşmeye Katıl")}
             </Button>
             <button onClick={() => setTestOpen(true)} className="mt-3 w-full text-center text-xs text-muted underline hover:text-ink">
-              Bağlantımı test et (kamera, mikrofon, internet)
+              {t("Bağlantımı test et (kamera, mikrofon, internet)")}
             </button>
             <p className="mt-4 rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-xs leading-relaxed text-warn">
-              Bu görüşme acil yardım hattı değildir. Kendinize veya bir başkasına zarar verme düşünceniz varsa ya da acil bir
-              durumdaysanız <b>112</b>'yi arayın.
+              {t("Bu görüşme acil yardım hattı değildir. Kendinize veya bir başkasına zarar verme düşünceniz varsa ya da acil bir durumdaysanız")} <b>112</b>{t("'yi arayın.")}
             </p>
             <p className="mt-3 text-xs leading-relaxed text-faint">
-              Bu bağlantı size özeldir ve tek kullanımlıktır; başkalarıyla paylaşmayın. <a href="./gizlilik.html" target="_blank" rel="noopener" className="underline hover:text-ink">Gizlilik politikası ve aydınlatma metni</a>.
+              {t("Bu bağlantı size özeldir ve tek kullanımlıktır; başkalarıyla paylaşmayın.")} <a href="./gizlilik.html" target="_blank" rel="noopener" className="underline hover:text-ink">{t("Gizlilik politikası ve aydınlatma metni")}</a>.
             </p>
           </>
         )}

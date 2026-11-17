@@ -9,11 +9,11 @@ use tauri::State;
 use crate::error::{AppError, AppResult};
 use crate::{AppState, assistant, clinical, db, keystore, recovery, turn};
 
-fn new_id() -> String {
+pub(crate) fn new_id() -> String {
     uuid::Uuid::new_v4().to_string()
 }
 
-fn with_conn<T>(state: &State<AppState>, f: impl FnOnce(&mut Connection) -> AppResult<T>) -> AppResult<T> {
+pub(crate) fn with_conn<T>(state: &State<AppState>, f: impl FnOnce(&mut Connection) -> AppResult<T>) -> AppResult<T> {
     let mut guard = state.conn.lock().map_err(|_| AppError::Invalid("Kilit hatası".into()))?;
     match guard.as_mut() {
         Some(c) => f(c),
@@ -421,6 +421,24 @@ fn validate_patient_file(mime: &str, bytes: &[u8]) -> AppResult<()> {
     if magic_ok { Ok(()) } else { Err(AppError::Invalid("Dosya içeriği bildirilen türle uyuşmuyor.".into())) }
 }
 
+/// Dışarıdan gelen hedef yolun güvenli olup olmadığını denetler: mutlak yol, var olan klasör,
+/// ana veritabanı (ve -wal/-shm yardımcıları) değil.
+pub(crate) fn check_dest(dest: &std::path::Path, db_path: &std::path::Path) -> AppResult<()> {
+    if !dest.is_absolute() {
+        return Err(AppError::Invalid("Geçersiz dosya yolu.".into()));
+    }
+    let parent_ok = dest.parent().is_some_and(|p| p.is_dir());
+    if !parent_ok || dest.is_dir() {
+        return Err(AppError::Invalid("Hedef klasör bulunamadı.".into()));
+    }
+    let db = db_path.to_string_lossy().to_lowercase();
+    let d = dest.to_string_lossy().to_lowercase();
+    if d == db || d == format!("{db}-wal") || d == format!("{db}-shm") {
+        return Err(AppError::Invalid("Veritabanının üzerine yazılamaz.".into()));
+    }
+    Ok(())
+}
+
 #[derive(Serialize)]
 pub struct PatientFileMeta {
     id: String,
@@ -488,9 +506,7 @@ pub fn get_patient_file(state: State<AppState>, id: String) -> AppResult<tauri::
 #[tauri::command]
 pub fn export_patient_file(state: State<AppState>, id: String, dest: String) -> AppResult<()> {
     let dest = PathBuf::from(dest);
-    if dest == state.db_path {
-        return Err(AppError::Invalid("Veritabanının üzerine yazılamaz.".into()));
-    }
+    check_dest(&dest, &state.db_path)?;
     let data: Vec<u8> = with_conn(&state, |c| {
         c.query_row("SELECT data FROM patient_files WHERE id = ?1", [id], |r| r.get(0))
             .optional()?
@@ -1104,6 +1120,21 @@ pub fn read_material(state: State<AppState>, id: String) -> AppResult<tauri::ipc
     Ok(tauri::ipc::Response::new(std::fs::read(&path)?))
 }
 
+/// Materyal dosyasını sistemin varsayılan uygulamasıyla açar. Yol arayüzden alınmaz.
+#[tauri::command]
+pub fn open_material(app: tauri::AppHandle, state: State<AppState>, id: String) -> AppResult<()> {
+    use tauri_plugin_opener::OpenerExt;
+    let path: String = with_conn(&state, |c| {
+        c.query_row("SELECT file_path FROM materials WHERE id = ?1", [&id], |r| r.get(0))
+            .optional()?
+            .ok_or_else(|| AppError::Invalid("Materyal bulunamadı.".into()))
+    })?;
+    if path.is_empty() || !std::path::Path::new(&path).is_file() {
+        return Err(AppError::Invalid("Materyal dosyası bulunamadı.".into()));
+    }
+    app.opener().open_path(path, None::<&str>).map_err(|e| AppError::Invalid(e.to_string()))
+}
+
 #[tauri::command]
 pub fn delete_material(state: State<AppState>, id: String) -> AppResult<()> {
     with_conn(&state, |c| {
@@ -1398,7 +1429,18 @@ pub async fn generate_turn_servers(state: State<'_, AppState>) -> AppResult<Opti
 // ───────────────────────────── Asistan (Gemini) ─────────────────────────────
 
 /// Gemini anahtarı arayüze geri verilmez; `get_settings` yalnızca "kayıtlı mı" bilgisini döndürür.
-const SECRET_SETTINGS: &[&str] = &["gemini_api_key"];
+const SECRET_SETTINGS: &[&str] = &["gemini_api_key", "cf_turn_api_token", "app_lock"];
+
+/// `set_setting` yalnızca bu anahtarları yazar; arayüzden gelen başka bir ad reddedilir.
+const ALLOWED_SETTINGS: &[&str] = &[
+    "therapist_name", "therapist_title", "patient_app_url", "invite_ttl_minutes",
+    "cf_turn_key_id", "cf_turn_api_token", "turn_url", "turn_username", "turn_credential",
+    "gemini_model", "gemini_api_key", RECOVERY_CONFIRMED, "onboarding_done", "last_backup_at",
+];
+
+fn setting_allowed(key: &str) -> bool {
+    ALLOWED_SETTINGS.contains(&key)
+}
 
 fn assistant_settings(state: &State<AppState>) -> AppResult<(String, String)> {
     with_conn(state, |c| {
@@ -1447,6 +1489,9 @@ pub fn get_settings(state: State<AppState>) -> AppResult<std::collections::HashM
 
 #[tauri::command]
 pub fn set_setting(state: State<AppState>, key: String, value: String) -> AppResult<()> {
+    if !setting_allowed(&key) || value.len() > 4096 {
+        return Err(AppError::Invalid("Bilinmeyen ayar.".into()));
+    }
     with_conn(&state, |c| {
         c.execute(
             "INSERT INTO settings (key, value) VALUES (?1, ?2)
@@ -1462,9 +1507,7 @@ pub fn set_setting(state: State<AppState>, key: String, value: String) -> AppRes
 #[tauri::command]
 pub fn backup_database(state: State<AppState>, dest: String) -> AppResult<()> {
     let dest = PathBuf::from(dest);
-    if dest == state.db_path {
-        return Err(AppError::Invalid("Yedek, ana veritabanının üzerine yazılamaz.".into()));
-    }
+    check_dest(&dest, &state.db_path)?;
     let key = keystore::load_key()?.ok_or_else(|| AppError::Key("Anahtar bulunamadı.".into()))?;
     with_conn(&state, |c| db::backup_to(c, &dest, &key))
 }
@@ -1472,8 +1515,8 @@ pub fn backup_database(state: State<AppState>, dest: String) -> AppResult<()> {
 #[tauri::command]
 pub fn restore_database(state: State<AppState>, src: String) -> AppResult<()> {
     let src = PathBuf::from(src);
-    if src == state.db_path {
-        return Err(AppError::Invalid("Ana veritabanı kendisinden geri yüklenemez.".into()));
+    if src == state.db_path || !src.is_absolute() || !src.is_file() {
+        return Err(AppError::Invalid("Geçersiz yedek dosyası.".into()));
     }
     let key = keystore::load_key()?.ok_or_else(|| AppError::Key("Anahtar bulunamadı.".into()))?;
     with_conn(&state, |c| db::restore_from(c, &src, &key))
@@ -1533,8 +1576,8 @@ pub fn unlock_with_recovery_key(state: State<AppState>, recovery_key: String) ->
 pub fn restore_with_recovery_key(state: State<AppState>, src: String, recovery_key: String) -> AppResult<()> {
     let key = recovery::decode(&recovery_key)?;
     let src = PathBuf::from(src);
-    if src == state.db_path {
-        return Err(AppError::Invalid("Ana veritabanı kendisinden geri yüklenemez.".into()));
+    if src == state.db_path || !src.is_absolute() || !src.is_file() {
+        return Err(AppError::Invalid("Geçersiz yedek dosyası.".into()));
     }
     let prepared = db::with_suffix(&state.db_path, ".restore");
     if let Err(e) = db::prepare_restore(&src, &prepared, &key) {
@@ -1580,6 +1623,21 @@ mod tests {
         assert!(validate_patient_file("image/png", &[]).is_err(), "boş");
         assert!(validate_patient_file("image/png", &[0x89, b'P', b'N', b'G', 1]).is_ok());
         assert!(validate_patient_file("audio/mp4", &vec![1u8; 26 * 1024 * 1024]).is_err(), "25 MB üstü");
+    }
+
+    #[test]
+    fn settings_allowlist() {
+        assert!(super::setting_allowed("gemini_api_key"));
+        assert!(super::setting_allowed("recovery_key_confirmed_at"));
+        assert!(!super::setting_allowed("database-key-v1"));
+        assert!(!super::setting_allowed(""));
+    }
+
+    #[test]
+    fn dest_paths_are_checked() {
+        let db = std::path::Path::new("C:/x/mindcare.db");
+        assert!(super::check_dest(std::path::Path::new("relative.bak"), db).is_err());
+        assert!(super::check_dest(std::path::Path::new("/nonexistent_dir_zz/a.bak"), db).is_err());
     }
 
     #[test]

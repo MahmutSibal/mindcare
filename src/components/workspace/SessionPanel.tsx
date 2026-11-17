@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ClipboardCheck, Clock3, FileSignature, MonitorX, Pause, Pencil, Play, Send, Sparkles, Square, Undo2 } from "lucide-react";
-import { api, errorText, type Patient, type Test } from "../../lib/api";
+import { api, errorText, type Patient, type Test, type TestResult } from "../../lib/api";
 import type { SharedMaterial } from "./materialShare";
 import { clock } from "../../lib/format";
-import { notifyDataChanged, useActiveSession } from "../../lib/session";
-import { maxScore, parseDefinition } from "../../lib/tests";
+import { notifyDataChanged, useActiveSession, useDataVersion } from "../../lib/session";
+import { maxScore, parseAnswers, parseDefinition } from "../../lib/tests";
 import { EditorContent, Toolbar, useNotesEditor } from "../NotesEditor";
 import { HomeworkDialog } from "./Homework";
 import { Button, Card, cx, Empty, Modal } from "../ui";
@@ -133,10 +133,31 @@ export function SessionTimer({ patient, call }: { patient: Patient | null; call:
 function LiveNotesEditor() {
   const { session } = useActiveSession();
   // Seans değişince editör sıfırdan kurulur.
-  return <NotesForSession key={session?.id ?? "none"} sessionId={session?.id ?? null} />;
+  return <NotesForSession key={session?.id ?? "none"} sessionId={session?.id ?? null} patientId={session?.patient_id ?? null} />;
 }
 
-function NotesForSession({ sessionId }: { sessionId: string | null }) {
+const escHtml = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** Test sonucunu nota eklenecek kısa bir özete çevirir: başlık, puan ve her sorunun cevabı. */
+function testResultHtml(r: TestResult): string {
+  const def = parseDefinition(r.definition_json);
+  const answers = parseAnswers(r.answers_json);
+  const max = maxScore(def);
+  const rows = def.questions.map((q) => {
+    const a = answers[q.id];
+    const text = q.kind === "scale" ? (a?.option != null ? def.options[a.option]?.label ?? "" : "") : a?.text ?? "";
+    return `<li>${escHtml(q.text)}: <b>${escHtml(text || "—")}</b></li>`;
+  });
+  const score = r.total_score != null ? ` – Puan: ${r.total_score}${max ? ` / ${max}` : ""}` : "";
+  return `<h2>${escHtml(r.test_title)}${score}</h2><ul>${rows.join("")}</ul>`;
+}
+
+function NotesForSession({ sessionId, patientId }: { sessionId: string | null; patientId: string | null }) {
+  const [results, setResults] = useState<TestResult[]>([]);
+  const dataVersion = useDataVersion();
+  useEffect(() => {
+    if (patientId) api.listTestResults(patientId).then((r) => setResults(r.slice(0, 15))).catch(() => {});
+  }, [patientId, dataVersion]);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [state, setState] = useState<"idle" | "dirty" | "saving" | "error">("idle");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -204,6 +225,24 @@ function NotesForSession({ sessionId }: { sessionId: string | null }) {
       </div>
       <div className="mt-3 flex items-center justify-between gap-2">
         <span className={cx("text-xs", state === "error" ? "text-danger" : "text-muted")}>{status}</span>
+        {results.length > 0 && (
+          <select
+            aria-label="Test sonucunu nota ekle"
+            title="Test sonucunu nota ekle"
+            disabled={!sessionId}
+            value=""
+            onChange={(e) => {
+              const r = results.find((x) => x.id === e.target.value);
+              if (r) editor?.chain().focus().insertContent(testResultHtml(r)).run();
+            }}
+            className="max-w-[11rem] rounded-md border border-line bg-bg px-1.5 py-1 text-xs text-muted disabled:opacity-30"
+          >
+            <option value="">Test sonucu ekle…</option>
+            {results.map((r) => (
+              <option key={r.id} value={r.id}>{r.test_title} ({r.completed_at.slice(0, 10)})</option>
+            ))}
+          </select>
+        )}
         <Button onClick={save} disabled={!sessionId || state === "saving"} className="py-1.5">Notu Kaydet</Button>
       </div>
     </Card>
@@ -235,11 +274,39 @@ function QuickTools({ call, patient, materials, onOpenBoard }: {
   const [picking, setPicking] = useState(false);
   const [givingHomework, setGivingHomework] = useState(false);
   const [pending, setPending] = useState<PendingTest | null>(null);
+  const [apptReq, setApptReq] = useState<{ date: string; time: string; note: string } | null>(null);
+  const [apptMsg, setApptMsg] = useState<string | null>(null);
   const [last, setLast] = useState<{ title: string; score: number | null; max: number | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pendingRef = useRef(pending);
   pendingRef.current = pending;
   const connected = call.state === "connected";
+
+  // Danışandan gelen randevu talebi: biçimi doğrulanır, terapist onaylarsa randevu oluşur.
+  useEffect(
+    () =>
+      call.onMessage((m) => {
+        if (m.type !== "appointment_request") return;
+        const date = String(m.date ?? "");
+        const time = String(m.time ?? "");
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) return;
+        setApptReq({ date, time, note: String(m.note ?? "").slice(0, 300) });
+        setApptMsg(null);
+      }),
+    [call.onMessage], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  const acceptAppt = async () => {
+    if (!apptReq || !patient) return;
+    try {
+      await api.createAppointment({ patient_id: patient.id, appointment_date: `${apptReq.date}T${apptReq.time}`, duration_minutes: 50 });
+      notifyDataChanged();
+      setApptMsg(`Randevu oluşturuldu: ${apptReq.date} ${apptReq.time}`);
+      setApptReq(null);
+    } catch (e) {
+      setApptMsg(errorText(e));
+    }
+  };
 
   // Danışandan gelen test cevaplarını kaydet. Puan Rust tarafında yeniden hesaplanır.
   const { onMessage } = call;
@@ -326,6 +393,18 @@ function QuickTools({ call, patient, materials, onOpenBoard }: {
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
       {tab === "materials" ? materials : (
+      <>
+      {apptReq && (
+        <div className="mb-2 rounded-lg border border-accent/40 bg-accent-soft px-3 py-2 text-[13px]">
+          <b>Randevu talebi:</b> {apptReq.date} saat {apptReq.time}
+          {apptReq.note && <div className="mt-0.5 text-xs text-muted">{apptReq.note}</div>}
+          <div className="mt-2 flex gap-2">
+            <Button className="py-1 text-xs" onClick={() => void acceptAppt()}>Randevu oluştur</Button>
+            <Button variant="ghost" className="py-1 text-xs" onClick={() => setApptReq(null)}>Yoksay</Button>
+          </div>
+        </div>
+      )}
+      {apptMsg && <p className="mb-2 text-xs text-ok">{apptMsg}</p>}
       <ul className="space-y-1.5">
         <li className="rounded-lg bg-card/70 px-3 py-2">
           <div className="flex items-center gap-3">
@@ -385,6 +464,7 @@ function QuickTools({ call, patient, materials, onOpenBoard }: {
           </Button>
         </li>
       </ul>
+      </>
       )}
       </div>
       {picking && <TestPicker onClose={() => setPicking(false)} onSend={send} />}

@@ -16,14 +16,6 @@
           "url": "https://*"
         }
       ]
-    },
-    {
-      "identifier": "opener:allow-open-path",
-      "allow": [
-        {
-          "path": "**"
-        }
-      ]
     }
   ]
 }

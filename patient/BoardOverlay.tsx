@@ -2,6 +2,7 @@
 // alttaki mikrofon, kamera ve çıkış düğmeleri her zaman erişilebilir.
 
 import { Minimize2, Pencil } from "lucide-react";
+import { t } from "./i18n";
 import BoardCanvas from "../src/components/BoardCanvas";
 import type { BoardApi } from "../src/lib/useBoard";
 
@@ -20,16 +21,16 @@ export default function BoardOverlay({ boardApi, video, onMinimize, backdropUrl 
         {video && <div className="h-14 w-20 shrink-0 overflow-hidden rounded-lg border border-line bg-black">{video}</div>}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 text-sm font-medium">
-            <Pencil size={14} className="text-accent" /> Ortak çizim
+            <Pencil size={14} className="text-accent" /> {t("Ortak çizim")}
           </div>
           {session.prompt && <p className="text-xs leading-snug text-muted">{session.prompt}</p>}
         </div>
         <button
           onClick={onMinimize}
           className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-card px-3 text-xs text-ink hover:bg-line"
-          title="Görüntüye dön (çizim kapanmaz)"
+          title={t("Görüntüye dön (çizim kapanmaz)")}
         >
-          <Minimize2 size={14} /> Küçült
+          <Minimize2 size={14} /> {t("Küçült")}
         </button>
       </div>
       <div className="min-h-0 flex-1">

@@ -3,6 +3,7 @@ mod clinical;
 mod commands;
 mod db;
 mod error;
+mod extras;
 mod keystore;
 mod recovery;
 mod turn;
@@ -43,7 +44,13 @@ fn init_database(path: &Path) -> AppResult<Connection> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // Otomatik güncelleme yalnızca masaüstünde (Android'de güncellemeyi Play Store yapar).
+    #[cfg(desktop)]
+    let builder = builder
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init());
+    builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
@@ -111,6 +118,7 @@ pub fn run() {
             commands::create_material,
             commands::delete_material,
             commands::read_material,
+            commands::open_material,
             commands::list_tests,
             commands::save_test,
             commands::delete_test,
@@ -130,6 +138,16 @@ pub fn run() {
             commands::confirm_recovery_key,
             commands::unlock_with_recovery_key,
             commands::restore_with_recovery_key,
+            extras::verify_app_pin,
+            extras::set_app_pin,
+            extras::clear_app_pin,
+            extras::billing_summary,
+            extras::list_ledger,
+            extras::add_ledger_entry,
+            extras::delete_ledger_entry,
+            extras::set_patient_fee,
+            extras::save_text_file,
+            extras::export_patient_data,
         ])
         .run(tauri::generate_context!())
         .expect("Mavi Ruh başlatılamadı");

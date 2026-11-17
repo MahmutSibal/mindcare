@@ -1,6 +1,7 @@
 // Danışan tarafı: terapistin verdiği ödevler. Bu sayfa görüşme bitince kapandığı için
 // danışan ödevi indirip (metin dosyası) veya kopyalayıp saklar; hiçbir yerde tutulmaz.
 
+import { t } from "./i18n";
 import { useState } from "react";
 import { Check, Copy, Download, FileSignature, X } from "lucide-react";
 import type { ChannelMessage } from "../src/lib/rtc";
@@ -50,7 +51,7 @@ export default function HomeworkView({ items, onClose }: { items: HomeworkMessag
     <div className="absolute inset-x-3 top-14 z-20 max-h-[70%] overflow-y-auto rounded-2xl border border-line bg-panel/95 p-4 shadow-2xl backdrop-blur sm:inset-x-auto sm:right-4 sm:w-[420px]">
       <div className="mb-3 flex items-center gap-2">
         <FileSignature size={18} className="text-accent" />
-        <span className="flex-1 font-semibold">Ödevleriniz</span>
+        <span className="flex-1 font-semibold">{t("Ödevleriniz")}</span>
         <button onClick={onClose} className="rounded-md p-1 text-muted hover:bg-card hover:text-ink" aria-label="Kapat">
           <X size={18} />
         </button>
@@ -63,17 +64,17 @@ export default function HomeworkView({ items, onClose }: { items: HomeworkMessag
             {h.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-muted">{h.description}</p>}
             <div className="mt-3 flex gap-2">
               <Button variant="outline" className="flex-1 py-1.5 text-xs" onClick={() => download(h)}>
-                <Download size={14} /> İndir
+                <Download size={14} /> {t("İndir")}
               </Button>
               <Button variant="outline" className="flex-1 py-1.5 text-xs" onClick={() => copy(h)}>
-                {copied === h.id ? <Check size={14} /> : <Copy size={14} />} {copied === h.id ? "Kopyalandı" : "Kopyala"}
+                {copied === h.id ? <Check size={14} /> : <Copy size={14} />} {copied === h.id ? t("Kopyalandı") : t("Kopyala")}
               </Button>
             </div>
           </li>
         ))}
       </ul>
       <p className="mt-3 text-[11px] leading-relaxed text-faint">
-        Bu sayfa görüşme bitince kapanır. Ödevinizi kaybetmemek için indirin veya kopyalayıp notlarınıza ekleyin.
+        {t("Bu sayfa görüşme bitince kapanır. Ödevinizi kaybetmemek için indirin veya kopyalayıp notlarınıza ekleyin.")}
       </p>
     </div>
   );

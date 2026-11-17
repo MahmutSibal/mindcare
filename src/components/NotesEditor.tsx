@@ -23,6 +23,15 @@ export function useNotesEditor(opts: { content: string; editable: boolean; place
 
 type Ed = ReturnType<typeof useNotesEditor>;
 
+const section = (title: string) => `<h2>${title}</h2><p></p>`;
+/** Hazır not iskeletleri; imlecin olduğu yere eklenir. */
+export const NOTE_TEMPLATES: { id: string; label: string; html: string }[] = [
+  { id: "soap", label: "SOAP (Öznel-Nesnel-Değerlendirme-Plan)", html: section("Öznel (S)") + section("Nesnel (O)") + section("Değerlendirme (A)") + section("Plan (P)") },
+  { id: "dap", label: "DAP (Veri-Değerlendirme-Plan)", html: section("Veri (D)") + section("Değerlendirme (A)") + section("Plan (P)") },
+  { id: "birp", label: "BIRP (Davranış-Müdahale-Yanıt-Plan)", html: section("Davranış (B)") + section("Müdahale (I)") + section("Yanıt (R)") + section("Plan (P)") },
+  { id: "risk", label: "Risk değerlendirmesi", html: section("Kendine zarar düşüncesi") + section("Koruyucu etkenler") + section("Güvenlik planı / yapılanlar") },
+];
+
 export function Toolbar({ editor }: { editor: Ed }) {
   const s = useEditorState({
     editor,
@@ -77,6 +86,21 @@ export function Toolbar({ editor }: { editor: Ed }) {
       <span className="mx-1 h-5 w-px bg-line" />
       {btn(false, () => c().undo().run(), Undo2, "Geri al")}
       {btn(false, () => c().redo().run(), Redo2, "Yinele")}
+      <span className="mx-1 h-5 w-px bg-line" />
+      <select
+        aria-label="Not şablonu"
+        title="Not şablonu ekle"
+        disabled={!s?.editable}
+        value=""
+        onChange={(e) => {
+          const t = NOTE_TEMPLATES.find((x) => x.id === e.target.value);
+          if (t) c().insertContent(t.html).run();
+        }}
+        className="rounded-md border border-line bg-bg px-1.5 py-1 text-xs text-muted disabled:opacity-30"
+      >
+        <option value="">Şablon…</option>
+        {NOTE_TEMPLATES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+      </select>
     </div>
   );
 }

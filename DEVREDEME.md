@@ -30,7 +30,9 @@ npm run tauri dev          # masaüstü uygulaması
 npm run patient:dev        # danışan sayfası (http://localhost:5174)
 npx tsc --noEmit           # tip denetimi
 cd src-tauri && cargo test # Rust testleri (39)
-npm run tauri build        # Windows kurulum dosyası (src-tauri/target/release/bundle/nsis)
+npm run build:win          # sürümü +1 yükseltir, Windows kurulum dosyasını üretir (src-tauri/target/release/bundle/nsis)
+npm run build:android      # sürümü +1 yükseltir, Android APK üretir
+npm run bump [minor|major|x.y.z]  # yalnızca sürümü yükseltir (6 dosyada birlikte)
 ```
 
 ## 3. Klasör haritası

@@ -117,3 +117,22 @@ npm run tauri build
 
 Android derlemesi için gereken ortam değişkenleri (ANDROID_HOME, NDK_HOME, JAVA_HOME, OpenSSL dizinleri) ve
 Android için OpenSSL'in WSL'de derlenmesi README'de anlatılmıştır.
+
+## Otomatik güncelleme (Windows)
+
+Kurulu uygulama açılışta ve 6 saatte bir `https://github.com/MahmutSibal/mindcare/releases/latest/download/latest.json`
+adresini denetler; yeni sürüm varsa köşede bildirim çıkar, kullanıcı "Şimdi güncelle" der (seans sürerken yüklenmez).
+Paket imzalıdır; imza `tauri.conf.json` içindeki genel anahtarla doğrulanır. Android'de güncellemeyi Play Store yapar.
+
+**Yeni sürüm yayınlama:**
+
+1. `npm run build:win "Bu sürümde neler değişti"`: sürümü +1 yapar, imzalı kurulum dosyasını derler ve
+   `src-tauri/target/release/bundle/nsis/latest.json` üretir.
+2. GitHub'da `v<sürüm>` etiketiyle yeni bir **Release** açın (depo herkese açık olmalı; özel depoda kullanıcılar `latest.json`'a erişemez).
+3. Release'e iki dosya yükleyin: kurulum dosyası (`Mavi Ruh_<sürüm>_x64-setup.exe`) ve `latest.json`.
+   Etiketi ve dosyaları yayınlayınca tüm kurulu uygulamalar bir sonraki denetimde güncellemeyi görür.
+
+**İmza anahtarı:** `C:\Users\Mahmu\maviruh-updater\updater.key` (parolasız). Gizli tutun, depoya koymayın.
+**Kaybolursa mevcut kullanıcılara bir daha güncelleme gönderilemez** (yeni anahtarla yeniden elle kurulum gerekir).
+Genel anahtar `src-tauri/tauri.conf.json > plugins.updater.pubkey` içindedir. Anahtar yolu `TAURI_SIGNING_PRIVATE_KEY_PATH` ile değiştirilir.
+İlk sürümü (otomatik güncellemeyi içeren) kullanıcılar elle kurar; sonrakiler kendiliğinden güncellenir.

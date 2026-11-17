@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from "react";
 import { Headphones, Lock } from "lucide-react";
+import { t, useLang } from "./i18n";
 
 const PHASES = [
   { label: "Nefes al", seconds: 4, scale: 1 },
@@ -25,6 +26,7 @@ const SENTENCES = [
 const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
 export default function WaitingRoom({ reconnecting }: { reconnecting: boolean }) {
+  useLang();
   const [phase, setPhase] = useState(0);
   const [sentence, setSentence] = useState(() => Math.floor(Math.random() * SENTENCES.length));
   const [visible, setVisible] = useState(true);
@@ -52,9 +54,9 @@ export default function WaitingRoom({ reconnecting }: { reconnecting: boolean })
     <div className="flex h-full flex-col items-center justify-center gap-8 bg-gradient-to-b from-panel via-bg to-accent-soft/60 px-6 pb-40 pt-16 text-center sm:pb-16">
       <div>
         <p className="text-lg font-medium text-ink">
-          {reconnecting ? "Bağlantı yeniden kuruluyor…" : "Terapistiniz birazdan burada olacak"}
+          {reconnecting ? t("Bağlantı yeniden kuruluyor…") : t("Terapistiniz birazdan burada olacak")}
         </p>
-        <p className="mt-1 text-sm text-muted">Beklerken birlikte birkaç nefes alalım.</p>
+        <p className="mt-1 text-sm text-muted">{t("Beklerken birlikte birkaç nefes alalım.")}</p>
       </div>
 
       <div className="relative flex h-44 w-44 items-center justify-center" aria-hidden="true">
@@ -74,12 +76,12 @@ export default function WaitingRoom({ reconnecting }: { reconnecting: boolean })
         className="min-h-[3.5rem] max-w-sm text-[15px] leading-relaxed text-ink/90 transition-opacity duration-500"
         style={{ opacity: visible ? 1 : 0 }}
       >
-        {SENTENCES[sentence]}
+        {t(SENTENCES[sentence]!)}
       </p>
 
       <div className="space-y-1.5 text-xs text-faint">
-        <p className="flex items-center justify-center gap-1.5"><Lock size={12} /> Görüşme şifrelidir ve kaydedilmez.</p>
-        <p className="flex items-center justify-center gap-1.5"><Headphones size={12} /> Kulaklık kullanmak sesi daha net yapar.</p>
+        <p className="flex items-center justify-center gap-1.5"><Lock size={12} /> {t("Görüşme şifrelidir ve kaydedilmez.")}</p>
+        <p className="flex items-center justify-center gap-1.5"><Headphones size={12} /> {t("Kulaklık kullanmak sesi daha net yapar.")}</p>
       </div>
     </div>
   );

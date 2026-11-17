@@ -1,6 +1,7 @@
 // Danışan tarafı: terapistin gönderdiği testi doldurma formu.
 // Cevaplar yalnızca şifreli görüşme veri kanalıyla terapiste gider; burada saklanmaz.
 
+import { t } from "./i18n";
 import { useState } from "react";
 import { CheckCircle2, ClipboardList } from "lucide-react";
 import type { ChannelMessage } from "../src/lib/rtc";
@@ -25,7 +26,7 @@ export default function TestForm({ test, onSubmit, onDone }: {
   const submit = () => {
     setError(null);
     if (!onSubmit(answers)) {
-      setError("Bağlantı şu an kurulu değil. Birkaç saniye sonra tekrar deneyin.");
+      setError(t("Bağlantı şu an kurulu değil. Birkaç saniye sonra tekrar deneyin."));
       return;
     }
     setSent(true);
@@ -36,8 +37,8 @@ export default function TestForm({ test, onSubmit, onDone }: {
     return (
       <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-bg/95 p-6 text-center">
         <CheckCircle2 size={44} className="text-ok" />
-        <p className="text-lg font-medium">Teşekkürler</p>
-        <p className="text-sm text-muted">Cevaplarınız terapistinize iletildi.</p>
+        <p className="text-lg font-medium">{t("Teşekkürler")}</p>
+        <p className="text-sm text-muted">{t("Cevaplarınız terapistinize iletildi.")}</p>
       </div>
     );
   }
@@ -47,7 +48,7 @@ export default function TestForm({ test, onSubmit, onDone }: {
       <div className="mx-auto max-w-xl p-4 pb-28 sm:p-6">
         <div className="mb-1 flex items-center gap-2 text-accent">
           <ClipboardList size={20} />
-          <span className="text-xs font-medium uppercase tracking-wide">Terapistiniz bir test gönderdi</span>
+          <span className="text-xs font-medium uppercase tracking-wide">{t("Terapistiniz bir test gönderdi")}</span>
         </div>
         <h2 className="text-xl font-semibold">{test.title}</h2>
         {test.instructions && <p className="mt-2 text-sm leading-relaxed text-muted">{test.instructions}</p>}
@@ -84,7 +85,7 @@ export default function TestForm({ test, onSubmit, onDone }: {
                   maxLength={MAX_TEXT_ANSWER}
                   value={answers[q.id]?.text ?? ""}
                   onChange={(e) => setAnswers({ ...answers, [q.id]: { text: e.target.value } })}
-                  placeholder="İsteğe bağlı"
+                  placeholder={t("İsteğe bağlı")}
                 />
               )}
             </li>
@@ -95,10 +96,10 @@ export default function TestForm({ test, onSubmit, onDone }: {
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-panel/95 p-3 backdrop-blur">
         <div className="mx-auto flex max-w-xl items-center gap-3">
           <span className="flex-1 text-xs text-muted">
-            {scaleCount > 0 && (missing > 0 ? `${scaleCount - missing} / ${scaleCount} cevaplandı` : "Tüm sorular cevaplandı")}
+            {scaleCount > 0 && (missing > 0 ? t("{n} / {total} cevaplandı", { n: scaleCount - missing, total: scaleCount }) : t("Tüm sorular cevaplandı"))}
             {error && <span className="block text-danger">{error}</span>}
           </span>
-          <Button className="px-6 py-2.5" onClick={submit} disabled={missing > 0}>Gönder</Button>
+          <Button className="px-6 py-2.5" onClick={submit} disabled={missing > 0}>{t("Gönder")}</Button>
         </div>
       </div>
     </div>

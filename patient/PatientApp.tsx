@@ -22,6 +22,8 @@ import { BRAND_NAME } from "../src/lib/brand";
 import { useBackClose, useBackGuard } from "../src/lib/backStack";
 import BrandMark from "../src/components/BrandMark";
 import ConnectionTest from "./ConnectionTest";
+import { LangSwitch, t, useLang } from "./i18n";
+import AppointmentRequest from "./AppointmentRequest";
 
 type Phase = "invalid" | "consent" | "joining" | "rejected" | "call" | "left";
 
@@ -113,6 +115,7 @@ async function enterFullscreen(video: HTMLVideoElement | null, container: HTMLEl
 }
 
 export default function PatientApp() {
+  useLang();
   const invite = useRef(readInvite()).current;
   const [phase, setPhase] = useState<Phase>(invite ? "consent" : "invalid");
   const [error, setError] = useState<string | null>(null);
@@ -232,7 +235,7 @@ export default function PatientApp() {
     try {
       const r = await joinRoom(invite.room, invite.token);
       if (r !== "ok") {
-        setError(REJECT_TEXT[r] ?? "Görüşmeye katılınamadı.");
+        setError(t(REJECT_TEXT[r] ?? "Görüşmeye katılınamadı."));
         setPhase("rejected");
         return;
       }
@@ -339,7 +342,7 @@ export default function PatientApp() {
     try {
       track = await open(next, true);
     } catch {
-      setError(next === "environment" ? "Arka kamera açılamadı." : "Ön kamera açılamadı.");
+      setError(next === "environment" ? t("Arka kamera açılamadı.") : t("Ön kamera açılamadı."));
       now = facing;
       track = await open(facing, false).catch(() => undefined);
     }
@@ -358,7 +361,7 @@ export default function PatientApp() {
       <div className="relative flex h-full flex-col bg-bg">
         {backHint && (
           <div className="pointer-events-none fixed inset-x-0 top-3 z-50 mx-auto w-fit max-w-[90%] rounded-lg bg-black/85 px-4 py-2 text-center text-xs text-white shadow-lg">
-            Görüşmeden ayrılmak için kırmızı düğmeye basın
+            {t("Görüşmeden ayrılmak için kırmızı düğmeye basın")}
           </div>
         )}
         <div ref={stage} className="relative min-h-0 flex-1 bg-black">
@@ -380,7 +383,7 @@ export default function PatientApp() {
             <div className="absolute inset-x-0 bottom-36 z-10 flex flex-col items-center gap-2 px-4 sm:bottom-6">
               {portrait && (
                 <span className="flex items-center gap-1.5 rounded-lg bg-black/60 px-3 py-1.5 text-xs text-white">
-                  <Smartphone size={13} className="rotate-90" /> Daha büyük görmek için telefonu yan çevirin
+                  <Smartphone size={13} className="rotate-90" /> {t("Daha büyük görmek için telefonu yan çevirin")}
                 </span>
               )}
               <button
@@ -393,7 +396,7 @@ export default function PatientApp() {
           )}
           {notice?.type === "material" && (
             <div className="absolute left-1/2 top-4 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-line bg-panel px-4 py-3 text-sm shadow-xl">
-              <FileText size={18} className="text-accent" /> Terapistiniz bir materyal paylaştı: <b>{notice.title}</b>
+              <FileText size={18} className="text-accent" /> {t("Terapistiniz bir materyal paylaştı:")} <b>{notice.title}</b>
             </div>
           )}
           {board.session && boardVisible && (
@@ -409,7 +412,7 @@ export default function PatientApp() {
               onClick={() => setBoardVisible(true)}
               className="absolute left-3 top-14 z-20 flex items-center gap-1.5 rounded-lg bg-accent-strong px-3 py-1.5 text-xs font-medium text-white shadow-lg"
             >
-              <Pencil size={14} /> Çizime dön
+              <Pencil size={14} /> {t("Çizime dön")}
             </button>
           )}
           {material.current && (
@@ -420,7 +423,7 @@ export default function PatientApp() {
               onClick={() => setHomeworkOpen(true)}
               className="absolute right-4 top-4 z-10 flex items-center gap-1.5 rounded-lg bg-accent-strong px-3 py-1.5 text-xs font-medium text-white shadow-lg"
             >
-              <FileSignature size={14} /> Ödevlerim ({homework.length})
+              <FileSignature size={14} /> {t("Ödevlerim")} ({homework.length})
             </button>
           )}
           {homework.length > 0 && homeworkOpen && <HomeworkView items={homework} onClose={() => setHomeworkOpen(false)} />}
@@ -438,29 +441,30 @@ export default function PatientApp() {
         <div className="relative flex shrink-0 items-center justify-center gap-3 border-t border-line bg-panel px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] landscape:pt-2 landscape:pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:gap-5">
           {menu && (
             <>
-              <button className="fixed inset-0 z-30 cursor-default" aria-label="Ayarları kapat" onClick={() => setMenu(false)} />
+              <button className="fixed inset-0 z-30 cursor-default" aria-label={t("Ayarları kapat")} onClick={() => setMenu(false)} />
               <div className="absolute bottom-full left-1/2 z-40 mb-2 w-[min(92vw,340px)] -translate-x-1/2 rounded-2xl border border-line bg-panel p-4 shadow-2xl">
                 <UploadSection upload={upload} />
+                <AppointmentRequest getCall={() => callRef.current} />
+                <div className="mb-3 flex justify-end"><LangSwitch /></div>
                 <QualityPicker value={quality} onChange={setQuality} />
                 <p className="mt-3 text-[11px] leading-relaxed text-faint">
-                  Bu ayar yalnızca sizin kameranızdan giden görüntüyü etkiler. Görüntü donuyor ya da ses kesiliyorsa
-                  "Veri tasarrufu"nu deneyin.
+                  {t('Bu ayar yalnızca sizin kameranızdan giden görüntüyü etkiler. Görüntü donuyor ya da ses kesiliyorsa "Veri tasarrufu"nu deneyin.')}
                 </p>
               </div>
             </>
           )}
-          <Round on={micOn} onClick={() => toggle("audio")} icon={micOn ? Mic : MicOff} label={micOn ? "Mikrofonu kapat" : "Mikrofonu aç"} />
-          <Round on={camOn} onClick={() => toggle("video")} icon={camOn ? Video : VideoOff} label={camOn ? "Kamerayı kapat" : "Kamerayı aç"} />
+          <Round on={micOn} onClick={() => toggle("audio")} icon={micOn ? Mic : MicOff} label={micOn ? t("Mikrofonu kapat") : t("Mikrofonu aç")} />
+          <Round on={camOn} onClick={() => toggle("video")} icon={camOn ? Video : VideoOff} label={camOn ? t("Kamerayı kapat") : t("Kamerayı aç")} />
           {canFlip && (
             <Round
               on={!flipping}
               onClick={flipCamera}
               icon={SwitchCamera}
-              label={facing === "user" ? "Arka kameraya geç" : "Ön kameraya geç"}
+              label={facing === "user" ? t("Arka kameraya geç") : t("Ön kameraya geç")}
             />
           )}
-          <Round on onClick={() => setMenu(!menu)} icon={MoreVertical} label="Ayarlar" />
-          <button onClick={leave} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-danger text-white hover:bg-danger/80" aria-label="Görüşmeden ayrıl">
+          <Round on onClick={() => setMenu(!menu)} icon={MoreVertical} label={t("Ayarlar")} />
+          <button onClick={leave} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-danger text-white hover:bg-danger/80" aria-label={t("Görüşmeden ayrıl")}>
             <PhoneOff size={20} />
           </button>
         </div>
@@ -474,12 +478,13 @@ export default function PatientApp() {
         <div className="mb-5 flex items-center gap-2">
           <BrandMark size={36} />
           <span className="text-lg font-semibold">{BRAND_NAME}</span>
+          <LangSwitch className="ml-auto" />
         </div>
 
-        {phase === "invalid" && <p className="text-sm text-muted">Bağlantı eksik veya hatalı. Lütfen terapistinizin gönderdiği bağlantıyı eksiksiz açın.</p>}
+        {phase === "invalid" && <p className="text-sm text-muted">{t("Bağlantı eksik veya hatalı. Lütfen terapistinizin gönderdiği bağlantıyı eksiksiz açın.")}</p>}
         {phase === "left" && (
           <>
-            <p className="text-sm text-muted">Görüşme sona erdi. Bu pencereyi kapatabilirsiniz.</p>
+            <p className="text-sm text-muted">{t("Görüşme sona erdi. Bu pencereyi kapatabilirsiniz.")}</p>
             <CrisisNote />
           </>
         )}
@@ -492,24 +497,24 @@ export default function PatientApp() {
         )}
         {(phase === "consent" || phase === "joining") && (
           <>
-            <h1 className="text-xl font-semibold">Görüşmeye katıl</h1>
+            <h1 className="text-xl font-semibold">{t("Görüşmeye katıl")}</h1>
             <p className="mt-2 text-sm text-muted">
-              Görüşme uçtan uca şifrelenir ve kaydedilmez. Katılmak için kamera ve mikrofon izni vermeniz gerekir.
+              {t("Görüşme uçtan uca şifrelenir ve kaydedilmez. Katılmak için kamera ve mikrofon izni vermeniz gerekir.")}
             </p>
             <div className="mt-5 aspect-video overflow-hidden rounded-xl border border-line bg-bg">
               {local ? (
                 camOn ? <VideoEl key={facing} stream={local} muted mirrored={facing === "user"} /> : <div className="flex h-full items-center justify-center text-faint"><VideoOff /></div>
               ) : (
                 <div className="flex h-full items-center justify-center">
-                  <Button variant="subtle" onClick={prepareMedia}><Video size={16} /> Kamera ve mikrofonu aç</Button>
+                  <Button variant="subtle" onClick={prepareMedia}><Video size={16} /> {t("Kamera ve mikrofonu aç")}</Button>
                 </div>
               )}
             </div>
             {local && (
               <div className="mt-3 flex justify-center gap-3">
-                <Round on={micOn} onClick={() => toggle("audio")} icon={micOn ? Mic : MicOff} label="Mikrofon" small />
-                <Round on={camOn} onClick={() => toggle("video")} icon={camOn ? Video : VideoOff} label="Kamera" small />
-                {canFlip && <Round on={!flipping} onClick={flipCamera} icon={SwitchCamera} label="Kamerayı çevir" small />}
+                <Round on={micOn} onClick={() => toggle("audio")} icon={micOn ? Mic : MicOff} label={t("Mikrofon")} small />
+                <Round on={camOn} onClick={() => toggle("video")} icon={camOn ? Video : VideoOff} label={t("Kamera")} small />
+                {canFlip && <Round on={!flipping} onClick={flipCamera} icon={SwitchCamera} label={t("Kamerayı çevir")} small />}
               </div>
             )}
             {error && <p className="mt-3 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
@@ -521,22 +526,18 @@ export default function PatientApp() {
                 onChange={(e) => setConsented(e.target.checked)}
               />
               <span>
-                Görüşmenin görüntülü ve sesli olarak çevrim içi yapılmasını, görüşme sırasında terapistimin gönderdiği test ve
-                ödevlere verdiğim yanıtların terapistime iletilmesini kabul ediyorum. Görüşme kaydedilmez. Görüşme süresince
-                yalnız ve rahat konuşabileceğim bir yerde olacağım.
+                {t("Görüşmenin görüntülü ve sesli olarak çevrim içi yapılmasını, görüşme sırasında terapistimin gönderdiği test ve ödevlere verdiğim yanıtların terapistime iletilmesini kabul ediyorum. Görüşme kaydedilmez. Görüşme süresince yalnız ve rahat konuşabileceğim bir yerde olacağım.")}
               </span>
             </label>
             <Button className="mt-4 w-full py-2.5" onClick={join} disabled={!local || !consented || phase === "joining"}>
-              {phase === "joining" ? "Katılınıyor…" : "Görüşmeye Katıl"}
+              {phase === "joining" ? t("Katılınıyor…") : t("Görüşmeye Katıl")}
             </Button>
             <button onClick={() => setTestOpen(true)} className="mt-3 w-full text-center text-xs text-muted underline hover:text-ink">
-              Bağlantımı test et (kamera, mikrofon, internet)
+              {t("Bağlantımı test et (kamera, mikrofon, internet)")}
             </button>
             <CrisisNote />
             <p className="mt-3 text-xs leading-relaxed text-faint">
-              Bu bağlantı size özeldir ve tek kullanımlıktır; başkalarıyla paylaşmayın. Bağlantı bilgileri yalnızca görüşmeyi
-              kurmak için kullanılır. Terapistinizin gönderdiği test cevapları şifreli görüşme bağlantısıyla doğrudan
-              terapistinize iletilir; bu sayfada veya bir sunucuda saklanmaz. <a href="./gizlilik.html" target="_blank" rel="noopener" className="underline hover:text-ink">Gizlilik politikası ve aydınlatma metni</a>.
+              {t("Bu bağlantı size özeldir ve tek kullanımlıktır; başkalarıyla paylaşmayın. Bağlantı bilgileri yalnızca görüşmeyi kurmak için kullanılır. Terapistinizin gönderdiği test cevapları şifreli görüşme bağlantısıyla doğrudan terapistinize iletilir; bu sayfada veya bir sunucuda saklanmaz.")} <a href="./gizlilik.html" target="_blank" rel="noopener" className="underline hover:text-ink">{t("Gizlilik politikası ve aydınlatma metni")}</a>.
             </p>
           </>
         )}
@@ -549,8 +550,7 @@ export default function PatientApp() {
 function CrisisNote() {
   return (
     <p className="mt-4 rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-xs leading-relaxed text-warn">
-      Bu görüşme acil yardım hattı değildir. Kendinize veya bir başkasına zarar verme düşünceniz varsa ya da acil bir
-      durumdaysanız <b>112</b>'yi arayın.
+      {t("Bu görüşme acil yardım hattı değildir. Kendinize veya bir başkasına zarar verme düşünceniz varsa ya da acil bir durumdaysanız")} <b>112</b>{t("'yi arayın.")}
     </p>
   );
 }
@@ -560,10 +560,10 @@ function ConnectionBadge({ state, stats }: { state: CallState; stats: CallStats 
   const weak = state === "connected" && stats !== null &&
     ((stats.packetLossPct ?? 0) > 8 || (stats.rttMs ?? 0) > 400);
   const [text, tone] =
-    state === "reconnecting" ? ["Bağlantı koptu, yeniden bağlanılıyor…", "bg-warn/90 text-black"]
-    : state !== "connected" ? ["Bağlanıyor", "bg-black/50 text-white"]
-    : weak ? ["Bağlantınız zayıf; görüntü donabilir", "bg-warn/90 text-black"]
-    : ["Şifreli görüşme", "bg-black/50 text-white"];
+    state === "reconnecting" ? [t("Bağlantı koptu, yeniden bağlanılıyor…"), "bg-warn/90 text-black"]
+    : state !== "connected" ? [t("Bağlanıyor"), "bg-black/50 text-white"]
+    : weak ? [t("Bağlantınız zayıf; görüntü donabilir"), "bg-warn/90 text-black"]
+    : [t("Şifreli görüşme"), "bg-black/50 text-white"];
   return (
     <div className={cx("absolute left-4 top-4 flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs backdrop-blur", tone)} role="status">
       <Lock size={12} /> {text}

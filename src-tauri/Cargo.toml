@@ -1,6 +1,6 @@
 [package]
 name = "mindcare"
-version = "1.0.0"
+version = "1.0.3"
 description = "Mavi Ruh - Seans ve Danisan Yonetim Sistemi"
 authors = ["Mavi Ruh"]
 edition = "2024"
@@ -34,6 +34,10 @@ thiserror = "2"
 
 # Anahtar, işletim sisteminin güvenli deposunda tutulur (Windows Credential Manager vb.).
 # Android'de bu depo yoktur; orada anahtar uygulamaya özel dizinde saklanır (bkz. keystore.rs).
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+
 [target.'cfg(not(target_os = "android"))'.dependencies]
 keyring = { version = "3", features = ["windows-native", "apple-native", "linux-native"] }
 

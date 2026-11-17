@@ -4,6 +4,7 @@
 
 import { useRef, useState } from "react";
 import { Check, CircleAlert, Loader2, TriangleAlert, X } from "lucide-react";
+import { LangSwitch, t, useLang } from "./i18n";
 import BrandMark from "../src/components/BrandMark";
 import { Button, cx } from "../src/components/ui";
 import { DEFAULT_STUN } from "../src/lib/config";
@@ -111,6 +112,7 @@ const ICON: Record<Status, React.ReactNode> = {
 };
 
 export default function ConnectionTest({ onClose }: { onClose?: () => void }) {
+  useLang();
   const [steps, setSteps] = useState<Step[]>(INITIAL);
   const [running, setRunning] = useState(false);
   const [finished, setFinished] = useState(false);
@@ -132,42 +134,42 @@ export default function ConnectionTest({ onClose }: { onClose?: () => void }) {
       // 1) Tarayıcı
       set("support", "run");
       if (!window.RTCPeerConnection || !navigator.mediaDevices?.getUserMedia) {
-        set("support", "fail", "Bu tarayıcı görüntülü görüşmeyi desteklemiyor.");
-        tips.push("Telefonda Chrome (Android) veya Safari (iPhone), bilgisayarda Chrome, Edge ya da Safari kullanın. Uygulama içi tarayıcılardan (Instagram, WhatsApp vb.) açmayın.");
+        set("support", "fail", t("Bu tarayıcı görüntülü görüşmeyi desteklemiyor."));
+        tips.push(t("Telefonda Chrome (Android) veya Safari (iPhone), bilgisayarda Chrome, Edge ya da Safari kullanın. Uygulama içi tarayıcılardan (Instagram, WhatsApp vb.) açmayın."));
         return;
       }
-      set("support", "ok", "Destekleniyor.");
+      set("support", "ok", t("Destekleniyor."));
 
       // 2) Kamera ve mikrofon
-      set("media", "run", "İzin isteniyor…");
+      set("media", "run", t("İzin isteniyor…"));
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: true });
         if (preview.current) preview.current.srcObject = stream;
-        set("media", "run", "Birkaç kelime konuşun…");
+        set("media", "run", t("Birkaç kelime konuşun…"));
         const peak = await listen(stream, setLevel);
         if (peak < 0.05) {
-          set("media", "warn", "Mikrofondan ses algılanmadı.");
-          tips.push("Mikrofonunuz ses almıyor: cihazın sessize alınmadığını, mikrofonun başka bir uygulamada kullanılmadığını ve tarayıcıda mikrofon izninin açık olduğunu kontrol edin.");
+          set("media", "warn", t("Mikrofondan ses algılanmadı."));
+          tips.push(t("Mikrofonunuz ses almıyor: cihazın sessize alınmadığını, mikrofonun başka bir uygulamada kullanılmadığını ve tarayıcıda mikrofon izninin açık olduğunu kontrol edin."));
         } else {
-          set("media", "ok", "Kamera açıldı, mikrofon sesinizi alıyor.");
+          set("media", "ok", t("Kamera açıldı, mikrofon sesinizi alıyor."));
         }
       } catch (e) {
         const name = (e as { name?: string })?.name;
-        set("media", "fail", name === "NotAllowedError" ? "Kamera/mikrofon izni verilmedi." : "Kamera veya mikrofon açılamadı.");
-        tips.push("Tarayıcının adres çubuğundaki kilit simgesinden kamera ve mikrofon iznini açıp testi yeniden çalıştırın.");
+        set("media", "fail", name === "NotAllowedError" ? t("Kamera/mikrofon izni verilmedi.") : t("Kamera veya mikrofon açılamadı."));
+        tips.push(t("Tarayıcının adres çubuğundaki kilit simgesinden kamera ve mikrofon iznini açıp testi yeniden çalıştırın."));
       }
 
       // 3) Doğrudan bağlantı
       set("network", "run");
       try {
         const r = await checkDirect();
-        if (r === "direct") set("network", "ok", "Ağınız doğrudan bağlantıya uygun.");
+        if (r === "direct") set("network", "ok", t("Ağınız doğrudan bağlantıya uygun."));
         else {
-          set("network", "warn", "Ağınız doğrudan bağlantıyı kısıtlıyor; görüşme yedek yoldan kurulacak.");
-          tips.push("Ağınız doğrudan bağlantıyı engelliyor. Görüşme yine kurulur ama kalite biraz düşebilir. VPN veya şirket/okul ağı kullanıyorsanız kapatıp kendi Wi-Fi'nize ya da mobil verinize geçin.");
+          set("network", "warn", t("Ağınız doğrudan bağlantıyı kısıtlıyor; görüşme yedek yoldan kurulacak."));
+          tips.push(t("Ağınız doğrudan bağlantıyı engelliyor. Görüşme yine kurulur ama kalite biraz düşebilir. VPN veya şirket/okul ağı kullanıyorsanız kapatıp kendi Wi-Fi'nize ya da mobil verinize geçin."));
         }
       } catch {
-        set("network", "warn", "Denetlenemedi.");
+        set("network", "warn", t("Denetlenemedi."));
       }
 
       // 4–6) Hız
@@ -175,26 +177,26 @@ export default function ConnectionTest({ onClose }: { onClose?: () => void }) {
         set("latency", "run");
         const ms = await measureLatency();
         if (ms > 300) {
-          set("latency", "warn", `${ms} ms (yüksek)`);
-          tips.push("Gecikme yüksek; görüntüde ve seste biraz geç gelme olabilir. Konuşurken birbirinizin sözünü kesmemek için kısa duraklamalar yapın.");
+          set("latency", "warn", `${ms} ms (${t("yüksek")})`);
+          tips.push(t("Gecikme yüksek; görüntüde ve seste biraz geç gelme olabilir. Konuşurken birbirinizin sözünü kesmemek için kısa duraklamalar yapın."));
         } else set("latency", "ok", `${ms} ms`);
 
         set("down", "run");
         const down = await measureDown();
         set("down", down < 1.5 ? "warn" : "ok", `${down.toFixed(1)} Mbit/sn`);
-        if (down < 1.5) tips.push("İndirme hızınız düşük; karşıdaki görüntü kısık gelebilir. Mümkünse Wi-Fi'ye yaklaşın.");
+        if (down < 1.5) tips.push(t("İndirme hızınız düşük; karşıdaki görüntü kısık gelebilir. Mümkünse Wi-Fi'ye yaklaşın."));
 
         set("up", "run");
         const up = await measureUp();
         if (up < 0.6) {
-          set("up", "warn", `${up.toFixed(1)} Mbit/sn (düşük)`);
-          tips.push("Gönderme hızınız düşük; görüntünüz terapiste kötü ulaşabilir. Görüşmede ⋮ menüsünden \"Veri tasarrufu\"nu seçin, mümkünse Wi-Fi'ye geçin ya da kamerayı kapatıp yalnızca sesle devam edin.");
+          set("up", "warn", `${up.toFixed(1)} Mbit/sn (${t("düşük")})`);
+          tips.push(t("Gönderme hızınız düşük; görüntünüz terapiste kötü ulaşabilir. Görüşmede ⋮ menüsünden \"Veri tasarrufu\"nu seçin, mümkünse Wi-Fi'ye geçin ya da kamerayı kapatıp yalnızca sesle devam edin."));
         } else set("up", "ok", `${up.toFixed(1)} Mbit/sn`);
       } catch {
         for (const id of ["latency", "down", "up"] as const) {
-          setSteps((s) => s.map((x) => (x.id === id && (x.status === "idle" || x.status === "run") ? { ...x, status: "warn", detail: "Ölçülemedi." } : x)));
+          setSteps((s) => s.map((x) => (x.id === id && (x.status === "idle" || x.status === "run") ? { ...x, status: "warn", detail: t("Ölçülemedi.") } : x)));
         }
-        tips.push("İnternet hızı ölçülemedi. Bağlantınız kesilmiş olabilir ya da bir engelleyici (VPN, reklam engelleyici) ölçümü durduruyor.");
+        tips.push(t("İnternet hızı ölçülemedi. Bağlantınız kesilmiş olabilir ya da bir engelleyici (VPN, reklam engelleyici) ölçümü durduruyor."));
       }
     } finally {
       stream?.getTracks().forEach((t) => t.stop());
@@ -212,15 +214,16 @@ export default function ConnectionTest({ onClose }: { onClose?: () => void }) {
     <div className="w-full max-w-md rounded-2xl border border-line bg-panel p-6 sm:p-8">
       <div className="mb-4 flex items-center gap-2">
         <BrandMark size={32} />
-        <span className="text-lg font-semibold">Bağlantı testi</span>
+        <span className="text-lg font-semibold">{t("Bağlantı testi")}</span>
+        <LangSwitch className="ml-2" />
         {onClose && (
-          <button onClick={onClose} className="ml-auto rounded-md p-1 text-muted hover:text-ink" aria-label="Kapat">
+          <button onClick={onClose} className="ml-auto rounded-md p-1 text-muted hover:text-ink" aria-label={t("Kapat")}>
             <X size={18} />
           </button>
         )}
       </div>
       <p className="text-sm text-muted">
-        Görüşmeden önce kameranızı, mikrofonunuzu ve internetinizi kontrol eder. Yaklaşık yarım dakika sürer; hiçbir kayıt tutulmaz.
+        {t("Görüşmeden önce kameranızı, mikrofonunuzu ve internetinizi kontrol eder. Yaklaşık yarım dakika sürer; hiçbir kayıt tutulmaz.")}
       </p>
 
       <div className="mt-4 aspect-video overflow-hidden rounded-xl border border-line bg-bg">
@@ -235,7 +238,7 @@ export default function ConnectionTest({ onClose }: { onClose?: () => void }) {
           <li key={s.id} className="flex items-start gap-2.5 text-sm">
             <span className="mt-0.5 shrink-0">{ICON[s.status]}</span>
             <span className="min-w-0">
-              <span className={cx(s.status === "idle" && "text-faint")}>{s.label}</span>
+              <span className={cx(s.status === "idle" && "text-faint")}>{t(s.label)}</span>
               {s.detail && <span className="block text-xs text-muted">{s.detail}</span>}
             </span>
           </li>
@@ -252,7 +255,7 @@ export default function ConnectionTest({ onClose }: { onClose?: () => void }) {
         >
           <div className="flex items-center gap-1.5 font-medium">
             {worst === "ok" ? <Check size={15} /> : <CircleAlert size={15} />}
-            {worst === "ok" ? "Her şey yolunda, görüşmeye hazırsınız." : worst === "warn" ? "Görüşme yapılabilir, ancak dikkat edilmesi gerekenler var." : "Görüşme için çözülmesi gereken bir sorun var."}
+            {worst === "ok" ? t("Her şey yolunda, görüşmeye hazırsınız.") : worst === "warn" ? t("Görüşme yapılabilir, ancak dikkat edilmesi gerekenler var.") : t("Görüşme için çözülmesi gereken bir sorun var.")}
           </div>
           {advice.length > 0 && (
             <ul className="mt-2 list-disc space-y-1.5 pl-5 text-xs leading-relaxed">
@@ -265,10 +268,10 @@ export default function ConnectionTest({ onClose }: { onClose?: () => void }) {
       )}
 
       <Button className="mt-5 w-full py-2.5" onClick={run} disabled={running}>
-        {running ? "Test sürüyor…" : finished ? "Testi yeniden çalıştır" : "Testi başlat"}
+        {running ? t("Test sürüyor…") : finished ? t("Testi yeniden çalıştır") : t("Testi başlat")}
       </Button>
       <p className="mt-3 text-[11px] leading-relaxed text-faint">
-        Hız ölçümü için Cloudflare'in herkese açık hız test sunucusu kullanılır; yalnızca rastgele veri gönderilip alınır, kişisel bilginiz paylaşılmaz.
+        {t("Hız ölçümü için Cloudflare'in herkese açık hız test sunucusu kullanılır; yalnızca rastgele veri gönderilip alınır, kişisel bilginiz paylaşılmaz.")}
       </p>
     </div>
   );

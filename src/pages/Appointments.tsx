@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { CalendarPlus, Check, Trash2, X } from "lucide-react";
+import { CalendarArrowDown, CalendarPlus, Check, MessageCircle, Trash2, X } from "lucide-react";
+import { save } from "@tauri-apps/plugin-dialog";
+import { shareViaWhatsApp, whatsappNumber } from "../lib/shareLink";
 import { api, errorText, type Appointment, type AppointmentStatus, type Patient } from "../lib/api";
 import { fmtDate, fmtTime, localInputValue } from "../lib/format";
 import { notifyDataChanged, useDataVersion } from "../lib/session";
@@ -19,10 +21,13 @@ export default function Appointments() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [filter, setFilter] = useState<"upcoming" | "past" | "all">("upcoming");
   const [adding, setAdding] = useState(false);
+  const [therapistName, setTherapistName] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
     api.listAppointments().then(setList);
     api.listPatients().then(setPatients);
+    api.getSettings().then((st) => setTherapistName(st.therapist_name ?? ""));
   }, [version]);
 
   const now = localInputValue(new Date());
@@ -35,6 +40,27 @@ export default function Appointments() {
     await api.setAppointmentStatus(a.id, s);
     notifyDataChanged();
   };
+  const remind = (a: Appointment) => {
+    const p = patients.find((x) => x.id === a.patient_id);
+    const text = `Merhaba ${a.patient_name}, ${fmtDate(a.appointment_date)} saat ${fmtTime(a.appointment_date)} için randevunuz var.` +
+      ` Görüşme bağlantısı seans öncesinde size ayrıca iletilecektir.${therapistName ? ` – ${therapistName}` : ""}`;
+    void shareViaWhatsApp(text, p?.phone);
+  };
+
+  // Yaklaşan randevuları takvim dosyasına (.ics) yazar; Google, Apple ve Outlook takvimi içe aktarır.
+  const exportIcs = async () => {
+    const upcoming = list.filter((a) => a.status === "scheduled" && a.appointment_date >= now);
+    if (upcoming.length === 0) return setMsg({ ok: false, text: "Aktarılacak yaklaşan randevu yok." });
+    const dest = await save({ defaultPath: "randevular.ics", filters: [{ name: "Takvim dosyası", extensions: ["ics"] }] });
+    if (!dest) return;
+    try {
+      await api.saveTextFile(dest, buildIcs(upcoming));
+      setMsg({ ok: true, text: `${upcoming.length} randevu takvim dosyasına yazıldı. Dosyayı takviminize içe aktarın (danışan adları dosyada açık yazar).` });
+    } catch (e) {
+      setMsg({ ok: false, text: errorText(e) });
+    }
+  };
+
   const remove = async (a: Appointment) => {
     await api.deleteAppointment(a.id);
     notifyDataChanged();
@@ -54,9 +80,11 @@ export default function Appointments() {
             </button>
           ))}
         </div>
+        <Button variant="subtle" onClick={() => void exportIcs()}><CalendarArrowDown size={16} /> Takvime aktar</Button>
         <Button onClick={() => setAdding(true)} disabled={patients.length === 0}><CalendarPlus size={16} /> Yeni Randevu</Button>
       </PageHeader>
 
+      {msg && <p className={`mb-4 rounded-lg px-3 py-2 text-sm ${msg.ok ? "bg-ok/10 text-ok" : "bg-danger/10 text-danger"}`}>{msg.text}</p>}
       {shown.length === 0 ? (
         <Empty text="Bu görünümde randevu yok." />
       ) : (
@@ -72,6 +100,14 @@ export default function Appointments() {
                 <div className="flex justify-end gap-1">
                   {a.status === "scheduled" && (
                     <>
+                      <Button
+                        variant="ghost"
+                        className="p-2 hover:text-ok"
+                        title={whatsappNumber(patients.find((x) => x.id === a.patient_id)?.phone) ? "WhatsApp'tan hatırlat" : "WhatsApp'ta hatırlat (numara kayıtlı değil, kişiyi siz seçersiniz)"}
+                        onClick={() => remind(a)}
+                      >
+                        <MessageCircle size={16} />
+                      </Button>
                       <Button variant="ghost" className="p-2 hover:text-ok" title="Tamamlandı" onClick={() => setStatus(a, "completed")}><Check size={16} /></Button>
                       <Button variant="ghost" className="p-2" title="İptal et" onClick={() => setStatus(a, "cancelled")}><X size={16} /></Button>
                     </>
@@ -136,4 +172,28 @@ function AppointmentForm({ patients, onClose }: { patients: Patient[]; onClose: 
       </form>
     </Modal>
   );
+}
+
+const pad = (n: number) => String(n).padStart(2, "0");
+const icsLocal = (d: Date) => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+const icsText = (t: string) => t.replace(/\\/g, "\\\\").replace(/[,;]/g, (m) => "\\" + m).replace(/\r?\n/g, "\\n");
+
+function buildIcs(list: Appointment[]): string {
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Mavi Ruh//Randevular//TR", "CALSCALE:GREGORIAN"];
+  for (const a of list) {
+    const start = new Date(a.appointment_date);
+    const end = new Date(start.getTime() + a.duration_minutes * 60_000);
+    lines.push(
+      "BEGIN:VEVENT",
+      `UID:${a.id}@maviruh`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART:${icsLocal(start)}`,
+      `DTEND:${icsLocal(end)}`,
+      `SUMMARY:${icsText(`Seans: ${a.patient_name}`)}`,
+      "END:VEVENT",
+    );
+  }
+  lines.push("END:VCALENDAR");
+  return lines.join("\r\n") + "\r\n";
 }

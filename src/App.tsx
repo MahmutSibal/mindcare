@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useBackClose, useBackGuard } from "./lib/backStack";
 import {
-  CalendarDays, ClipboardList, FolderOpen, Home, LockKeyhole, Menu, NotebookTabs, Settings as SettingsIcon, Users, UsersRound,
+  CalendarDays, ClipboardList, FolderOpen, Home, LockKeyhole, Menu, NotebookTabs, Settings as SettingsIcon, Users, UsersRound, Wallet,
 } from "lucide-react";
-import { api, errorText, RECOVERY_CONFIRMED_KEY, type AppStatus } from "./lib/api";
+import { api, errorText, RECOVERY_CONFIRMED_KEY, type Appointment, type AppStatus } from "./lib/api";
 import { BRAND_NAME } from "./lib/brand";
 import BrandMark from "./components/BrandMark";
 import { notifyDataChanged, SessionProvider, useActiveSession, useDataVersion } from "./lib/session";
@@ -17,14 +17,18 @@ import Sessions from "./pages/Sessions";
 import Materials from "./pages/Materials";
 import Tests from "./pages/Tests";
 import Settings from "./pages/Settings";
+import Billing from "./pages/Billing";
+import AppLock from "./components/AppLock";
+import UpdateBanner from "./components/UpdateBanner";
 
-export type Page = "home" | "groups" | "patients" | "appointments" | "sessions" | "materials" | "tests" | "settings";
+export type Page = "home" | "groups" | "patients" | "appointments" | "billing" | "sessions" | "materials" | "tests" | "settings";
 
 const NAV: { id: Page; label: string; icon: typeof Home }[] = [
   { id: "home", label: "Ana Sayfa", icon: Home },
   { id: "patients", label: "Danışanlar", icon: Users },
   { id: "groups", label: "Gruplar", icon: UsersRound },
   { id: "appointments", label: "Randevular", icon: CalendarDays },
+  { id: "billing", label: "Ücretler", icon: Wallet },
   { id: "sessions", label: "Seanslar", icon: NotebookTabs },
   { id: "materials", label: "Materyaller", icon: FolderOpen },
   { id: "tests", label: "Testler", icon: ClipboardList },
@@ -50,11 +54,68 @@ export default function App() {
   );
 }
 
+/** İlk açılışta bir kez: ad ve unvan sorulur. "Şimdilik geç" de bir daha sormaz. */
+function WelcomeProfile({ onDone }: { onDone: () => void }) {
+  const [name, setName] = useState("");
+  const [title, setTitle] = useState("");
+  const [busy, setBusy] = useState(false);
+  const finish = async (save: boolean) => {
+    setBusy(true);
+    try {
+      if (save && name.trim()) {
+        await api.setSetting("therapist_name", name.trim());
+        await api.setSetting("therapist_title", title.trim());
+      }
+      await api.setSetting("onboarding_done", "1");
+    } finally {
+      onDone();
+    }
+  };
+  const cls = "w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm outline-none focus:border-accent";
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-6">
+      <div className="w-full max-w-md rounded-2xl border border-line bg-panel p-6 shadow-2xl">
+        <h2 className="text-lg font-semibold">Hoş geldiniz</h2>
+        <p className="mt-1 text-sm text-muted">
+          Danışanlarınız görüşmeye katılırken bu adı görür. İstediğiniz zaman Ayarlar'dan değiştirebilirsiniz.
+        </p>
+        <label className="mt-4 block text-xs text-muted">Ad Soyad
+          <input className={cls + " mt-1"} value={name} onChange={(e) => setName(e.target.value)} placeholder="Örn: Ayşe Yılmaz" autoFocus />
+        </label>
+        <label className="mt-3 block text-xs text-muted">Unvan (isteğe bağlı)
+          <input className={cls + " mt-1"} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Klinik Psikolog" />
+        </label>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => void finish(false)} disabled={busy}>Şimdilik geç</Button>
+          <Button onClick={() => void finish(true)} disabled={busy || !name.trim()}>Başla</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Son yedek yoksa ya da 30 günden eskiyse hatırlat. */
+function backupOverdue(last: string | null): boolean {
+  if (!last) return true;
+  const t = Date.parse(last);
+  return Number.isNaN(t) || Date.now() - t > 30 * 24 * 3600 * 1000;
+}
+
 function Shell() {
   const [page, setPage] = useState<Page>("home");
   const [patientId, setPatientId] = useState<string | null>(null);
   const [therapist, setTherapist] = useState({ name: "", title: "" });
   const [askRecovery, setAskRecovery] = useState(false);
+  const [askProfile, setAskProfile] = useState(false);
+  const [locked, setLocked] = useState(false);
+  const [lockEnabled, setLockEnabled] = useState(false);
+  const [lastBackup, setLastBackup] = useState<string | null | undefined>(undefined);
+  const [hasPatients, setHasPatients] = useState(false);
+  const [backupDismissed, setBackupDismissed] = useState(false);
+  const [due, setDue] = useState<Appointment | null>(null);
+  const [dueDismissed, setDueDismissed] = useState<string[]>([]);
+  const lastActive = useRef(Date.now());
+  const firstLoad = useRef(true);
   const [backHint, setBackHint] = useState(false);
   const pageRef = useRef(page);
   pageRef.current = page;
@@ -68,15 +129,59 @@ function Shell() {
     setTimeout(() => setBackHint(false), 2500);
   });
   const { session } = useActiveSession();
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
   const version = useDataVersion();
 
   useEffect(() => {
-    api.getSettings().then((s) => setTherapist({ name: s.therapist_name ?? "", title: s.therapist_title ?? "" }));
+    api.getSettings().then((s) => {
+      setTherapist({ name: s.therapist_name ?? "", title: s.therapist_title ?? "" });
+      const enabled = s.app_lock_set === "1";
+      setLockEnabled(enabled);
+      if (firstLoad.current) setLocked(enabled);
+      firstLoad.current = false;
+      setLastBackup(s.last_backup_at ?? null);
+    });
+    api.listPatients().then((l) => setHasPatients(l.length > 0));
+  }, [version]);
+
+  // Uygulama kilidi: 5 dakika hareketsizlikte kilitlenir (seans sürerken kilitlenmez).
+  useEffect(() => {
+    const touch = () => { lastActive.current = Date.now(); };
+    const events = ["pointerdown", "keydown", "mousemove", "touchstart"] as const;
+    events.forEach((e) => window.addEventListener(e, touch));
+    const t = setInterval(() => {
+      if (lockEnabled && !sessionRef.current && Date.now() - lastActive.current > 5 * 60_000) setLocked(true);
+    }, 15_000);
+    return () => {
+      events.forEach((e) => window.removeEventListener(e, touch));
+      clearInterval(t);
+    };
+  }, [lockEnabled]);
+
+  // Randevu saati gelince (5 dk önce - 10 dk sonra) "seansı başlat" önerisi.
+  useEffect(() => {
+    const check = () => {
+      api.listAppointments().then((list) => {
+        const now = Date.now();
+        const hit = list.find((a) => {
+          const d = new Date(a.appointment_date).getTime();
+          return a.status === "scheduled" && d - now <= 5 * 60_000 && now - d <= 10 * 60_000;
+        });
+        setDue(hit ?? null);
+      }).catch(() => {});
+    };
+    check();
+    const t = setInterval(check, 30_000);
+    return () => clearInterval(t);
   }, [version]);
 
   // Kurtarma anahtarı doğrulanana kadar her açılışta bir kez hatırlatılır.
   useEffect(() => {
-    api.getSettings().then((s) => setAskRecovery(!s[RECOVERY_CONFIRMED_KEY]));
+    api.getSettings().then((s) => {
+      setAskRecovery(!s[RECOVERY_CONFIRMED_KEY]);
+      setAskProfile(!s.onboarding_done && !(s.therapist_name ?? "").trim());
+    });
   }, []);
 
   const openPatient = (id: string) => {
@@ -116,15 +221,17 @@ function Shell() {
         </div>
         <button
           onClick={() => setPage("settings")}
-          title={therapist.name || "Profil"}
+          title={therapist.name || "Ayarlar"}
           className="flex items-center justify-center gap-3 border-t border-line px-2 py-4 text-left hover:bg-card xl:justify-start xl:px-4"
         >
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-card text-sm font-medium text-accent">
-            {(therapist.name || "?").slice(0, 1).toLocaleUpperCase("tr-TR")}
+            {therapist.name ? therapist.name.slice(0, 1).toLocaleUpperCase("tr-TR") : <SettingsIcon size={16} />}
           </div>
           <div className="hidden min-w-0 xl:block">
-            <div className="truncate text-sm">{therapist.name || "Profil ayarla"}</div>
-            <div className="truncate text-xs text-faint">{therapist.title || "Ayarlar'dan düzenleyin"}</div>
+            <div className="truncate text-sm">{therapist.name || "Ayarlar"}</div>
+            {(therapist.title || !therapist.name) && (
+              <div className="truncate text-xs text-faint">{therapist.title || "Adınızı ekleyin"}</div>
+            )}
           </div>
         </button>
       </aside>
@@ -140,6 +247,7 @@ function Shell() {
         </div>
         {page === "patients" && <Patients onOpen={openPatient} />}
         {page === "appointments" && <Appointments />}
+        {page === "billing" && <Billing />}
         {page === "sessions" && <Sessions onOpenPatient={openPatient} />}
         {page === "materials" && <Materials />}
         {page === "tests" && <Tests />}
@@ -153,7 +261,34 @@ function Shell() {
         </div>
       )}
 
-      {askRecovery && (
+      {(due && !dueDismissed.includes(due.id)) || (hasPatients && !backupDismissed && lastBackup !== undefined && backupOverdue(lastBackup)) ? (
+        <div className="fixed inset-x-0 top-3 z-[65] mx-auto flex w-fit max-w-[92%] flex-col gap-2">
+          {due && !dueDismissed.includes(due.id) && (
+            <div className="flex items-center gap-3 rounded-lg border border-accent/40 bg-panel px-4 py-2.5 text-sm shadow-lg">
+              <span><b>{due.patient_name}</b> ile randevu saati geldi.</span>
+              <Button className="py-1" onClick={() => { setDueDismissed((d) => [...d, due.id]); openPatient(due.patient_id); }}>Seansı başlat</Button>
+              <button className="text-xs text-muted hover:text-ink" onClick={() => setDueDismissed((d) => [...d, due.id])}>Kapat</button>
+            </div>
+          )}
+          {hasPatients && !backupDismissed && lastBackup !== undefined && backupOverdue(lastBackup) && (
+            <div className="flex items-center gap-3 rounded-lg border border-warn/40 bg-panel px-4 py-2.5 text-sm shadow-lg">
+              <span>{lastBackup ? "Son yedeğinizin üzerinden 30 günden fazla geçti." : "Henüz yedek almadınız."}</span>
+              <Button className="py-1" variant="subtle" onClick={() => { setBackupDismissed(true); setPage("settings"); }}>Yedek al</Button>
+              <button className="text-xs text-muted hover:text-ink" onClick={() => setBackupDismissed(true)}>Sonra</button>
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      <UpdateBanner sessionActive={!!session} />
+
+      {locked && <AppLock onUnlock={() => { lastActive.current = Date.now(); setLocked(false); }} />}
+
+      {askProfile && !locked && (
+        <WelcomeProfile onDone={() => { setAskProfile(false); notifyDataChanged(); }} />
+      )}
+
+      {askRecovery && !askProfile && !locked && (
         <RecoveryKeyDialog
           onClose={() => setAskRecovery(false)}
           onConfirmed={() => {

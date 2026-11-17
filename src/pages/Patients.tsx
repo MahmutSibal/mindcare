@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { PencilLine, Search, Trash2, UserPlus } from "lucide-react";
+import { FileDown, PencilLine, Search, Trash2, UserPlus } from "lucide-react";
+import { save } from "@tauri-apps/plugin-dialog";
 import { api, errorText, type Patient } from "../lib/api";
 import { age, fmtDate, fmtDateTime, initials } from "../lib/format";
 import { notifyDataChanged, useActiveSession, useDataVersion } from "../lib/session";
@@ -15,6 +16,7 @@ export default function Patients({ onOpen }: { onOpen: (id: string) => void }) {
   const [edit, setEdit] = useState<Patient | null | "new">(null);
   const [del, setDel] = useState<Patient | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     api.listPatients().then(setList);
@@ -35,6 +37,19 @@ export default function Patients({ onOpen }: { onOpen: (id: string) => void }) {
     }
   };
 
+  const exportData = async (p: Patient) => {
+    const safe = p.full_name.replace(/[^\p{L}\p{N}]+/gu, "-").slice(0, 40);
+    const dest = await save({ defaultPath: `${safe}-kayit.html`, filters: [{ name: "Danışan kaydı (HTML)", extensions: ["html"] }] });
+    if (!dest) return;
+    try {
+      await api.exportPatientData(p.id, dest);
+      setError(null);
+      setNotice(`Kayıt dışa aktarıldı: ${dest}. Dosyayı tarayıcıda açıp Yazdır → PDF olarak kaydet ile PDF'e çevirebilirsiniz. Dosya şifresizdir; güvenle saklayın.`);
+    } catch (e) {
+      setError(errorText(e));
+    }
+  };
+
   return (
     <div className="h-full overflow-y-auto p-4 md:p-8">
       <PageHeader title="Danışanlar" subtitle={`${list.length} kayıtlı danışan`}>
@@ -44,6 +59,8 @@ export default function Patients({ onOpen }: { onOpen: (id: string) => void }) {
         </div>
         <Button onClick={() => setEdit("new")}><UserPlus size={16} /> Yeni Danışan</Button>
       </PageHeader>
+      {notice && <p className="mb-4 rounded-lg bg-ok/10 px-3 py-2 text-sm text-ok">{notice}</p>}
+      {error && !del && <p className="mb-4 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
 
       {filtered.length === 0 ? (
         <Empty text={q ? "Eşleşen danışan yok." : "Henüz danışan eklenmedi."} />
@@ -70,6 +87,7 @@ export default function Patients({ onOpen }: { onOpen: (id: string) => void }) {
               </td>
               <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                 <div className="flex justify-end gap-1">
+                  <Button variant="ghost" className="p-2" onClick={() => void exportData(p)} title="Tüm kaydı dışa aktar (HTML → PDF)"><FileDown size={16} /></Button>
                   <Button variant="ghost" className="p-2" onClick={() => setEdit(p)} title="Düzenle"><PencilLine size={16} /></Button>
                   <Button
                     variant="ghost"

@@ -224,6 +224,21 @@ const MIGRATIONS: &[&str] = &[
         FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
     );
     "#,
+    // 9 — Ücret takibi: danışan başına seans ücreti ve borç/ödeme defteri (tutarlar kuruş cinsinden).
+    r#"
+    ALTER TABLE patients ADD COLUMN session_fee_cents INTEGER;
+    CREATE TABLE ledger (
+        id TEXT PRIMARY KEY,
+        patient_id TEXT NOT NULL,
+        kind TEXT NOT NULL CHECK (kind IN ('charge','payment')),
+        amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+        entry_date TEXT NOT NULL,
+        note TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+    );
+    CREATE INDEX idx_ledger_patient ON ledger(patient_id, entry_date DESC);
+    "#,
 ];
 
 fn apply_key(conn: &Connection, key: &Zeroizing<String>) -> AppResult<()> {

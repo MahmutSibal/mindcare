@@ -1,6 +1,7 @@
 // Danışan tarafı: terapiste dosya gönderme (fotoğraf, belge, ses). Dosya şifreli veri kanalından
 // parça parça gider; danışan sayfası hiçbir yere kaydetmez. Terapist kaydedince onay döner.
 
+import { t } from "./i18n";
 import { useCallback, useRef, useState } from "react";
 import { Check, Paperclip, X } from "lucide-react";
 import type { ChannelMessage } from "../src/lib/rtc";
@@ -22,9 +23,9 @@ export function useUpload(getCall: () => { sendBuffered: (m: ChannelMessage) => 
       const call = getCall();
       const mime = uploadMimeFor(file);
       const fail = (error: string) => setState({ name: file.name, progress: 0, status: "failed", error });
-      if (!call) return fail("Görüşme bağlı değil.");
-      if (!mime) return fail("Bu dosya türü gönderilemez. Fotoğraf, PDF, metin, Word belgesi veya ses dosyası seçin.");
-      if (file.size === 0) return fail("Dosya boş.");
+      if (!call) return fail(t("Görüşme bağlı değil."));
+      if (!mime) return fail(t("Bu dosya türü gönderilemez. Fotoğraf, PDF, metin, Word belgesi veya ses dosyası seçin."));
+      if (file.size === 0) return fail(t("Dosya boş."));
       if (file.size > MAX_FILE_SHARE_BYTES) {
         return fail(`Dosya ${fmtBytes(file.size)}; en fazla ${fmtBytes(MAX_FILE_SHARE_BYTES)} gönderilebilir.`);
       }
@@ -34,7 +35,7 @@ export function useUpload(getCall: () => { sendBuffered: (m: ChannelMessage) => 
       try {
         const bytes = new Uint8Array(await file.arrayBuffer());
         const lost = () => {
-          throw new Error("Bağlantı kesildi; dosya gönderilemedi.");
+          throw new Error(t("Bağlantı kesildi; dosya gönderilemedi."));
         };
         if (!(await call.sendBuffered({ type: "upload_start", id, name: file.name, mime, size: bytes.byteLength }))) lost();
         let last = 0;
@@ -64,7 +65,7 @@ export function useUpload(getCall: () => { sendBuffered: (m: ChannelMessage) => 
     if (m.type !== "upload_result") return false;
     if (m.id !== activeId.current) return true;
     setState((s) =>
-      s ? (m.ok ? { ...s, progress: 1, status: "done" } : { ...s, status: "failed", error: m.error || "Terapist dosyayı alamadı." }) : s,
+      s ? (m.ok ? { ...s, progress: 1, status: "done" } : { ...s, status: "failed", error: m.error || t("Terapist dosyayı alamadı.") }) : s,
     );
     return true;
   }, []);
@@ -100,7 +101,7 @@ export function UploadSection({ upload }: { upload: ReturnType<typeof useUpload>
         disabled={busy}
         className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-line bg-card text-sm text-ink hover:bg-line disabled:opacity-50"
       >
-        <Paperclip size={16} /> Terapiste dosya gönder
+        <Paperclip size={16} /> {t("Terapiste dosya gönder")}
       </button>
       {s && (
         <div className="mt-2 text-xs" role="status">
@@ -110,7 +111,7 @@ export function UploadSection({ upload }: { upload: ReturnType<typeof useUpload>
             <span className="min-w-0 flex-1 truncate">{s.name}</span>
             {!busy && (
               <button onClick={upload.dismiss} className="text-muted underline">
-                Tamam
+                {t("Tamam")}
               </button>
             )}
           </div>
@@ -120,9 +121,9 @@ export function UploadSection({ upload }: { upload: ReturnType<typeof useUpload>
             </div>
           )}
           <p className={s.status === "failed" ? "mt-1 text-danger" : "mt-1 text-muted"}>
-            {s.status === "sending" && `Gönderiliyor… %${Math.round(s.progress * 100)}`}
-            {s.status === "waiting" && "Terapistin onayı bekleniyor…"}
-            {s.status === "done" && "Terapiste ulaştı."}
+            {s.status === "sending" && `${t("Gönderiliyor…")} %${Math.round(s.progress * 100)}`}
+            {s.status === "waiting" && t("Terapistin onayı bekleniyor…")}
+            {s.status === "done" && t("Terapiste ulaştı.")}
             {s.status === "failed" && s.error}
           </p>
         </div>

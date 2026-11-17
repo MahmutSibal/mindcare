@@ -1,13 +1,16 @@
 {
   "name": "mindcare",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "bump": "node scripts/bump-version.mjs",
+    "build:win": "node scripts/build-win.mjs",
+    "build:android": "node scripts/bump-version.mjs && tauri android build --target aarch64 --apk",
     "patient:dev": "vite --config vite.patient.config.ts",
     "patient:build": "tsc && vite build --config vite.patient.config.ts"
   },
@@ -16,6 +19,8 @@
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2.8.4",
     "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.14.1",
     "@tiptap/pm": "^3.33.0",
     "@tiptap/react": "^3.33.0",
     "@tiptap/starter-kit": "^3.33.0",

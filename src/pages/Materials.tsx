@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { openPath } from "@tauri-apps/plugin-opener";
 import { ExternalLink, FilePlus2, Link2, Quote, Trash2 } from "lucide-react";
 import { httpsUrl, isWebLink, parseYouTube } from "../lib/share";
 import { api, errorText, type Material, type MaterialCategory } from "../lib/api";
@@ -61,7 +60,7 @@ export default function Materials() {
   const openFile = async (m: Material) => {
     setError(null);
     try {
-      await openPath(m.file_path);
+      await api.openMaterial(m.id);
     } catch {
       setError(`Dosya açılamadı: ${m.file_path}`);
     }

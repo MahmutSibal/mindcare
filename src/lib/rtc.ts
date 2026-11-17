@@ -125,6 +125,20 @@ export interface CallHandlers {
 
 // Veri kanalı mesajları. Kanal iki uç arasında DTLS ile şifrelidir ve sunucudan geçmez
 // (TURN kullanılsa bile aktarıcı içeriği okuyamaz).
+/** Veri kanalından gelen ham metni doğrular: nesne olmalı, `type` metin olmalı, boyut sınırlı (parça 16 KB). */
+export function parseChannelMessage(raw: unknown): ChannelMessage | null {
+  if (typeof raw !== "string" || raw.length > 256 * 1024) return null;
+  try {
+    const m: unknown = JSON.parse(raw);
+    if (m && typeof m === "object" && !Array.isArray(m) && typeof (m as { type?: unknown }).type === "string") {
+      return m as ChannelMessage;
+    }
+  } catch {
+    /* geçersiz */
+  }
+  return null;
+}
+
 export type ChannelMessage =
   | { type: "text"; text: string }
   | { type: "material"; title: string; category: string }
@@ -152,6 +166,8 @@ export type ChannelMessage =
   // Terapist → danışan: görüntüde ekran paylaşımı veya materyal videosu var mı. Danışan sayfası
   // bu durumda görüntüyü kırpmadan sığdırır (yatay ekran dikey telefonda yarım görünmesin).
   | { type: "content_share"; active: boolean }
+  // Danışan → terapist: randevu talebi (yalnızca görüşme sırasında, veri kanalıyla; hiçbir sunucuya yazılmaz).
+  | { type: "appointment_request"; date: string; time: string; note: string }
   // Danışan → terapist: danışan katılırken çevrim içi görüşme onamını işaretledi.
   | { type: "consent" }
   // Danışan → terapist: gösterilen videonun (YouTube) danışandaki durumu.
@@ -541,11 +557,8 @@ export class Call {
 
   private wireDataChannel(dc: RTCDataChannel) {
     dc.onmessage = (e) => {
-      try {
-        this.h.onMessage?.(JSON.parse(e.data) as ChannelMessage);
-      } catch {
-        /* yok say */
-      }
+      const m = parseChannelMessage(e.data);
+      if (m) this.h.onMessage?.(m);
     };
   }
 

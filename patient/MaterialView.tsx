@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, ExternalLink, FileText, Play, Quote, X } from "lucide-react";
+import { t } from "./i18n";
 import type { ChannelMessage, MediaState } from "../src/lib/rtc";
 import { fmtBytes, fromBase64, httpsUrl, isPdf, isSafeImage, MAX_FILE_SHARE_BYTES, parseYouTube } from "../src/lib/share";
 import { Button } from "../src/components/ui";
@@ -231,13 +232,13 @@ function YouTubeEmbed({ id, title, videoId, start, closeBtn, control, onMediaSta
           referrerPolicy="strict-origin-when-cross-origin"
         />
         <div className="flex items-center gap-3 text-xs text-white/80">
-          <span role="status">{MEDIA_TEXT[state]}</span>
+          <span role="status">{t(MEDIA_TEXT[state])}</span>
           {state !== "playing" && (
             <button
               onClick={() => command("playVideo")}
               className="flex items-center gap-1.5 rounded-lg bg-accent-strong px-4 py-2 text-sm font-medium text-white"
             >
-              <Play size={15} /> Videoyu başlat
+              <Play size={15} /> {t("Videoyu başlat")}
             </button>
           )}
         </div>
@@ -287,9 +288,9 @@ export default function MaterialView({ item, onClose, control, onMediaState }: {
           <span className="flex-1 truncate font-medium">{item.title}</span>
           {closeBtn}
         </div>
-        <p className="mb-3 break-all text-xs text-muted">Terapistiniz bir bağlantı paylaştı: {new URL(item.link).hostname}</p>
+        <p className="mb-3 break-all text-xs text-muted">{t("Terapistiniz bir bağlantı paylaştı:")} {new URL(item.link).hostname}</p>
         <Button variant="outline" className="w-full py-1.5 text-xs" onClick={() => window.open(item.link, "_blank", "noopener,noreferrer")}>
-          <ExternalLink size={14} /> Bağlantıyı yeni sekmede aç
+          <ExternalLink size={14} /> {t("Bağlantıyı yeni sekmede aç")}
         </Button>
       </div>
     );
@@ -298,7 +299,7 @@ export default function MaterialView({ item, onClose, control, onMediaState }: {
   if (!item.url && item.kind !== "quote") {
     return (
       <div className="absolute left-1/2 top-16 z-20 w-[min(90%,360px)] -translate-x-1/2 rounded-xl border border-line bg-panel p-4 shadow-2xl">
-        <div className="mb-2 text-sm">Terapistiniz bir materyal paylaşıyor: <b>{item.title}</b></div>
+        <div className="mb-2 text-sm">{t("Terapistiniz bir materyal paylaşıyor:")} <b>{item.title}</b></div>
         <div className="h-2 overflow-hidden rounded-full bg-card">
           <div className="h-full bg-accent transition-all" style={{ width: `${Math.round(item.progress * 100)}%` }} />
         </div>
@@ -312,7 +313,7 @@ export default function MaterialView({ item, onClose, control, onMediaState }: {
       <div className="absolute inset-0 z-20 flex flex-col bg-black/95">
         <div className="flex items-center gap-2 px-3 py-2">
           <span className="flex-1 truncate text-sm text-white">{item.title}</span>
-          <button onClick={() => void save()} className="rounded-md p-1.5 text-muted hover:bg-card hover:text-ink" aria-label="İndir">
+          <button onClick={() => void save()} className="rounded-md p-1.5 text-muted hover:bg-card hover:text-ink" aria-label={t("İndir")}>
             <Download size={18} />
           </button>
           {closeBtn}
@@ -343,15 +344,15 @@ export default function MaterialView({ item, onClose, control, onMediaState }: {
         <span className="flex-1 truncate font-medium">{item.title}</span>
         {closeBtn}
       </div>
-      <p className="mb-3 text-xs text-muted">Terapistiniz bir belge paylaştı • {fmtBytes(item.size)}</p>
+      <p className="mb-3 text-xs text-muted">{t("Terapistiniz bir belge paylaştı")} • {fmtBytes(item.size)}</p>
       <div className="flex gap-2">
         {isPdf(item.mime) && (
           <Button variant="outline" className="flex-1 py-1.5 text-xs" onClick={() => window.open(item.url, "_blank", "noopener")}>
-            <ExternalLink size={14} /> Aç
+            <ExternalLink size={14} /> {t("Aç")}
           </Button>
         )}
         <Button variant="outline" className="flex-1 py-1.5 text-xs" onClick={() => void save()}>
-          <Download size={14} /> İndir
+          <Download size={14} /> {t("İndir")}
         </Button>
       </div>
     </div>

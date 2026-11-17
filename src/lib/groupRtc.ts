@@ -9,7 +9,7 @@
 //    terapist diğer danışanlara iletir; böylece herkes aynı tuvali görür.
 //  - Bağlantı sayısı arttıkça kişi başına video bit hızı düşürülür (yükleme hızı sınırlıdır).
 
-import { ensureSignedIn, randomToken, sha256Hex, supabase, buildIceServers, type CallState, type ChannelMessage, type JoinResult } from "./rtc";
+import { ensureSignedIn, randomToken, sha256Hex, supabase, buildIceServers, type CallState, type ChannelMessage, parseChannelMessage, type JoinResult } from "./rtc";
 
 // ───────────────────────────── Oda yönetimi ─────────────────────────────
 
@@ -350,12 +350,8 @@ export class GroupCall {
 
   private wireChannel(link: Link, ch: RTCDataChannel) {
     ch.onmessage = (ev) => {
-      let m: ChannelMessage;
-      try {
-        m = JSON.parse(ev.data) as ChannelMessage;
-      } catch {
-        return;
-      }
+      const m = parseChannelMessage(ev.data);
+      if (!m) return;
       this.h.onMessage?.(m, link.id);
       // Tuval herkes için ortak: terapist, bir danışandan geleni diğer danışanlara iletir.
       if (this.role === "host" && m.type.startsWith("board_")) this.sendMessage(m, undefined, link.id);

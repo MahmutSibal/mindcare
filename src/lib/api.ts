@@ -283,6 +283,7 @@ export const api = {
   deleteMaterial: (id: string) => invoke<void>("delete_material", { id }),
   /** Kütüphanedeki materyal dosyasının ham içeriği. */
   readMaterial: (id: string) => invoke<ArrayBuffer>("read_material", { id }),
+  openMaterial: (id: string) => invoke<void>("open_material", { id }),
 
   listTests: () => invoke<Test[]>("list_tests"),
   saveTest: (id: string | null, input: { title: string; instructions?: string; definition_json: string }) =>
@@ -320,12 +321,41 @@ export const api = {
   backupDatabase: (dest: string) => invoke<void>("backup_database", { dest }),
   restoreDatabase: (src: string) => invoke<void>("restore_database", { src }),
 
+  verifyAppPin: (pin: string) => invoke<boolean>("verify_app_pin", { pin }),
+  setAppPin: (pin: string, current?: string) => invoke<void>("set_app_pin", { pin, current: current ?? null }),
+  clearAppPin: (pin: string) => invoke<void>("clear_app_pin", { pin }),
+
+  billingSummary: () => invoke<BillingRow[]>("billing_summary"),
+  listLedger: (patientId: string) => invoke<LedgerEntry[]>("list_ledger", { patientId }),
+  addLedgerEntry: (input: { patient_id: string; kind: "charge" | "payment"; amount_cents: number; entry_date: string; note?: string }) =>
+    invoke<string>("add_ledger_entry", { input }),
+  deleteLedgerEntry: (id: string) => invoke<void>("delete_ledger_entry", { id }),
+  setPatientFee: (patientId: string, feeCents: number | null) => invoke<void>("set_patient_fee", { patientId, feeCents }),
+
+  saveTextFile: (dest: string, content: string) => invoke<void>("save_text_file", { dest, content }),
+  exportPatientData: (patientId: string, dest: string) => invoke<void>("export_patient_data", { patientId, dest }),
+
   getRecoveryKey: () => invoke<string>("get_recovery_key"),
   confirmRecoveryKey: (input: string) => invoke<void>("confirm_recovery_key", { input }),
   unlockWithRecoveryKey: (recoveryKey: string) => invoke<void>("unlock_with_recovery_key", { recoveryKey }),
   restoreWithRecoveryKey: (src: string, recoveryKey: string) =>
     invoke<void>("restore_with_recovery_key", { src, recoveryKey }),
 };
+
+export interface LedgerEntry {
+  id: string;
+  kind: "charge" | "payment";
+  amount_cents: number;
+  entry_date: string;
+  note: string | null;
+}
+export interface BillingRow {
+  patient_id: string;
+  patient_name: string;
+  session_fee_cents: number | null;
+  charged_cents: number;
+  paid_cents: number;
+}
 
 /** Ayarlar tablosunda kurtarma anahtarının doğrulandığı zamanı tutan anahtar. */
 export const RECOVERY_CONFIRMED_KEY = "recovery_key_confirmed_at";
