@@ -70,5 +70,11 @@ npm run patient:build      # danışan istemcisi → dist-patient/ (HTTPS üzeri
 
 ## Marka
 Görünen ad `src/lib/brand.ts` içindedir (`BRAND_NAME`). Teknik adlar (`com.mindcare.desktop` kimliği, `mindcare.db`, anahtar deposu
-adı) bilerek değiştirilmedi: değişirse uygulama mevcut şifreli veritabanını bulamaz. Logo gelince `npx tauri icon <logo.png>` ile
-masaüstü ve Android simgeleri yeniden üretilir; ekrandaki küçük simge `HeartHandshake` yerine logo ile değiştirilir.
+adı) bilerek değiştirilmedi: değişirse uygulama mevcut şifreli veritabanını bulamaz. Logo `logo/logo.jpeg` (müşterinin dosyası);
+uygulama simgeleri `npx tauri icon logo/mavi-ruh-simge-1024.png` ile üretilir.
+
+## Daha fazlası
+- **[DEVREDEME.md](DEVREDEME.md)**: geliştirici devir teslim belgesi (mimari, hesaplar, tuzaklar, eksikler). Önce bunu okuyun.
+- **[YAYIN.md](YAYIN.md)**: Play Store ve Windows yayın rehberi, mağaza metinleri.
+- **[supabase/README.md](supabase/README.md)**: sinyalleşme sunucusu ve güvenlik modeli.
+- `scripts/`: Android derleme ortamı ve OpenSSL derleme betiği.
