@@ -24,6 +24,7 @@ import BrandMark from "../src/components/BrandMark";
 import ConnectionTest from "./ConnectionTest";
 import { LangSwitch, t, useLang } from "./i18n";
 import AppointmentRequest from "./AppointmentRequest";
+import RecordingNotice from "./RecordingNotice";
 
 type Phase = "invalid" | "consent" | "joining" | "rejected" | "call" | "left";
 
@@ -139,6 +140,8 @@ export default function PatientApp() {
   const [test, setTest] = useState<Extract<ChannelMessage, { type: "test" }> | null>(null);
   const [homework, setHomework] = useState<HomeworkMessage[]>([]);
   const [homeworkOpen, setHomeworkOpen] = useState(false);
+  const [recAsk, setRecAsk] = useState(false);
+  const [recActive, setRecActive] = useState(false);
   const callRef = useRef<Call | null>(null);
   // Gösterilen videonun durumu terapiste bildirilir (ne izlendiğini görebilsin).
   const reportMedia = useCallback((id: string, s: MediaReport) => {
@@ -281,6 +284,15 @@ export default function PatientApp() {
             }
             return;
           }
+          if (m.type === "record_request") {
+            setRecAsk(true);
+            return;
+          }
+          if (m.type === "record_state") {
+            setRecActive(m.active === true);
+            if (m.active !== true) setRecAsk(false);
+            return;
+          }
           if (m.type === "test_cancel") {
             setTest((t) => (t?.requestId === m.requestId ? null : t));
             return;
@@ -379,6 +391,15 @@ export default function PatientApp() {
             {camOn ? <VideoEl key={facing} stream={local} muted mirrored={facing === "user"} /> : <div className="flex h-full items-center justify-center text-faint"><VideoOff /></div>}
           </div>
           <ConnectionBadge state={state} stats={stats} />
+          <RecordingNotice
+            ask={recAsk}
+            active={recActive}
+            onAnswer={(ok) => {
+              callRef.current?.sendMessage({ type: "record_response", accepted: ok });
+              setRecAsk(false);
+            }}
+            onStop={() => callRef.current?.sendMessage({ type: "record_stop" })}
+          />
           {remote && contentShare && (
             <div className="absolute inset-x-0 bottom-36 z-10 flex flex-col items-center gap-2 px-4 sm:bottom-6">
               {portrait && (
@@ -499,7 +520,7 @@ export default function PatientApp() {
           <>
             <h1 className="text-xl font-semibold">{t("Görüşmeye katıl")}</h1>
             <p className="mt-2 text-sm text-muted">
-              {t("Görüşme uçtan uca şifrelenir ve kaydedilmez. Katılmak için kamera ve mikrofon izni vermeniz gerekir.")}
+              {t("Görüşme uçtan uca şifrelenir; siz ayrıca izin vermedikçe kaydedilmez. Katılmak için kamera ve mikrofon izni vermeniz gerekir.")}
             </p>
             <div className="mt-5 aspect-video overflow-hidden rounded-xl border border-line bg-bg">
               {local ? (
@@ -526,7 +547,7 @@ export default function PatientApp() {
                 onChange={(e) => setConsented(e.target.checked)}
               />
               <span>
-                {t("Görüşmenin görüntülü ve sesli olarak çevrim içi yapılmasını, görüşme sırasında terapistimin gönderdiği test ve ödevlere verdiğim yanıtların terapistime iletilmesini kabul ediyorum. Görüşme kaydedilmez. Görüşme süresince yalnız ve rahat konuşabileceğim bir yerde olacağım.")}
+                {t("Görüşmenin görüntülü ve sesli olarak çevrim içi yapılmasını, görüşme sırasında terapistimin gönderdiği test ve ödevlere verdiğim yanıtların terapistime iletilmesini kabul ediyorum. Görüşme, ben ayrıca izin vermedikçe kaydedilmez. Görüşme süresince yalnız ve rahat konuşabileceğim bir yerde olacağım.")}
               </span>
             </label>
             <Button className="mt-4 w-full py-2.5" onClick={join} disabled={!local || !consented || phase === "joining"}>

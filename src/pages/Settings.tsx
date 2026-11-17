@@ -267,7 +267,7 @@ export default function Settings() {
             {BRAND_NAME} • sürüm {APP_VERSION}
           </p>
           <p className="mt-2 text-xs leading-relaxed text-faint">
-            Danışan verileri yalnızca bu cihazda, şifreli olarak saklanır. Görüşmeler uçtan uca şifrelidir ve kaydedilmez.
+            Danışan verileri yalnızca bu cihazda, şifreli olarak saklanır. Görüşmeler uçtan uca şifrelidir; yalnızca danışanın görüşme sırasında verdiği açık izinle kaydedilebilir.
           </p>
           <Button
             variant="subtle"

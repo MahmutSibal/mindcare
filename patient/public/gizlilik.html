@@ -25,7 +25,7 @@
   <p class="muted">Mavi Ruh terapist uygulaması (Windows, Android) ve danışan görüşme sayfası • Son güncelleme: 15 Kasım 2026</p>
 
   <div class="box">
-    <p><b>Kısaca:</b> Danışan dosyaları, seans notları, test sonuçları ve ödevler yalnızca terapistin kendi cihazında, şifreli olarak saklanır; hiçbir sunucuya gönderilmez. Görüntülü görüşmeler uçtan uca şifrelidir ve kaydedilmez.</p>
+    <p><b>Kısaca:</b> Danışan dosyaları, seans notları, test sonuçları ve ödevler yalnızca terapistin kendi cihazında, şifreli olarak saklanır; hiçbir sunucuya gönderilmez. Görüntülü görüşmeler uçtan uca şifrelidir ve yalnızca sizin görüşme sırasında verdiğiniz açık izinle kaydedilebilir.</p>
   </div>
 
   <h2>1. Veri sorumlusu</h2>
@@ -35,7 +35,7 @@
   <table>
     <tr><th>Veri</th><th>Nerede</th><th>Amaç</th></tr>
     <tr><td>Danışan kimlik ve iletişim bilgileri, başvuru nedeni, kullanılan ilaç ve maddeler, seans notları, test sonuçları, ödevler, çizimler, danışanın gönderdiği dosyalar (sağlık verisi dâhil)</td><td>Yalnızca terapistin cihazında; AES-256 ile şifrelenmiş veritabanında (SQLCipher). Sunucuya gönderilmez, uygulama verisi bulut yedeklemesine alınmaz.</td><td>Psikoterapi hizmetinin yürütülmesi ve kayıt tutma yükümlülüğü</td></tr>
-    <tr><td>Görüntü ve ses (görüntülü görüşme)</td><td>Taraflar arasında doğrudan, uçtan uca şifreli (WebRTC, DTLS-SRTP). Doğrudan bağlantı kurulamazsa Cloudflare'in aktarma (TURN) sunucusu şifreli paketleri iletir; içeriği göremez. <b>Görüşmeler kaydedilmez.</b></td><td>Çevrim içi seans</td></tr>
+    <tr><td>Görüntü ve ses (görüntülü görüşme)</td><td>Taraflar arasında doğrudan, uçtan uca şifreli (WebRTC, DTLS-SRTP). Doğrudan bağlantı kurulamazsa Cloudflare'in aktarma (TURN) sunucusu şifreli paketleri iletir; içeriği göremez. <b>Görüşmeler yalnızca sizin o an verdiğiniz açık izinle kaydedilir; izin yoksa hiçbir kayıt yapılmaz.</b></td><td>Çevrim içi seans</td></tr>
     <tr><td>Görüşmeyi kurmak için teknik bilgiler: rastgele oda kimliği, davet anahtarının özeti (SHA-256), anonim oturum kimliği, IP adresi</td><td>Supabase (Avrupa Birliği, Frankfurt veri merkezi). Ad, not veya görüşme içeriği tutulmaz.</td><td>Bağlantı kurma ve davetin tek kullanımlık olmasını sağlama</td></tr>
     <tr><td>Danışan görüşme sayfasının sunulması: IP adresi, tarayıcı bilgisi</td><td>Render (barındırma sağlayıcısı) sunucu günlükleri</td><td>Sayfanın sunulması ve güvenliği</td></tr>
     <tr><td>Bağlantı testi (isteğe bağlı): yalnızca rastgele test verisi</td><td>Cloudflare hız ölçüm sunucusu</td><td>İnternet hızının ölçülmesi</td></tr>
@@ -43,7 +43,7 @@
   </table>
 
   <h2>3. Kamera ve mikrofon</h2>
-  <p>Kamera ve mikrofon yalnızca görüntülü görüşme ve isteğe bağlı bağlantı testi sırasında, sizin izninizle kullanılır. Görüntü ve ses kaydedilmez, herhangi bir sunucuda saklanmaz.</p>
+  <p>Kamera ve mikrofon yalnızca görüntülü görüşme ve isteğe bağlı bağlantı testi sırasında, sizin izninizle kullanılır. Görüntü ve ses, siz o an açıkça izin vermedikçe kaydedilmez. İzin verirseniz kaydın (görüntü, ses ve varsa ortak çizim) bir kopyası yalnızca terapistin cihazında, şifreli olarak saklanır; hiçbir sunucuya gönderilmez. Kayıt sırasında ekranda bir gösterge görünür ve kaydı istediğiniz an durdurabilirsiniz; izin vermemeniz görüşmeyi etkilemez. Kaydın silinmesini terapistinizden isteyebilirsiniz.</p>
 
   <h2>4. Hukuki sebep</h2>
   <p>Sağlık verileri KVKK m.6 uyarınca açık rızanıza dayanarak ve/veya sır saklama yükümlülüğü altındaki sağlık meslek mensubu tarafından tıbbi teşhis ve tedavi hizmetlerinin yürütülmesi amacıyla işlenir. Görüşmeye katılırken çevrim içi görüşme onamı ayrıca alınır.</p>

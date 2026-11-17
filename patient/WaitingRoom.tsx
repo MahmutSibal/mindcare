@@ -80,7 +80,7 @@ export default function WaitingRoom({ reconnecting }: { reconnecting: boolean })
       </p>
 
       <div className="space-y-1.5 text-xs text-faint">
-        <p className="flex items-center justify-center gap-1.5"><Lock size={12} /> {t("Görüşme şifrelidir ve kaydedilmez.")}</p>
+        <p className="flex items-center justify-center gap-1.5"><Lock size={12} /> {t("Görüşme şifrelidir; izniniz olmadan kaydedilmez.")}</p>
         <p className="flex items-center justify-center gap-1.5"><Headphones size={12} /> {t("Kulaklık kullanmak sesi daha net yapar.")}</p>
       </div>
     </div>

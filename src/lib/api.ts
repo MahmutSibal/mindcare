@@ -333,6 +333,14 @@ export const api = {
   setPatientFee: (patientId: string, feeCents: number | null) => invoke<void>("set_patient_fee", { patientId, feeCents }),
 
   saveTextFile: (dest: string, content: string) => invoke<void>("save_text_file", { dest, content }),
+  startRecording: (patientId: string, sessionId: string | null, mime: string, consentAt: string) =>
+    invoke<string>("start_recording", { patientId, sessionId, mime, consentAt }),
+  appendRecordingChunk: (id: string, seq: number, bytes: Uint8Array) =>
+    invoke<void>("append_recording_chunk", bytes, { headers: { "x-recording-id": id, "x-seq": String(seq) } }),
+  finishRecording: (id: string, durationSeconds: number) => invoke<void>("finish_recording", { id, durationSeconds }),
+  listRecordings: (patientId: string) => invoke<RecordingMeta[]>("list_recordings", { patientId }),
+  getRecordingChunk: (id: string, seq: number) => invoke<ArrayBuffer>("get_recording_chunk", { id, seq }),
+  deleteRecording: (id: string) => invoke<void>("delete_recording", { id }),
   exportPatientData: (patientId: string, dest: string) => invoke<void>("export_patient_data", { patientId, dest }),
 
   getRecoveryKey: () => invoke<string>("get_recovery_key"),
@@ -342,6 +350,17 @@ export const api = {
     invoke<void>("restore_with_recovery_key", { src, recoveryKey }),
 };
 
+export interface RecordingMeta {
+  id: string;
+  session_number: number | null;
+  mime: string;
+  duration_seconds: number;
+  size: number;
+  chunks: number;
+  consent_at: string | null;
+  created_at: string;
+  finished: boolean;
+}
 export interface LedgerEntry {
   id: string;
   kind: "charge" | "payment";

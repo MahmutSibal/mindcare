@@ -148,6 +148,12 @@ pub fn run() {
             extras::set_patient_fee,
             extras::save_text_file,
             extras::export_patient_data,
+            extras::start_recording,
+            extras::append_recording_chunk,
+            extras::finish_recording,
+            extras::list_recordings,
+            extras::get_recording_chunk,
+            extras::delete_recording,
         ])
         .run(tauri::generate_context!())
         .expect("Mavi Ruh başlatılamadı");

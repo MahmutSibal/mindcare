@@ -71,14 +71,14 @@ export function LangSwitch({ className = "" }: { className?: string }) {
 const EN: Record<string, string> = {
   // Katılma ekranı
   "Görüşmeye katıl": "Join the session",
-  "Görüşme uçtan uca şifrelenir ve kaydedilmez. Katılmak için kamera ve mikrofon izni vermeniz gerekir.":
-    "The session is end-to-end encrypted and is not recorded. You need to allow camera and microphone access to join.",
+  "Görüşme uçtan uca şifrelenir; siz ayrıca izin vermedikçe kaydedilmez. Katılmak için kamera ve mikrofon izni vermeniz gerekir.":
+    "The session is end-to-end encrypted and is not recorded unless you separately give permission. You need to allow camera and microphone access to join.",
   "Kamera ve mikrofonu aç": "Turn on camera and microphone",
   "Mikrofon": "Microphone",
   "Kamera": "Camera",
   "Kamerayı çevir": "Flip camera",
-  "Görüşmenin görüntülü ve sesli olarak çevrim içi yapılmasını, görüşme sırasında terapistimin gönderdiği test ve ödevlere verdiğim yanıtların terapistime iletilmesini kabul ediyorum. Görüşme kaydedilmez. Görüşme süresince yalnız ve rahat konuşabileceğim bir yerde olacağım.":
-    "I agree to hold the session online by video and audio, and to my answers to tests and homework sent by my therapist during the session being passed to my therapist. The session is not recorded. I will be in a place where I can talk alone and comfortably during the session.",
+  "Görüşmenin görüntülü ve sesli olarak çevrim içi yapılmasını, görüşme sırasında terapistimin gönderdiği test ve ödevlere verdiğim yanıtların terapistime iletilmesini kabul ediyorum. Görüşme, ben ayrıca izin vermedikçe kaydedilmez. Görüşme süresince yalnız ve rahat konuşabileceğim bir yerde olacağım.":
+    "I agree to hold the session online by video and audio, and to my answers to tests and homework sent by my therapist during the session being passed to my therapist. The session is not recorded unless I separately give permission. I will be in a place where I can talk alone and comfortably during the session.",
   "Katılınıyor…": "Joining…",
   "Görüşmeye Katıl": "Join the session",
   "Bağlantımı test et (kamera, mikrofon, internet)": "Test my connection (camera, microphone, internet)",
@@ -131,7 +131,13 @@ const EN: Record<string, string> = {
   "Bağlantı yeniden kuruluyor…": "Reconnecting…",
   "Terapistiniz birazdan burada olacak": "Your therapist will be here shortly",
   "Beklerken birlikte birkaç nefes alalım.": "Let us take a few breaths together while we wait.",
-  "Görüşme şifrelidir ve kaydedilmez.": "The session is encrypted and not recorded.",
+  "Görüşme şifrelidir; izniniz olmadan kaydedilmez.": "The session is encrypted and is not recorded without your permission.",
+  "Görüşme kaydediliyor": "Session is being recorded",
+  "Kaydı durdur": "Stop recording",
+  "Kayıt izni": "Recording permission",
+  "Terapistiniz bu görüşmeyi (görüntü, ses ve varsa ortak çizim) kaydetmek istiyor. Kayıt yalnızca terapistinizin şifreli bilgisayarında saklanır, başka kimseyle paylaşılmaz. İzin vermek zorunda değilsiniz; reddederseniz görüşme aynen devam eder. Kayıt sürerken ekranda gösterge çıkar ve istediğiniz an durdurabilirsiniz.": "Your therapist would like to record this session (video, audio and the shared drawing if used). The recording is stored only on your therapist's encrypted computer and is not shared with anyone else. You do not have to agree; if you decline, the session continues as normal. An indicator is shown while recording and you can stop it at any time.",
+  "İzin vermiyorum": "I do not agree",
+  "Kabul ediyorum": "I agree",
   "Kulaklık kullanmak sesi daha net yapar.": "Using headphones makes the sound clearer.",
   // Test
   "Bağlantı şu an kurulu değil. Birkaç saniye sonra tekrar deneyin.": "The connection is not ready right now. Try again in a few seconds.",

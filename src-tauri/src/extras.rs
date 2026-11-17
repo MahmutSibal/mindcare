@@ -353,6 +353,119 @@ pub fn export_patient_data(state: State<AppState>, patient_id: String, dest: Str
     Ok(())
 }
 
+// ───────────────────────────── Seans kayıtları ─────────────────────────────
+
+const MAX_CHUNK_BYTES: usize = 16 * 1024 * 1024;
+
+fn valid_recording_mime(m: &str) -> bool {
+    (m.starts_with("video/webm") || m.starts_with("video/mp4")) && m.len() <= 80
+        && m.chars().all(|c| c.is_ascii_alphanumeric() || "/;=,.- ".contains(c))
+}
+
+#[derive(Serialize)]
+pub struct RecordingMeta {
+    id: String,
+    session_number: Option<i64>,
+    mime: String,
+    duration_seconds: i64,
+    size: i64,
+    chunks: i64,
+    consent_at: Option<String>,
+    created_at: String,
+    finished: bool,
+}
+
+/// Kaydı başlatır. `consent_at`: danışanın görüşme sırasında onay verdiği an (zorunlu).
+#[tauri::command]
+pub fn start_recording(state: State<AppState>, patient_id: String, session_id: Option<String>, mime: String, consent_at: String) -> AppResult<String> {
+    if !valid_recording_mime(&mime) {
+        return Err(AppError::Invalid("Kayıt biçimi desteklenmiyor.".into()));
+    }
+    if consent_at.trim().is_empty() {
+        return Err(AppError::Invalid("Danışan onayı olmadan kayıt başlatılamaz.".into()));
+    }
+    let session_id = session_id.filter(|s| !s.is_empty());
+    with_conn(&state, |c| {
+        let id = new_id();
+        c.execute(
+            "INSERT INTO recordings (id, patient_id, session_id, mime, consent_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![id, patient_id, session_id, mime, consent_at],
+        )?;
+        Ok(id)
+    })
+}
+
+/// Kayıt parçasını ekler. İçerik ham bayt; üst bilgiler `x-recording-id`, `x-seq`.
+#[tauri::command]
+pub fn append_recording_chunk(state: State<AppState>, request: tauri::ipc::Request<'_>) -> AppResult<()> {
+    let bytes = match request.body() {
+        tauri::ipc::InvokeBody::Raw(b) => b.as_slice(),
+        _ => return Err(AppError::Invalid("Kayıt parçası alınamadı.".into())),
+    };
+    if bytes.is_empty() || bytes.len() > MAX_CHUNK_BYTES {
+        return Err(AppError::Invalid("Kayıt parçası geçersiz.".into()));
+    }
+    let header = |k: &str| request.headers().get(k).and_then(|v| v.to_str().ok()).map(str::to_owned);
+    let id = header("x-recording-id").ok_or_else(|| AppError::Invalid("Kayıt belirtilmedi.".into()))?;
+    let seq: i64 = header("x-seq").and_then(|v| v.parse().ok()).ok_or_else(|| AppError::Invalid("Parça sırası geçersiz.".into()))?;
+    with_conn(&state, |c| {
+        c.execute("INSERT OR REPLACE INTO recording_chunks (recording_id, seq, data) VALUES (?1, ?2, ?3)", params![id, seq, bytes])?;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn finish_recording(state: State<AppState>, id: String, duration_seconds: i64) -> AppResult<()> {
+    with_conn(&state, |c| {
+        c.execute(
+            "UPDATE recordings SET duration_seconds = ?2, finished_at = CURRENT_TIMESTAMP WHERE id = ?1",
+            params![id, duration_seconds.clamp(0, 24 * 3600)],
+        )?;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn list_recordings(state: State<AppState>, patient_id: String) -> AppResult<Vec<RecordingMeta>> {
+    with_conn(&state, |c| {
+        let mut st = c.prepare(
+            "SELECT r.id, s.session_number, r.mime, r.duration_seconds,
+                    COALESCE((SELECT SUM(length(data)) FROM recording_chunks k WHERE k.recording_id = r.id), 0),
+                    (SELECT COUNT(*) FROM recording_chunks k WHERE k.recording_id = r.id),
+                    r.consent_at, r.created_at, r.finished_at IS NOT NULL
+             FROM recordings r LEFT JOIN sessions s ON s.id = r.session_id
+             WHERE r.patient_id = ?1 ORDER BY r.created_at DESC",
+        )?;
+        let rows = st
+            .query_map([patient_id], |r| {
+                Ok(RecordingMeta {
+                    id: r.get(0)?, session_number: r.get(1)?, mime: r.get(2)?, duration_seconds: r.get(3)?,
+                    size: r.get(4)?, chunks: r.get(5)?, consent_at: r.get(6)?, created_at: r.get(7)?, finished: r.get(8)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    })
+}
+
+#[tauri::command]
+pub fn get_recording_chunk(state: State<AppState>, id: String, seq: i64) -> AppResult<tauri::ipc::Response> {
+    let data: Vec<u8> = with_conn(&state, |c| {
+        c.query_row("SELECT data FROM recording_chunks WHERE recording_id = ?1 AND seq = ?2", params![id, seq], |r| r.get(0))
+            .optional()?
+            .ok_or_else(|| AppError::Invalid("Kayıt parçası bulunamadı.".into()))
+    })?;
+    Ok(tauri::ipc::Response::new(data))
+}
+
+#[tauri::command]
+pub fn delete_recording(state: State<AppState>, id: String) -> AppResult<()> {
+    with_conn(&state, |c| {
+        c.execute("DELETE FROM recordings WHERE id = ?1", [id])?;
+        Ok(())
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -377,6 +490,14 @@ mod tests {
         assert!(!t.contains("<script") && !t.contains("<b>"));
         assert!(t.contains("Merhaba dünya"));
         assert!(t.contains("&lt;x&gt;"));
+    }
+
+    #[test]
+    fn recording_mime_check() {
+        assert!(valid_recording_mime("video/webm;codecs=vp9,opus"));
+        assert!(valid_recording_mime("video/webm"));
+        assert!(!valid_recording_mime("text/html"));
+        assert!(!valid_recording_mime("video/webm<script>"));
     }
 
     #[test]

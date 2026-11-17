@@ -166,6 +166,11 @@ export type ChannelMessage =
   // Terapist → danışan: görüntüde ekran paylaşımı veya materyal videosu var mı. Danışan sayfası
   // bu durumda görüntüyü kırpmadan sığdırır (yatay ekran dikey telefonda yarım görünmesin).
   | { type: "content_share"; active: boolean }
+  // Kayıt (yalnızca danışanın açık onayıyla): terapist ister, danışan yanıtlar; kayıt sürerken iki taraf göstergeyi görür.
+  | { type: "record_request" }
+  | { type: "record_response"; accepted: boolean }
+  | { type: "record_state"; active: boolean }
+  | { type: "record_stop" }
   // Danışan → terapist: randevu talebi (yalnızca görüşme sırasında, veri kanalıyla; hiçbir sunucuya yazılmaz).
   | { type: "appointment_request"; date: string; time: string; note: string }
   // Danışan → terapist: danışan katılırken çevrim içi görüşme onamını işaretledi.

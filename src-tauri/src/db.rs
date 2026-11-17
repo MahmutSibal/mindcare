@@ -239,6 +239,30 @@ const MIGRATIONS: &[&str] = &[
     );
     CREATE INDEX idx_ledger_patient ON ledger(patient_id, entry_date DESC);
     "#,
+    // 10 — Seans kayıtları (video + ortak çizim). Yalnızca danışanın görüşme sırasında verdiği onayla
+    // oluşturulur; parçalar şifreli veritabanında BLOB olarak durur, yedeğe ve kurtarma anahtarına dahildir.
+    r#"
+    CREATE TABLE recordings (
+        id TEXT PRIMARY KEY,
+        patient_id TEXT NOT NULL,
+        session_id TEXT,
+        mime TEXT NOT NULL,
+        duration_seconds INTEGER NOT NULL DEFAULT 0,
+        consent_at TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        finished_at DATETIME,
+        FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+        FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE SET NULL
+    );
+    CREATE INDEX idx_recordings_patient ON recordings(patient_id, created_at DESC);
+    CREATE TABLE recording_chunks (
+        recording_id TEXT NOT NULL,
+        seq INTEGER NOT NULL,
+        data BLOB NOT NULL,
+        PRIMARY KEY (recording_id, seq),
+        FOREIGN KEY (recording_id) REFERENCES recordings(id) ON DELETE CASCADE
+    );
+    "#,
 ];
 
 fn apply_key(conn: &Connection, key: &Zeroizing<String>) -> AppResult<()> {

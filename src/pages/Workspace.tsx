@@ -3,10 +3,11 @@ import {
   CalendarCheck2, ChevronDown, ChevronRight, ClipboardList, FileCheck2, Pencil, PencilLine, Phone, ShieldAlert, UserPlus, Users,
 } from "lucide-react";
 import { CATEGORY_LABEL, CategoryIcon } from "../components/category";
-import { api, type DrawingMeta, type Homework, type Material, type Note, type Patient, type PatientFileMeta, type Session, type Substance, type TestResult } from "../lib/api";
+import { api, type DrawingMeta, type Homework, type Material, type Note, type Patient, type PatientFileMeta, type RecordingMeta, type Session, type Substance, type TestResult } from "../lib/api";
 import ClinicalTab from "../components/workspace/ClinicalTab";
 import { PatientFiles, ReceivedFilesToast, useIncomingFiles } from "../components/workspace/patientFiles";
 import { BoardPanel, BoardStartDialog, DrawingsList } from "../components/workspace/BoardPanel";
+import { RecordingControl, RecordingsList } from "../components/workspace/Recordings";
 import { useBoard } from "../lib/useBoard";
 import { age, fmtDate, fmtDateTime, initials, minutes, plainText } from "../lib/format";
 import { notifyDataChanged, useActiveSession, useDataVersion } from "../lib/session";
@@ -42,6 +43,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate, visi
   const [homework, setHomework] = useState<Homework[]>([]);
   const [substances, setSubstances] = useState<Substance[]>([]);
   const [drawings, setDrawings] = useState<DrawingMeta[]>([]);
+  const [recordings, setRecordings] = useState<RecordingMeta[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [shared, setShared] = useState<SharedMaterial | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
@@ -114,7 +116,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate, visi
       setPatient(null);
       return;
     }
-    const [p, s, n, r, h, sub, dr, fl] = await Promise.all([
+    const [p, s, n, r, h, sub, dr, fl, rc] = await Promise.all([
       api.getPatient(patientId),
       api.listSessions(patientId),
       api.listNotes(patientId),
@@ -123,6 +125,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate, visi
       api.listSubstances(patientId),
       api.listDrawings(patientId),
       api.listPatientFiles(patientId),
+      api.listRecordings(patientId),
     ]);
     setPatient(p);
     setSessions(s);
@@ -132,6 +135,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate, visi
     setSubstances(sub);
     setDrawings(dr);
     setFiles(fl);
+    setRecordings(rc);
   }, [patientId]);
 
   useEffect(() => {
@@ -202,11 +206,12 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate, visi
     {
       id: "tests",
       label: "Çalışmalar",
-      count: results.length + drawings.length + files.length,
+      count: results.length + drawings.length + files.length + recordings.length,
       body: (
         <>
           <TestResults results={results} inTab />
           <DrawingsList drawings={drawings} />
+          <RecordingsList recordings={recordings} />
           <PatientFiles files={files} onDraw={call.state === "connected" ? (f) => void drawOnFile(f) : undefined} />
         </>
       ),
@@ -269,6 +274,13 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate, visi
         />
         <SessionTimer patient={patient} call={call} />
         <CallPanel call={call} patient={patient} />
+        <RecordingControl
+          call={call}
+          boardApi={boardApi}
+          backdropUrl={boardBackdrop}
+          patientId={patient?.id ?? null}
+          sessionId={session && session.patient_id === patient?.id ? session.id : null}
+        />
       </div>
 
       {/* Sağ panel — canlı notlar ve seans araçları */}
