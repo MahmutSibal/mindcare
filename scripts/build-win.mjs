@@ -21,4 +21,4 @@ const run = (cmd, args) => {
 const notes = process.argv.slice(2).filter((a) => !a.startsWith("--")).join(" ");
 if (!process.argv.includes("--no-bump")) run("node", ["scripts/bump-version.mjs"]);
 run("npx", ["tauri", "build"]);
-run("node", ["scripts/make-latest-json.mjs", ...(notes ? [notes] : [])]);
+run("node", ["scripts/make-latest-json.mjs", ...(notes ? [`"${notes.replace(/"/g, "")}"`] : [])]);
