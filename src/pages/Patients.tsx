@@ -55,7 +55,7 @@ export default function Patients({ onOpen }: { onOpen: (id: string) => void }) {
       <PageHeader title="Danışanlar" subtitle={`${list.length} kayıtlı danışan`}>
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
-          <input className={inputCls + " w-64 pl-9"} placeholder="Ara…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input className={inputCls + " w-full pl-9 sm:w-64"} placeholder="Ara…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <Button onClick={() => setEdit("new")}><UserPlus size={16} /> Yeni Danışan</Button>
       </PageHeader>

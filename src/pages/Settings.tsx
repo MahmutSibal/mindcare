@@ -334,7 +334,7 @@ export default function Settings() {
             <Field label="Adres(ler)" hint="Örn: turn:turn.ornek.com:3478, turns:turn.ornek.com:5349">
               <input className={inputCls} value={form.turn_url} onChange={set("turn_url")} />
             </Field>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Kullanıcı adı"><input className={inputCls} value={form.turn_username} onChange={set("turn_username")} /></Field>
               <Field label="Parola"><input type="password" className={inputCls} value={form.turn_credential} onChange={set("turn_credential")} /></Field>
             </div>
@@ -421,7 +421,7 @@ function AppLockCard() {
         {enabled && (
           <Field label="Mevcut PIN"><input type="password" inputMode="numeric" className={inputCls} value={current} onChange={(e) => setCurrent(digits(e.target.value))} autoComplete="off" /></Field>
         )}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label={enabled ? "Yeni PIN" : "PIN"}><input type="password" inputMode="numeric" className={inputCls} value={pin} onChange={(e) => setPin(digits(e.target.value))} autoComplete="off" /></Field>
           <Field label="PIN (tekrar)"><input type="password" inputMode="numeric" className={inputCls} value={pin2} onChange={(e) => setPin2(digits(e.target.value))} autoComplete="off" /></Field>
         </div>

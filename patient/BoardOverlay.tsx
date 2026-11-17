@@ -16,21 +16,21 @@ export default function BoardOverlay({ boardApi, video, onMinimize, backdropUrl 
 }) {
   const session = boardApi.session!;
   return (
-    <div className="absolute inset-0 z-30 flex flex-col gap-2 bg-bg p-2 sm:p-3">
-      <div className="flex shrink-0 items-center gap-2">
-        {video && <div className="h-14 w-20 shrink-0 overflow-hidden rounded-lg border border-line bg-black">{video}</div>}
+    <div className="absolute inset-0 z-30 flex flex-col gap-2.5 bg-bg p-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] sm:p-4">
+      <div className="flex shrink-0 items-center gap-3">
+        {video && <div className="h-14 w-20 shrink-0 overflow-hidden rounded-xl border border-line bg-black shadow-md sm:h-16 sm:w-24">{video}</div>}
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 text-sm font-medium">
-            <Pencil size={14} className="text-accent" /> {t("Ortak çizim")}
+          <div className="flex items-center gap-1.5 text-sm font-semibold">
+            <Pencil size={14} className="shrink-0 text-accent" /> {t("Ortak çizim")}
           </div>
-          {session.prompt && <p className="text-xs leading-snug text-muted">{session.prompt}</p>}
+          {session.prompt && <p className="mt-0.5 line-clamp-3 text-xs leading-snug text-muted">{session.prompt}</p>}
         </div>
         <button
           onClick={onMinimize}
-          className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-card px-3 text-xs text-ink hover:bg-line"
+          className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-line bg-card px-3.5 text-xs font-medium text-ink transition-colors hover:bg-line"
           title={t("Görüntüye dön (çizim kapanmaz)")}
         >
-          <Minimize2 size={14} /> {t("Küçült")}
+          <Minimize2 size={15} /> <span>{t("Küçült")}</span>
         </button>
       </div>
       <div className="min-h-0 flex-1">

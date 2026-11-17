@@ -48,7 +48,7 @@ export default function PatientForm({ patient, onClose, onSaved }: {
         <Field label="Ad Soyad *">
           <input className={inputCls} value={form.full_name} onChange={set("full_name")} autoFocus required />
         </Field>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Doğum Tarihi">
             <input type="date" className={inputCls} value={form.birth_date} onChange={set("birth_date")} />
           </Field>
@@ -70,7 +70,7 @@ export default function PatientForm({ patient, onClose, onSaved }: {
         </Field>
         <div className="rounded-lg border border-line p-3">
           <p className="mb-3 text-[13px] font-medium">Acil durum ve güvenlik</p>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Acil durumda aranacak kişi">
               <input className={inputCls} value={form.emergency_contact} onChange={set("emergency_contact")} placeholder="Ad, yakınlık" />
             </Field>

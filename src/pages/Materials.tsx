@@ -86,7 +86,7 @@ export default function Materials() {
       {list.length === 0 ? (
         <Empty text="Henüz materyal eklenmedi." />
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))] gap-3">
           {list.map((m) => (
             <div key={m.id} className="flex flex-col rounded-xl border border-line bg-panel p-4">
               <div className="flex items-start gap-3">

@@ -31,7 +31,7 @@ export default function AppointmentRequest({ getCall }: { getCall: () => { sendM
       </button>
       {open && (
         <div className="mt-3 space-y-2 text-xs text-muted">
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 min-[380px]:grid-cols-2">
             <label>{t("Tarih")}<input type="date" min={today} className={field} value={date} onChange={(e) => setDate(e.target.value)} /></label>
             <label>{t("Saat")}<input type="time" className={field} value={time} onChange={(e) => setTime(e.target.value)} /></label>
           </div>

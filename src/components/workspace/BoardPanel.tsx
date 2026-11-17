@@ -50,7 +50,7 @@ function RemoteThumb({ stream }: { stream: MediaStream | null }) {
     if (ref.current) ref.current.srcObject = stream;
   }, [stream]);
   if (!stream) return null;
-  return <video ref={ref} autoPlay playsInline muted className="h-16 w-24 shrink-0 rounded-lg border border-line bg-black object-cover" />;
+  return <video ref={ref} autoPlay playsInline muted className="h-14 w-20 shrink-0 rounded-xl border border-line bg-black object-cover shadow-md sm:h-16 sm:w-24" />;
 }
 
 /** Terapist: ortak tuval, kaydetme ve kapatma. Ses ve görüntü açık kalır. */
@@ -103,29 +103,45 @@ export function BoardPanel({ boardApi, patient, sessionId, remote, backdropUrl, 
   };
 
   return (
-    <div className="fixed inset-3 z-40 flex flex-col gap-2 rounded-2xl border border-line bg-panel p-3 shadow-2xl">
-      <div className="flex shrink-0 items-center gap-3">
-        <RemoteThumb stream={remote} />
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-medium">Ortak çizim{label ? ` • ${label}` : patient ? ` • ${patient.full_name}` : ""}</div>
-          {session.prompt && <p className="truncate text-xs text-muted" title={session.prompt}>Yönerge: {session.prompt}</p>}
+    <div className="fixed inset-0 z-40 flex flex-col gap-3 bg-panel p-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] md:inset-3 md:rounded-2xl md:border md:border-line md:p-4 md:shadow-2xl">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="flex min-w-0 flex-1 basis-56 items-center gap-3">
+          <RemoteThumb stream={remote} />
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 text-sm font-semibold">
+              <Pencil size={14} className="shrink-0 text-accent" /> Ortak çizim
+            </div>
+            {(label || patient) && <p className="truncate text-xs text-muted">{label ?? patient?.full_name}</p>}
+            {session.prompt && (
+              <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-faint" title={session.prompt}>Yönerge: {session.prompt}</p>
+            )}
+          </div>
         </div>
-        <input
-          className={`${inputCls} hidden w-48 md:block`}
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          maxLength={80}
-          aria-label="Kayıt başlığı"
-          placeholder="Kayıt başlığı"
-        />
-        <Button variant="outline" onClick={() => void save()} disabled={!patient && !saveFor?.length}>
-          <Save size={15} /> {saveFor ? "Üyelerin dosyasına kaydet" : "Danışan dosyasına kaydet"}
-        </Button>
-        <Button variant="ghost" onClick={() => (dirty ? setConfirmClose(true) : boardApi.close())} aria-label="Tahtayı kapat" title="Tahtayı iki taraf için kapat">
-          <X size={18} />
-        </Button>
+        <div className="ml-auto flex items-center gap-2">
+          <input
+            className={`${inputCls} hidden w-44 md:block lg:w-56`}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            maxLength={80}
+            aria-label="Kayıt başlığı"
+            placeholder="Kayıt başlığı"
+          />
+          <Button
+            variant="outline"
+            onClick={() => void save()}
+            disabled={!patient && !saveFor?.length}
+            title={saveFor ? "Üyelerin dosyasına kaydet" : "Danışan dosyasına kaydet"}
+          >
+            <Save size={15} />
+            <span className="hidden lg:inline">{saveFor ? "Üyelerin dosyasına kaydet" : "Danışan dosyasına kaydet"}</span>
+            <span className="lg:hidden">Kaydet</span>
+          </Button>
+          <Button variant="ghost" className="px-2.5" onClick={() => (dirty ? setConfirmClose(true) : boardApi.close())} aria-label="Tahtayı kapat" title="Tahtayı iki taraf için kapat">
+            <X size={18} />
+          </Button>
+        </div>
       </div>
-      {message && <p className={`shrink-0 text-xs ${message.ok ? "text-ok" : "text-danger"}`}>{message.text}</p>}
+      {message && <p className={`shrink-0 rounded-lg px-3 py-1.5 text-xs ${message.ok ? "bg-ok/10 text-ok" : "bg-danger/10 text-danger"}`}>{message.text}</p>}
       <div className="min-h-0 flex-1">
         <BoardCanvas board={boardApi.board} rev={boardApi.rev} sessionId={session.id} send={boardApi.send} onChange={boardApi.bump} background={BACKGROUND} backdropUrl={backdropUrl} />
       </div>

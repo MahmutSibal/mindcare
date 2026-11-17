@@ -166,7 +166,7 @@ function SubstanceDialog({ patientId, substance, kind, onClose }: {
         <Field label="Ad">
           <input className={inputCls} value={form.name} onChange={set("name")} placeholder={K.placeholder} autoFocus required />
         </Field>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label={kind === "medication" ? "Doz" : "Miktar"}>
             <input className={inputCls} value={form.dose} onChange={set("dose")} placeholder={kind === "medication" ? "Örn. 50 mg" : "Örn. günde 10 adet"} />
           </Field>

@@ -82,18 +82,18 @@ export function Modal({ title, onClose, children, width = "max-w-lg" }: {
   // Telefon ve tablette geri tuşu diyaloğu kapatır (uygulamadan çıkmaz).
   useBackClose(true, onClose);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center sm:p-6" onMouseDown={onClose}>
       <div
-        className={cx("w-full rounded-2xl border border-line bg-panel shadow-2xl", width)}
+        className={cx("flex max-h-[92dvh] w-full flex-col rounded-t-2xl border border-line bg-panel shadow-2xl sm:max-h-[88dvh] sm:rounded-2xl", width)}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <header className="flex items-center justify-between border-b border-line px-5 py-4">
-          <h3 className="text-base font-semibold">{title}</h3>
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-4 py-3.5 sm:px-5 sm:py-4">
+          <h3 className="min-w-0 truncate text-base font-semibold">{title}</h3>
           <button onClick={onClose} className="rounded-md p-1 text-muted hover:bg-card hover:text-ink" aria-label="Kapat">
             <X size={18} />
           </button>
         </header>
-        <div className="max-h-[75vh] overflow-y-auto p-5">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-5">{children}</div>
       </div>
     </div>
   );

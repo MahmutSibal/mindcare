@@ -32,7 +32,7 @@ export default function Tests() {
       {list.length === 0 ? (
         <Empty icon={<ClipboardList size={28} />} text="Henüz test oluşturulmadı." />
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-3">
           {list.map((t) => {
             const def = parseDefinition(t.definition_json);
             const max = maxScore(def);
@@ -158,13 +158,13 @@ function TestEditor({ test, onClose }: { test: Test | null; onClose: () => void 
 
         {hasScale && (
           <section>
-            <div className="mb-2 flex items-center justify-between">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-semibold">Cevap seçenekleri <span className="font-normal text-faint">(tüm ölçekli sorular için ortak)</span></h3>
               <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => setOptions(FREQUENCY_SCALE)}>0–3 sıklık ölçeği</Button>
             </div>
             <div className="space-y-2">
               {options.map((o, i) => (
-                <div key={i} className="grid grid-cols-[1fr_90px_32px] gap-2">
+                <div key={i} className="grid grid-cols-[1fr_72px_32px] gap-2 sm:grid-cols-[1fr_90px_32px]">
                   <input className={inputCls} value={o.label} onChange={(e) => setOption(i, { label: e.target.value })} placeholder="Seçenek" />
                   <input
                     type="number"
@@ -190,13 +190,13 @@ function TestEditor({ test, onClose }: { test: Test | null; onClose: () => void 
         )}
 
         <section>
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold">Sorular <span className="font-normal text-faint">({questions.length}{max !== null && ` • en yüksek puan ${max}`})</span></h3>
             <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => setPasting(true)}><ClipboardPaste size={14} /> Toplu yapıştır</Button>
           </div>
           <ol className="space-y-2">
             {questions.map((q, i) => (
-              <li key={q.id} className="grid grid-cols-[24px_1fr_150px_auto] items-start gap-2 rounded-lg bg-card/50 p-2">
+              <li key={q.id} className="grid grid-cols-[24px_1fr] items-start gap-2 sm:grid-cols-[24px_1fr_150px_auto] rounded-lg bg-card/50 p-2">
                 <span className="pt-2 text-right text-sm text-faint">{i + 1}.</span>
                 <textarea
                   className={`${inputCls} resize-y`}
@@ -205,11 +205,11 @@ function TestEditor({ test, onClose }: { test: Test | null; onClose: () => void 
                   onChange={(e) => setQuestion(i, { text: e.target.value })}
                   placeholder="Soru metni"
                 />
-                <select className={inputCls} value={q.kind} onChange={(e) => setQuestion(i, { kind: e.target.value as QuestionKind })}>
+                <select className={`${inputCls} col-start-2 sm:col-auto`} value={q.kind} onChange={(e) => setQuestion(i, { kind: e.target.value as QuestionKind })}>
                   <option value="scale">Ölçekli (puanlı)</option>
                   <option value="text">Serbest metin</option>
                 </select>
-                <div className="flex">
+                <div className="col-start-2 flex sm:col-auto">
                   <IconBtn label="Yukarı taşı" onClick={() => move(i, -1)} disabled={i === 0}><ArrowUp size={15} /></IconBtn>
                   <IconBtn label="Aşağı taşı" onClick={() => move(i, 1)} disabled={i === questions.length - 1}><ArrowDown size={15} /></IconBtn>
                   <IconBtn label="Soruyu sil" onClick={() => setQuestions(questions.filter((_, j) => j !== i))} danger><Trash2 size={15} /></IconBtn>

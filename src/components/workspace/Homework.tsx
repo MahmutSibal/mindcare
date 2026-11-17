@@ -203,7 +203,7 @@ function HomeworkReview({ homework: h, onClose }: { homework: Homework; onClose:
       {h.description && <p className="mb-5 whitespace-pre-wrap rounded-lg bg-card/60 p-3 text-sm">{h.description}</p>}
 
       <p className="mb-2 text-[13px] text-muted">Değerlendirme</p>
-      <div className="mb-3 grid grid-cols-4 gap-2">
+      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {(Object.keys(HOMEWORK_STATUS) as HomeworkStatus[]).map((k) => (
           <button
             key={k}

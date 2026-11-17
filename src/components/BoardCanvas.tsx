@@ -208,37 +208,49 @@ export default function BoardCanvas({ board, rev, sessionId, send, onChange, bac
       aria-pressed={tool === id}
       aria-label={label}
       title={label}
-      className={cx("flex h-9 w-9 items-center justify-center rounded-lg border", tool === id ? "border-accent bg-accent-soft text-accent" : "border-line bg-card text-ink hover:bg-line")}
+      className={cx(
+        "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
+        tool === id ? "bg-accent-soft text-accent shadow-inner ring-1 ring-accent/40" : "text-muted hover:bg-line hover:text-ink",
+      )}
     >
       <Icon size={17} />
     </button>
   );
 
+  const group = "flex shrink-0 items-center rounded-xl border border-line bg-card/60";
+
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2">
+    <div className="flex h-full min-h-0 flex-col gap-2.5">
+      {/* Araç çubuğu: dar ekranda ikinci satıra sarar; hiçbir araç gizlenmez. */}
       <div className="flex shrink-0 flex-wrap items-center gap-2">
-        <div className="flex gap-1">
+        <div className={cx(group, "gap-0.5 p-1")}>
           {toolBtn("pen", Pencil, "Kalem")}
           {toolBtn("eraser", Eraser, "Silgi")}
           {toolBtn("text", Type, "Yazı")}
         </div>
-        <div className="flex items-center gap-1" role="radiogroup" aria-label="Renk">
-          {COLORS.map((c) => (
-            <button
-              key={c}
-              role="radio"
-              aria-checked={color === c}
-              aria-label={`Renk ${c}`}
-              onClick={() => {
-                setColor(c);
-                if (tool === "eraser") setTool("pen");
-              }}
-              className={cx("h-6 w-6 rounded-full border-2", color === c && tool !== "eraser" ? "border-white" : "border-transparent")}
-              style={{ background: c }}
-            />
-          ))}
+        <div className={cx(group, "gap-2 px-3 py-2")} role="radiogroup" aria-label="Renk">
+          {COLORS.map((c) => {
+            const on = color === c && tool !== "eraser";
+            return (
+              <button
+                key={c}
+                role="radio"
+                aria-checked={on}
+                aria-label={`Renk ${c}`}
+                onClick={() => {
+                  setColor(c);
+                  if (tool === "eraser") setTool("pen");
+                }}
+                className={cx(
+                  "h-6 w-6 shrink-0 rounded-full transition-transform",
+                  on ? "scale-110 ring-2 ring-white ring-offset-2 ring-offset-panel" : "ring-1 ring-white/20 hover:scale-105",
+                )}
+                style={{ background: c }}
+              />
+            );
+          })}
         </div>
-        <div className="flex items-center gap-1" role="radiogroup" aria-label="Kalınlık">
+        <div className={cx(group, "gap-0.5 p-1")} role="radiogroup" aria-label="Kalınlık">
           {WIDTHS.map((w) => (
             <button
               key={w}
@@ -246,39 +258,54 @@ export default function BoardCanvas({ board, rev, sessionId, send, onChange, bac
               aria-checked={width === w}
               aria-label={`Kalınlık ${w}`}
               onClick={() => setWidth(w)}
-              className={cx("flex h-8 w-8 items-center justify-center rounded-lg border", width === w ? "border-accent bg-accent-soft" : "border-line bg-card")}
+              className={cx(
+                "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
+                width === w ? "bg-accent-soft ring-1 ring-accent/40" : "hover:bg-line",
+              )}
             >
               <span className="rounded-full bg-ink" style={{ width: w + 3, height: w + 3 }} />
             </button>
           ))}
         </div>
-        <div className="ml-auto flex gap-1">
-          <button onClick={undo} aria-label="Geri al" title="Geri al (yalnızca kendi çizdiklerinizi)" className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-card text-ink hover:bg-line">
+        <div className={cx(group, "ml-auto gap-0.5 p-1")}>
+          <button
+            onClick={undo}
+            aria-label="Geri al"
+            title="Geri al (yalnızca kendi çizdiklerinizi)"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-line hover:text-ink"
+          >
             <Undo2 size={17} />
           </button>
           <button
             onClick={clear}
             aria-label="Hepsini temizle"
-            className={cx("flex h-9 items-center gap-1.5 rounded-lg border px-2.5 text-xs", confirmClear ? "border-danger bg-danger/20 text-danger" : "border-line bg-card text-ink hover:bg-line")}
+            title="Hepsini temizle"
+            className={cx(
+              "flex h-9 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs transition-colors",
+              confirmClear ? "bg-danger/20 text-danger ring-1 ring-danger/50" : "text-muted hover:bg-line hover:text-ink",
+            )}
           >
-            <Trash2 size={15} /> {confirmClear ? "Emin misiniz?" : "Temizle"}
+            <Trash2 size={16} />
+            <span className={confirmClear ? "" : "hidden sm:inline"}>{confirmClear ? "Emin misiniz?" : "Temizle"}</span>
           </button>
         </div>
       </div>
 
-      <div ref={wrap} className="flex min-h-0 flex-1 items-center justify-center">
-        <div className="relative" style={{ width: size.w, height: size.h }}>
-          <canvas
-            ref={cv}
-            style={{ width: size.w, height: size.h, touchAction: "none", cursor: tool === "text" ? "text" : "crosshair" }}
-            className="block rounded-xl border border-line"
-            onPointerDown={onDown}
-            onPointerMove={onMove}
-            onPointerUp={onUp}
-            onPointerCancel={onUp}
-            role="img"
-            aria-label="Ortak çizim tuvali"
-          />
+      {/* Tuval alanı: 4:3 oranı korunarak mevcut alana sığar (oranlı koordinatlar; iki taraf aynı görür). */}
+      <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-line/70 bg-black/20">
+        <div ref={wrap} className="absolute inset-1.5 flex items-center justify-center sm:inset-3">
+          <div className="relative" style={{ width: size.w, height: size.h }}>
+            <canvas
+              ref={cv}
+              style={{ width: size.w, height: size.h, touchAction: "none", cursor: tool === "text" ? "text" : "crosshair" }}
+              className="block rounded-xl shadow-xl ring-1 ring-white/10"
+              onPointerDown={onDown}
+              onPointerMove={onMove}
+              onPointerUp={onUp}
+              onPointerCancel={onUp}
+              role="img"
+              aria-label="Ortak çizim tuvali"
+            />
           {textAt && (
             <input
               autoFocus
@@ -298,6 +325,7 @@ export default function BoardCanvas({ board, rev, sessionId, send, onChange, bac
               style={{ left: Math.min(textAt.x * size.w, size.w - 180), top: Math.min(textAt.y * size.h, size.h - 34) }}
             />
           )}
+          </div>
         </div>
       </div>
     </div>
