@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Pencil, Save, Trash2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pencil, Save, Trash2, X } from "lucide-react";
 import { api, errorText, type DrawingMeta, type Patient } from "../../lib/api";
 import { loadImage, renderPngBase64 } from "../../lib/board";
 import { fmtDate } from "../../lib/format";
@@ -54,7 +54,7 @@ function RemoteThumb({ stream }: { stream: MediaStream | null }) {
 }
 
 /** Terapist: ortak tuval, kaydetme ve kapatma. Ses ve görüntü açık kalır. */
-export function BoardPanel({ boardApi, patient, sessionId, remote, backdropUrl, saveFor, label }: {
+export function BoardPanel({ boardApi, patient, sessionId, remote, backdropUrl, saveFor, label, onPdfPage }: {
   boardApi: BoardApi;
   patient: Patient | null;
   /** Grup görüşmesi: çizim bu danışanların hepsinin dosyasına kaydedilir. */
@@ -64,6 +64,8 @@ export function BoardPanel({ boardApi, patient, sessionId, remote, backdropUrl, 
   remote: MediaStream | null;
   /** Arka plan görseli (üzerine çizilen materyal). */
   backdropUrl: string | null;
+  /** PDF üzerinde çiziliyorsa sayfa değiştirme (yalnızca terapist). */
+  onPdfPage?: (page: number) => void;
 }) {
   const session = boardApi.session!;
   const [title, setTitle] = useState(session.prompt?.slice(0, 60) || "Çizim");
@@ -82,12 +84,12 @@ export function BoardPanel({ boardApi, patient, sessionId, remote, backdropUrl, 
     }
     try {
       const img = backdropUrl ? await loadImage(backdropUrl).catch(() => null) : null;
-      const png = renderPngBase64(boardApi.board.elements, BACKGROUND, img);
+      const png = renderPngBase64(boardApi.board.elements, BACKGROUND, img, 1200, Math.round(1200 / session.aspect));
       for (const pid of targets) {
         await api.saveDrawing({
           patient_id: pid,
           session_id: sessionId,
-          title: title.trim() || "Çizim",
+          title: (title.trim() || "Çizim") + (session.pdf ? ` (sayfa ${session.pdf.page})` : ""),
           prompt: session.prompt ?? undefined,
           png_base64: png,
         });
@@ -117,6 +119,27 @@ export function BoardPanel({ boardApi, patient, sessionId, remote, backdropUrl, 
             )}
           </div>
         </div>
+        {session.pdf && onPdfPage && (
+          <div className="flex items-center gap-1 rounded-xl border border-line bg-card/60 p-1" role="group" aria-label="PDF sayfaları">
+            <button
+              onClick={() => onPdfPage(session.pdf!.page - 1)}
+              disabled={session.pdf.page <= 1}
+              aria-label="Önceki sayfa"
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-muted hover:bg-line hover:text-ink disabled:opacity-30"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <span className="min-w-[4.5rem] text-center text-sm tabular-nums">{session.pdf.page} / {session.pdf.total}</span>
+            <button
+              onClick={() => onPdfPage(session.pdf!.page + 1)}
+              disabled={session.pdf.page >= session.pdf.total}
+              aria-label="Sonraki sayfa"
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-muted hover:bg-line hover:text-ink disabled:opacity-30"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        )}
         <div className="ml-auto flex items-center gap-2">
           <input
             className={`${inputCls} hidden w-44 md:block lg:w-56`}
@@ -143,7 +166,7 @@ export function BoardPanel({ boardApi, patient, sessionId, remote, backdropUrl, 
       </div>
       {message && <p className={`shrink-0 rounded-lg px-3 py-1.5 text-xs ${message.ok ? "bg-ok/10 text-ok" : "bg-danger/10 text-danger"}`}>{message.text}</p>}
       <div className="min-h-0 flex-1">
-        <BoardCanvas board={boardApi.board} rev={boardApi.rev} sessionId={session.id} send={boardApi.send} onChange={boardApi.bump} background={BACKGROUND} backdropUrl={backdropUrl} />
+        <BoardCanvas board={boardApi.board} rev={boardApi.rev} sessionId={session.id} send={boardApi.send} onChange={boardApi.bump} background={BACKGROUND} backdropUrl={backdropUrl} aspect={session.aspect} />
       </div>
 
       {confirmClose && (

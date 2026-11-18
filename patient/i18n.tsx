@@ -133,6 +133,7 @@ const EN: Record<string, string> = {
   "Görüşme şifrelidir; izniniz olmadan kaydedilmez.": "The session is encrypted and is not recorded without your permission.",
   "Görüşme kaydediliyor": "Session is being recorded",
   "Ses ve görüntü": "Sound and video",
+  "Sayfa": "Page",
   "Mikrofon": "Microphone",
   "Hoparlör / kulaklık": "Speaker / headphones",
   "Sesi dene": "Test sound",

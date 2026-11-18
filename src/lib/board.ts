@@ -5,17 +5,18 @@
 export type Pt = [number, number];
 
 export type Element =
-  | { id: string; kind: "stroke"; color: string; width: number; erase: boolean; pts: Pt[] }
+  | { id: string; kind: "stroke"; color: string; width: number; erase: boolean; hl?: boolean; pts: Pt[] }
   | { id: string; kind: "text"; color: string; size: number; x: number; y: number; text: string };
 
 /** Kanal mesajları (ChannelMessage'e `board_*` olarak eklenir). */
 export type BoardMessage =
   // Terapist → danışan: tahta açıldı; yönerge isteğe bağlı.
   // `backdropId`: tuvalin arka planı olan, daha önce gösterilen görselin kimliği (yoksa boş tuval).
-  | { type: "board_open"; sessionId: string; prompt: string | null; backdropId: string | null }
+  // `aspect`: tuvalin genişlik/yükseklik oranı (PDF sayfaları için; yoksa 4:3). `pdfPage`/`pdfTotal`: PDF üzerinde çiziliyorsa sayfa bilgisi.
+  | { type: "board_open"; sessionId: string; prompt: string | null; backdropId: string | null; aspect?: number; pdfPage?: number; pdfTotal?: number }
   | { type: "board_close"; sessionId: string }
   // İki yön: çizgi parçaları (canlı) ve tamamlanan öğeler.
-  | { type: "board_stroke"; sessionId: string; id: string; color: string; width: number; erase: boolean; pts: Pt[] }
+  | { type: "board_stroke"; sessionId: string; id: string; color: string; width: number; erase: boolean; hl?: boolean; pts: Pt[] }
   | { type: "board_text"; sessionId: string; el: Extract<Element, { kind: "text" }> }
   | { type: "board_undo"; sessionId: string; id: string }
   | { type: "board_clear"; sessionId: string }
@@ -51,12 +52,12 @@ export function sanitizeColor(c: unknown): string {
 }
 
 /** Gelen çizgi parçasını doğrular; geçersizse `null`. */
-export function sanitizeStroke(m: { id?: unknown; color?: unknown; width?: unknown; erase?: unknown; pts?: unknown }) {
+export function sanitizeStroke(m: { id?: unknown; color?: unknown; width?: unknown; erase?: unknown; hl?: unknown; pts?: unknown }) {
   const id = safeId(m.id);
   const pts = cleanPts(m.pts);
   if (!id || !pts) return null;
   const width = typeof m.width === "number" && Number.isFinite(m.width) ? Math.min(40, Math.max(1, m.width)) : 4;
-  return { id, color: sanitizeColor(m.color), width, erase: m.erase === true, pts };
+  return { id, color: sanitizeColor(m.color), width, erase: m.erase === true, hl: m.hl === true && m.erase !== true, pts };
 }
 
 export function sanitizeText(el: unknown): Extract<Element, { kind: "text" }> | null {
@@ -93,13 +94,13 @@ export class BoardState {
   /** Geri alınan veya temizlenen öğelerin kimlikleri; yeniden bağlanınca geri gelmesin diye hatırlanır. */
   removed = new Set<string>();
 
-  addStroke(s: { id: string; color: string; width: number; erase: boolean; pts: Pt[] }): void {
+  addStroke(s: { id: string; color: string; width: number; erase: boolean; hl?: boolean; pts: Pt[] }): void {
     if (this.removed.has(s.id)) return;
     const existing = this.elements.find((e) => e.id === s.id && e.kind === "stroke");
     if (existing && existing.kind === "stroke") {
       if (existing.pts.length + s.pts.length <= MAX_PTS_PER_STROKE) existing.pts.push(...s.pts);
     } else if (this.elements.length < MAX_ELEMENTS) {
-      this.elements.push({ id: s.id, kind: "stroke", color: s.color, width: s.width, erase: s.erase, pts: [...s.pts] });
+      this.elements.push({ id: s.id, kind: "stroke", color: s.color, width: s.width, erase: s.erase, hl: s.hl === true, pts: [...s.pts] });
     }
   }
 
@@ -184,6 +185,7 @@ export function draw(
   for (const e of elements) {
     if (e.kind === "text") {
       lc.globalCompositeOperation = "source-over";
+      lc.globalAlpha = 1;
       lc.fillStyle = e.color;
       lc.font = `${Math.round(e.size * h)}px "Segoe UI", system-ui, sans-serif`;
       lc.textBaseline = "top";
@@ -191,9 +193,10 @@ export function draw(
       continue;
     }
     lc.globalCompositeOperation = e.erase ? "destination-out" : "source-over";
+    lc.globalAlpha = e.hl ? 0.5 : 1; // vurgu kalemi: yarı saydam, kalın
     lc.strokeStyle = e.erase ? "#000" : e.color;
     lc.fillStyle = lc.strokeStyle;
-    lc.lineWidth = (e.erase ? e.width * 3 : e.width) * (scale / 800);
+    lc.lineWidth = (e.erase ? e.width * 3 : e.hl ? e.width * 4 : e.width) * (scale / 800);
     const [first, ...rest] = e.pts;
     if (!first) continue;
     if (rest.length === 0) {

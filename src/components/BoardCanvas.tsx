@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, Eraser, Pencil, Trash2, Type, Undo2, X } from "lucide-react";
+import { Check, Eraser, Highlighter, Pencil, Trash2, Type, Undo2, X } from "lucide-react";
 import { BoardState, COLORS, draw, loadImage, newId, type BoardMessage, type Pt, WIDTHS } from "../lib/board";
 import { cx } from "./ui";
 
-type Tool = "pen" | "eraser" | "text";
+type Tool = "pen" | "highlight" | "eraser" | "text";
 
 /** Çizgi parçaları bu aralıkla karşıya gönderilir (canlı görünsün, kanal da boğulmasın). */
 const SEND_EVERY_MS = 25;
@@ -14,7 +14,7 @@ const TEXT_SIZES = [0.035, 0.05, 0.075];
  * Ortak tuval. Fare, parmak ve kalem aynı "pointer" olaylarıyla çalışır; telefon ve bilgisayar için
  * ayrı kod yoktur. Çizim oranlı koordinatlarla tutulur, 4:3 alana sığdırılır.
  */
-export default function BoardCanvas({ board, rev, sessionId, send, onChange, background = "#152629", backdropUrl = null }: {
+export default function BoardCanvas({ board, rev, sessionId, send, onChange, background = "#152629", backdropUrl = null, aspect = 4 / 3 }: {
   board: BoardState;
   /** Uzaktan gelen değişikliklerde artar; tuval yeniden çizilir. */
   rev: number;
@@ -25,6 +25,8 @@ export default function BoardCanvas({ board, rev, sessionId, send, onChange, bac
   background?: string;
   /** Arka plan görseli (gösterilen materyal); iki taraf da üstüne çizer. */
   backdropUrl?: string | null;
+  /** Tuvalin genişlik/yükseklik oranı (PDF sayfası için sayfanın oranı). İki taraf aynı değeri kullanır. */
+  aspect?: number;
 }) {
   const wrap = useRef<HTMLDivElement>(null);
   const cv = useRef<HTMLCanvasElement>(null);
@@ -36,7 +38,7 @@ export default function BoardCanvas({ board, rev, sessionId, send, onChange, bac
   const [textVal, setTextVal] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
   const mine = useRef<string[]>([]);
-  const active = useRef<{ id: string; color: string; width: number; erase: boolean; pending: Pt[]; last: Pt; timer: ReturnType<typeof setInterval> } | null>(null);
+  const active = useRef<{ id: string; color: string; width: number; erase: boolean; hl: boolean; pending: Pt[]; last: Pt; timer: ReturnType<typeof setInterval> } | null>(null);
   const raf = useRef(0);
   const textRef = useRef<HTMLInputElement>(null);
   // Yazı kutusu açılınca odak verilir (bir sonraki turda, tıklamanın odak değişiminden sonra).
@@ -62,16 +64,16 @@ export default function BoardCanvas({ board, rev, sessionId, send, onChange, bac
     const ro = new ResizeObserver(() => {
       const r = el.getBoundingClientRect();
       let w = r.width;
-      let h = (w * 3) / 4;
+      let h = w / aspect;
       if (h > r.height) {
         h = r.height;
-        w = (h * 4) / 3;
+        w = h * aspect;
       }
       setSize({ w: Math.max(0, Math.floor(w)), h: Math.max(0, Math.floor(h)) });
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [aspect]);
 
   const redraw = useCallback(() => {
     const c = cv.current;
@@ -108,7 +110,7 @@ export default function BoardCanvas({ board, rev, sessionId, send, onChange, bac
   const flush = () => {
     const a = active.current;
     if (!a || a.pending.length === 0) return;
-    send({ type: "board_stroke", sessionId, id: a.id, color: a.color, width: a.width, erase: a.erase, pts: a.pending });
+    send({ type: "board_stroke", sessionId, id: a.id, color: a.color, width: a.width, erase: a.erase, hl: a.hl, pts: a.pending });
     a.pending = [];
   };
 
@@ -129,8 +131,9 @@ export default function BoardCanvas({ board, rev, sessionId, send, onChange, bac
       /* bazı cihazlarda yakalama desteklenmez; çizim yine çalışır */
     }
     const erase = tool === "eraser";
+    const hl = tool === "highlight";
     const id = newId();
-    const s = { id, color: erase ? COLORS[0] : color, width, erase };
+    const s = { id, color: erase ? COLORS[0] : color, width, erase, hl };
     board.addStroke({ ...s, pts: [p] });
     mine.current.push(id);
     active.current = { ...s, pending: [p], last: p, timer: setInterval(flush, SEND_EVERY_MS) };
@@ -143,9 +146,9 @@ export default function BoardCanvas({ board, rev, sessionId, send, onChange, bac
     const native = e.nativeEvent as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] };
     const events = native.getCoalescedEvents?.() ?? [native];
     const pts = (events.length ? events : [native]).map((ev) => point(ev.clientX, ev.clientY));
-    board.addStroke({ id: a.id, color: a.color, width: a.width, erase: a.erase, pts });
+    board.addStroke({ id: a.id, color: a.color, width: a.width, erase: a.erase, hl: a.hl, pts });
     a.pending.push(...pts);
-    if (a.erase || !cv.current) {
+    if (a.erase || a.hl || !cv.current) {
       schedule();
       return;
     }
@@ -237,6 +240,7 @@ export default function BoardCanvas({ board, rev, sessionId, send, onChange, bac
       <div className="flex shrink-0 flex-wrap items-center gap-2">
         <div className={cx(group, "gap-0.5 p-1")}>
           {toolBtn("pen", Pencil, "Kalem")}
+          {toolBtn("highlight", Highlighter, "Vurgu kalemi (önemli yerleri işaretle)")}
           {toolBtn("eraser", Eraser, "Silgi")}
           {toolBtn("text", Type, "Yazı")}
         </div>

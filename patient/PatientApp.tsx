@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { applySink, Call, type CallState, type CallStats, type ChannelMessage, getLocalMedia, joinRoom, type JoinResult, openInputTrack } from "../src/lib/rtc";
 import DevicePanel from "../src/components/DevicePanel";
+import { openPdf, type PdfDoc } from "../src/lib/pdfView";
 import { Button, cx } from "../src/components/ui";
 import TestForm from "./TestForm";
 import HomeworkView, { type HomeworkMessage } from "./HomeworkView";
@@ -176,8 +177,42 @@ export default function PatientApp() {
   useEffect(() => {
     const id = board.session?.backdropId;
     const cur = material.current;
-    if (id && cur && cur.id === id && cur.url) setBackdropUrl(cur.url);
+    if (id && cur && cur.id === id && cur.url && !board.session?.pdf) setBackdropUrl(cur.url);
   }, [board.session?.backdropId, material.current?.id, material.current?.url]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Terapist PDF üzerinde çiziyorsa: gelen PDF'nin ilgili sayfası görsele çevrilip tuvale arka plan olur.
+  const pdfDoc = useRef<{ id: string; doc: PdfDoc } | null>(null);
+  const pdfUrl = useRef<string | null>(null);
+  useEffect(() => {
+    const s = board.session;
+    const cur = material.current;
+    if (!s?.pdf || !s.backdropId || !cur || cur.id !== s.backdropId || !cur.url) return;
+    let live = true;
+    (async () => {
+      try {
+        if (pdfDoc.current?.id !== cur.id) {
+          pdfDoc.current?.doc.destroy();
+          pdfDoc.current = null;
+          const bytes = new Uint8Array(await (await fetch(cur.url!)).arrayBuffer());
+          pdfDoc.current = { id: cur.id, doc: await openPdf(bytes) };
+        }
+        const img = await pdfDoc.current!.doc.render(s.pdf!.page);
+        if (!live) {
+          URL.revokeObjectURL(img.url);
+          return;
+        }
+        const old = pdfUrl.current;
+        pdfUrl.current = img.url;
+        setBackdropUrl(img.url);
+        if (old) setTimeout(() => URL.revokeObjectURL(old), 3000);
+      } catch {
+        /* PDF açılamadı: boş tuval kalır */
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [board.session?.id, board.session?.pdf?.page, board.session?.backdropId, material.current?.id, material.current?.url]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Geri tuşu: açık ekranı kapatır, görüşmeden çıkarmaz (bkz. backStack.ts).
   const [backHint, setBackHint] = useState(false);
@@ -459,6 +494,7 @@ export default function PatientApp() {
               backdropUrl={backdropUrl}
               onMinimize={() => setBoardVisible(false)}
               video={remote ? <VideoEl stream={remote} muted /> : null}
+              selfVideo={local && camOn ? <VideoEl stream={local} muted mirrored={facing === "user"} /> : null}
             />
           )}
           {board.session && !boardVisible && (

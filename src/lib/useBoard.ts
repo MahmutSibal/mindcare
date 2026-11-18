@@ -2,7 +2,7 @@
 // İki taraf da aynı kancayı kullanır; mesajlar görüşmenin şifreli veri kanalından gider.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BoardState, newId, sanitizeElements, sanitizeStroke, sanitizeText, type BoardMessage } from "./board";
+import { BoardState, newId, sanitizeElements, sanitizeStroke, sanitizeText, type BoardMessage, type Element } from "./board";
 import type { ChannelMessage } from "./rtc";
 
 export interface BoardSession {
@@ -10,6 +10,19 @@ export interface BoardSession {
   prompt: string | null;
   /** Arka plan görselinin (gösterilen materyalin) kimliği. */
   backdropId: string | null;
+  /** Tuvalin genişlik/yükseklik oranı (PDF sayfası için sayfanın oranı; varsayılan 4:3). */
+  aspect: number;
+  /** PDF üzerinde çiziliyorsa sayfa bilgisi. */
+  pdf?: { page: number; total: number };
+}
+
+export const DEFAULT_ASPECT = 4 / 3;
+const cleanAspect = (a: unknown) => (typeof a === "number" && Number.isFinite(a) ? Math.min(2.5, Math.max(0.4, a)) : DEFAULT_ASPECT);
+
+/** Aynı belgenin sayfaları arasında gezerken her sayfanın çizimi saklanır. */
+interface Snapshot {
+  elements: Element[];
+  removed: string[];
 }
 
 export function useBoard(role: "host" | "guest", send: (m: ChannelMessage) => boolean, connected: boolean) {
@@ -21,6 +34,20 @@ export function useBoard(role: "host" | "guest", send: (m: ChannelMessage) => bo
   sessionRef.current = session;
   const sendRef = useRef(send);
   sendRef.current = send;
+  const snapshots = useRef(new Map<string, Snapshot>());
+  const stash = () => {
+    const cur = sessionRef.current;
+    if (cur) snapshots.current.set(cur.id, { elements: [...board.elements], removed: [...board.removed] });
+  };
+  /** Tahtayı sıfırlar; bu oturumun saklı çizimi varsa geri yükler (PDF'de sayfaya dönünce çizim durur). */
+  const resetFor = (id: string) => {
+    board.reset();
+    const snap = snapshots.current.get(id);
+    if (snap) {
+      board.elements = [...snap.elements];
+      board.removed = new Set(snap.removed);
+    }
+  };
 
   /** Tahta durumunu karşıya gönderir; veri kanalı henüz açık değilse birkaç kez dener. */
   const sync = useCallback(() => {
@@ -43,16 +70,17 @@ export function useBoard(role: "host" | "guest", send: (m: ChannelMessage) => bo
 
   /** Terapist: yeni tahta açar ve danışana bildirir. */
   const open = useCallback(
-    (prompt: string | null, backdropId: string | null = null) => {
-      const id = newId();
-      board.reset();
-      const s = { id, prompt: prompt?.trim() || null, backdropId };
+    (prompt: string | null, backdropId: string | null = null, opts?: { id?: string; aspect?: number; pdf?: { page: number; total: number } }) => {
+      const id = opts?.id ?? newId();
+      stash();
+      resetFor(id);
+      const s: BoardSession = { id, prompt: prompt?.trim() || null, backdropId, aspect: cleanAspect(opts?.aspect), pdf: opts?.pdf };
       sessionRef.current = s;
       setSession(s);
-      sendRef.current({ type: "board_open", sessionId: id, prompt: s.prompt, backdropId });
+      sendRef.current({ type: "board_open", sessionId: id, prompt: s.prompt, backdropId, aspect: s.aspect, pdfPage: s.pdf?.page, pdfTotal: s.pdf?.total });
       bump();
     },
-    [board, bump],
+    [board, bump], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   /** Terapist: tahtayı iki taraf için kapatır. */
@@ -60,6 +88,7 @@ export function useBoard(role: "host" | "guest", send: (m: ChannelMessage) => bo
     const s = sessionRef.current;
     if (s && role === "host") sendRef.current({ type: "board_close", sessionId: s.id });
     sessionRef.current = null;
+    snapshots.current.clear();
     setSession(null);
   }, [role]);
 
@@ -70,11 +99,16 @@ export function useBoard(role: "host" | "guest", send: (m: ChannelMessage) => bo
       const b = m as BoardMessage;
       if (b.type === "board_open") {
         if (role === "guest" && typeof b.sessionId === "string") {
-          board.reset();
-          const s = {
+          stash();
+          resetFor(b.sessionId);
+          const total = typeof b.pdfTotal === "number" && Number.isFinite(b.pdfTotal) ? Math.min(500, Math.max(1, Math.floor(b.pdfTotal))) : 0;
+          const page = typeof b.pdfPage === "number" && Number.isFinite(b.pdfPage) ? Math.min(total || 1, Math.max(1, Math.floor(b.pdfPage))) : 1;
+          const s: BoardSession = {
             id: b.sessionId,
             prompt: typeof b.prompt === "string" ? b.prompt.slice(0, 500) : null,
             backdropId: typeof b.backdropId === "string" ? b.backdropId.slice(0, 64) : null,
+            aspect: cleanAspect(b.aspect),
+            pdf: total ? { page, total } : undefined,
           };
           sessionRef.current = s;
           setSession(s);
@@ -88,6 +122,7 @@ export function useBoard(role: "host" | "guest", send: (m: ChannelMessage) => bo
         case "board_close":
           if (role === "guest") {
             sessionRef.current = null;
+            snapshots.current.clear();
             setSession(null);
           }
           break;

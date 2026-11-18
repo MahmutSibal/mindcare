@@ -346,11 +346,6 @@ export default function MaterialView({ item, onClose, control, onMediaState }: {
       </div>
       <p className="mb-3 text-xs text-muted">{t("Terapistiniz bir belge paylaştı")} • {fmtBytes(item.size)}</p>
       <div className="flex gap-2">
-        {isPdf(item.mime) && (
-          <Button variant="outline" className="flex-1 py-1.5 text-xs" onClick={() => window.open(item.url, "_blank", "noopener")}>
-            <ExternalLink size={14} /> {t("Aç")}
-          </Button>
-        )}
         <Button variant="outline" className="flex-1 py-1.5 text-xs" onClick={() => void save()}>
           <Download size={14} /> {t("İndir")}
         </Button>

@@ -9,6 +9,8 @@ import { PatientFiles, ReceivedFilesToast, useIncomingFiles } from "../component
 import { BoardPanel, BoardStartDialog, DrawingsList } from "../components/workspace/BoardPanel";
 import { RecordingControl, RecordingsList } from "../components/workspace/Recordings";
 import { useBoard } from "../lib/useBoard";
+import { openPdf, type PdfDoc } from "../lib/pdfView";
+import { newId } from "../lib/board";
 import { age, fmtDate, fmtDateTime, initials, minutes, plainText } from "../lib/format";
 import { notifyDataChanged, useActiveSession, useDataVersion } from "../lib/session";
 import { HomeworkCard, useHomeworkDeliveryReceipts } from "../components/workspace/Homework";
@@ -72,6 +74,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate, visi
   useEffect(() => onCallMessage((m) => void boardApi.handle(m)), [onCallMessage, boardApi.handle]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!call.inCall && boardApi.session) boardApi.close();
+    if (!call.inCall) endPdf();
   }, [call.inCall]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Danışan materyali eksiksiz aldığında onay gönderir.
@@ -166,6 +169,50 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate, visi
       return null;
     }
   };
+
+  // PDF: danışana gönderilir ve sayfa sayfa, birlikte işaretlenebilen ortak bir görünümde açılır. Danışan
+  // başka sekmeye geçmez; iki taraf da kamerayı görmeye devam eder.
+  const pdfRef = useRef<{ shareId: string; baseId: string; doc: PdfDoc } | null>(null);
+  const backdropObj = useRef<string | null>(null);
+  const setBackdropUrl = (url: string | null) => {
+    const old = backdropObj.current;
+    backdropObj.current = url;
+    setBoardBackdrop(url);
+    if (old && old !== url) setTimeout(() => URL.revokeObjectURL(old), 3000);
+  };
+  const isPdfMaterial = (m: Material) => m.category === "document" && /\.pdf$/i.test(m.file_path);
+  const goPdfPage = async (n: number) => {
+    const p = pdfRef.current;
+    if (!p) return;
+    try {
+      const page = Math.min(Math.max(1, n), p.doc.pages);
+      const img = await p.doc.render(page);
+      setBackdropUrl(img.url);
+      boardApi.open(null, p.shareId, { id: `${p.baseId}-${page}`, aspect: img.aspect, pdf: { page, total: p.doc.pages } });
+    } catch (e) {
+      setShareError(errorText(e));
+    }
+  };
+  const startPdf = async (m: Material) => {
+    const s = await showMaterial(m);
+    if (!s?.shareId) return;
+    try {
+      const doc = await openPdf(new Uint8Array(await api.readMaterial(m.id)));
+      pdfRef.current?.doc.destroy();
+      pdfRef.current = { shareId: s.shareId, baseId: newId(), doc };
+      await goPdfPage(1);
+    } catch (e) {
+      setShareError(errorText(e));
+    }
+  };
+  const endPdf = () => {
+    pdfRef.current?.doc.destroy();
+    pdfRef.current = null;
+  };
+  // Tahta kapanınca (iki taraf için) PDF de bırakılır.
+  useEffect(() => {
+    if (!boardApi.session) endPdf();
+  }, [boardApi.session?.id ? 1 : 0]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Görseli danışana gösterir, sonra üzerine ortak çizim açar. */
   const drawOnMaterial = async (m: Material, bytes?: Uint8Array<ArrayBuffer>) => {
@@ -293,7 +340,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate, visi
         materials={
           <MaterialLibrary
             materials={materials}
-            onShow={(m) => void showMaterial(m)}
+            onShow={(m) => void (isPdfMaterial(m) ? startPdf(m) : showMaterial(m))}
             onDraw={(m) => void drawOnMaterial(m)}
             onAll={() => onNavigate("materials")}
             connected={call.state === "connected"}
@@ -323,6 +370,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate, visi
           sessionId={session && session.patient_id === patient?.id ? session.id : null}
           remote={call.remote}
           backdropUrl={boardBackdrop}
+          onPdfPage={boardApi.session.pdf ? (n) => void goPdfPage(n) : undefined}
         />
       )}
     </div>
