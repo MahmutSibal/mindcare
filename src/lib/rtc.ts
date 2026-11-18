@@ -197,8 +197,8 @@ export const QUALITY_PRESETS: { id: QualityPreset; label: string; hint: string }
   { id: "saver", label: "Veri tasarrufu", hint: "Düşük kalite; mobil veride az kota harcar, ses önceliklidir." },
 ];
 const CAMERA_QUALITY: Record<QualityPreset, { bitrate: number; scale: number; fps: number }> = {
-  auto: { bitrate: 2_500_000, scale: 1, fps: 30 },
-  balanced: { bitrate: 1_000_000, scale: 1.5, fps: 24 },
+  auto: { bitrate: 4_000_000, scale: 1, fps: 30 }, // Full HD kamerada net görüntü (bağlantı elverdiği kadar)
+  balanced: { bitrate: 1_800_000, scale: 1.5, fps: 30 },
   saver: { bitrate: 400_000, scale: 2.5, fps: 15 },
 };
 
@@ -425,7 +425,7 @@ export class Call {
       const enc = p.encodings?.[0];
       if (enc) {
         // Bant daraldığında konuşma görüntüden önce gelsin.
-        enc.maxBitrate = 64_000; // konuşma için yüksek kalite (Opus varsayılanı ~32 kbps)
+        enc.maxBitrate = 128_000; // yüksek kaliteli konuşma/müzik (Opus varsayılanı ~32 kbps)
         enc.priority = "high";
         enc.networkPriority = "high";
         await audio.setParameters(p).catch(() => {});
@@ -663,7 +663,7 @@ type VoiceConstraints = MediaTrackConstraints & { voiceIsolation?: boolean };
  * ayrıca ses yalıtımı (klavye ve arka plan seslerini konuşmadan ayırır).
  */
 function voiceConstraints(): VoiceConstraints {
-  const audio: VoiceConstraints = { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 };
+  const audio: VoiceConstraints = { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1, sampleRate: { ideal: 48000 } };
   const supported = navigator.mediaDevices.getSupportedConstraints() as Record<string, boolean | undefined>;
   if (supported.voiceIsolation) audio.voiceIsolation = true;
   return audio;
@@ -677,10 +677,44 @@ export function audioProcessing(stream: MediaStream | null): { noiseSuppression:
   return { noiseSuppression: !!s.noiseSuppression, echoCancellation: !!s.echoCancellation, voiceIsolation: !!s.voiceIsolation };
 }
 
+const VIDEO_IDEAL = { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30, max: 30 } };
+
+export interface DeviceInfo { id: string; label: string }
+export interface DeviceLists { mics: DeviceInfo[]; speakers: DeviceInfo[]; cams: DeviceInfo[] }
+
+/** Takılı mikrofon, hoparlör ve kameraları listeler (izin verildikten sonra adları görünür). */
+export async function listDevices(): Promise<DeviceLists> {
+  const all = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.deviceId);
+  const pick = (kind: MediaDeviceKind, fallback: string): DeviceInfo[] =>
+    all.filter((d) => d.kind === kind).map((d, i) => ({ id: d.deviceId, label: d.label || `${fallback} ${i + 1}` }));
+  return { mics: pick("audioinput", "Mikrofon"), speakers: pick("audiooutput", "Hoparlör"), cams: pick("videoinput", "Kamera") };
+}
+
+/** Çıkış cihazı seçimi (setSinkId) bu tarayıcıda var mı? Telefonlarda genellikle yoktur. */
+export function outputSelectable(): boolean {
+  return typeof HTMLMediaElement !== "undefined" && "setSinkId" in HTMLMediaElement.prototype;
+}
+
+/** Belirli bir mikrofon ya da kameradan yeni bir iz açar. */
+export async function openInputTrack(kind: "audio" | "video", deviceId: string): Promise<MediaStreamTrack> {
+  const s = await navigator.mediaDevices.getUserMedia(
+    kind === "audio"
+      ? { audio: { ...voiceConstraints(), deviceId: { exact: deviceId } } }
+      : { video: { ...VIDEO_IDEAL, deviceId: { exact: deviceId } } },
+  );
+  return (kind === "audio" ? s.getAudioTracks() : s.getVideoTracks())[0]!;
+}
+
+/** Medya öğesinin sesini seçilen hoparlöre yönlendirir (destek yoksa sessizce geçer). */
+export function applySink(el: HTMLMediaElement | null, deviceId: string) {
+  const m = el as (HTMLMediaElement & { setSinkId?: (id: string) => Promise<void> }) | null;
+  if (m?.setSinkId && deviceId) void m.setSinkId(deviceId).catch(() => {});
+}
+
 export async function getLocalMedia(): Promise<MediaStream> {
   try {
     return await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } },
+      video: VIDEO_IDEAL,
       audio: voiceConstraints(),
     });
   } catch (e: any) {

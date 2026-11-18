@@ -22,7 +22,7 @@ export function RecordingControl({ call, boardApi, backdropUrl, patientId, sessi
   if (!rec.supported) return null;
 
   return (
-    <div className="rounded-xl border border-line bg-panel px-3 py-2.5 text-[13px]">
+    <div className="rounded-xl border border-line bg-panel px-3 py-2 text-[13px]">
       <div className="flex flex-wrap items-center gap-2">
         {rec.status === "recording" ? (
           <>
@@ -42,7 +42,7 @@ export function RecordingControl({ call, boardApi, backdropUrl, patientId, sessi
           <span className="text-muted">Kayıt kaydediliyor…</span>
         ) : (
           <>
-            <span className="text-muted">Seans kaydı (video + ortak çizim)</span>
+            <span className="text-muted" title="Danışan açıkça kabul etmeden kayıt başlamaz; danışan istediği an durdurabilir. Kayıt yalnızca bu bilgisayarın şifreli veritabanında saklanır (yaklaşık 400 MB/saat). Pencere küçültülürse kalite düşebilir.">Seans kaydı</span>
             <Button
               variant="outline"
               className="ml-auto px-3 py-1.5 text-xs"
@@ -55,12 +55,6 @@ export function RecordingControl({ call, boardApi, backdropUrl, patientId, sessi
           </>
         )}
       </div>
-      {rec.status === "idle" && !rec.notice && (
-        <p className="mt-1.5 text-[11px] leading-relaxed text-faint">
-          Danışan açıkça kabul etmeden kayıt başlamaz ve danışan istediği an durdurabilir. Kayıt yalnızca bu bilgisayarın şifreli
-          veritabanında saklanır; yaklaşık 400 MB/saat yer kaplar. Pencere küçültülürse kayıt kalitesi düşebilir.
-        </p>
-      )}
       {rec.notice && (
         <p className="mt-1.5 flex items-start justify-between gap-2 text-xs text-muted">
           <span>{rec.notice}</span>

@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useBackClose, useBackGuard } from "./lib/backStack";
-import {
-  CalendarDays, ClipboardList, FolderOpen, Home, LockKeyhole, Menu, NotebookTabs, Settings as SettingsIcon, Users, UsersRound, Wallet,
-} from "lucide-react";
+import { CalendarDays, CircleHelp, FolderOpen, Home, LockKeyhole, Menu, Settings as SettingsIcon, Users, UsersRound } from "lucide-react";
 import { api, errorText, RECOVERY_CONFIRMED_KEY, type Appointment, type AppStatus } from "./lib/api";
 import { BRAND_NAME } from "./lib/brand";
 import BrandMark from "./components/BrandMark";
@@ -20,20 +18,45 @@ import Settings from "./pages/Settings";
 import Billing from "./pages/Billing";
 import AppLock from "./components/AppLock";
 import UpdateBanner from "./components/UpdateBanner";
+import GuideTour from "./components/GuideTour";
 
 export type Page = "home" | "groups" | "patients" | "appointments" | "billing" | "sessions" | "materials" | "tests" | "settings";
 
-const NAV: { id: Page; label: string; icon: typeof Home }[] = [
-  { id: "home", label: "Ana Sayfa", icon: Home },
-  { id: "patients", label: "Danışanlar", icon: Users },
-  { id: "groups", label: "Gruplar", icon: UsersRound },
-  { id: "appointments", label: "Randevular", icon: CalendarDays },
-  { id: "billing", label: "Ücretler", icon: Wallet },
-  { id: "sessions", label: "Seanslar", icon: NotebookTabs },
-  { id: "materials", label: "Materyaller", icon: FolderOpen },
-  { id: "tests", label: "Testler", icon: ClipboardList },
-  { id: "settings", label: "Ayarlar", icon: SettingsIcon },
+/** Yan menü 6 bölümdür; birden çok sayfası olan bölümlerde sayfalar üstte sekme olarak görünür. */
+const NAV: { id: Page; label: string; icon: typeof Home; pages: { page: Page; label: string }[] }[] = [
+  { id: "home", label: "Ana Sayfa", icon: Home, pages: [{ page: "home", label: "Ana Sayfa" }] },
+  { id: "patients", label: "Danışanlar", icon: Users, pages: [{ page: "patients", label: "Danışanlar" }, { page: "billing", label: "Ücretler" }] },
+  { id: "groups", label: "Gruplar", icon: UsersRound, pages: [{ page: "groups", label: "Gruplar" }] },
+  { id: "appointments", label: "Takvim", icon: CalendarDays, pages: [{ page: "appointments", label: "Randevular" }, { page: "sessions", label: "Geçmiş seanslar" }] },
+  { id: "materials", label: "Kütüphane", icon: FolderOpen, pages: [{ page: "materials", label: "Materyaller" }, { page: "tests", label: "Testler" }] },
+  { id: "settings", label: "Ayarlar", icon: SettingsIcon, pages: [{ page: "settings", label: "Ayarlar" }] },
 ];
+
+const sectionOf = (page: Page) => NAV.find((n) => n.pages.some((p) => p.page === page)) ?? NAV[0]!;
+
+/** Bölümün sayfaları arasında geçiş: Danışanlar | Ücretler gibi. */
+function SectionTabs({ page, onPage }: { page: Page; onPage: (p: Page) => void }) {
+  const section = sectionOf(page);
+  if (section.pages.length < 2) return null;
+  return (
+    <div className="flex shrink-0 gap-1 border-b border-line px-4 pt-2 md:px-8" role="tablist">
+      {section.pages.map((p) => (
+        <button
+          key={p.page}
+          role="tab"
+          aria-selected={page === p.page}
+          onClick={() => onPage(p.page)}
+          className={cx(
+            "-mb-px border-b-2 px-3 py-2.5 text-sm transition-colors",
+            page === p.page ? "border-accent font-medium text-ink" : "border-transparent text-muted hover:text-ink",
+          )}
+        >
+          {p.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export default function App() {
   const [status, setStatus] = useState<AppStatus | null>(null);
@@ -107,6 +130,8 @@ function Shell() {
   const [therapist, setTherapist] = useState({ name: "", title: "" });
   const [askRecovery, setAskRecovery] = useState(false);
   const [askProfile, setAskProfile] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [askGuide, setAskGuide] = useState(false);
   const [locked, setLocked] = useState(false);
   const [lockEnabled, setLockEnabled] = useState(false);
   const [lastBackup, setLastBackup] = useState<string | null | undefined>(undefined);
@@ -181,6 +206,7 @@ function Shell() {
     api.getSettings().then((s) => {
       setAskRecovery(!s[RECOVERY_CONFIRMED_KEY]);
       setAskProfile(!s.onboarding_done && !(s.therapist_name ?? "").trim());
+      setAskGuide(!s.guide_seen);
     });
   }, []);
 
@@ -197,28 +223,41 @@ function Shell() {
           <span className="hidden font-semibold tracking-tight xl:inline">{BRAND_NAME}</span>
         </div>
         <nav className="flex flex-1 flex-col gap-0.5 px-1.5 pt-1 xl:px-2">
-          {NAV.map(({ id, label, icon: Icon }) => (
+          {NAV.map(({ id, label, icon: Icon, pages }) => {
+            const active = pages.some((p) => p.page === page);
+            return (
             <button
               key={id}
-              onClick={() => setPage(id)}
+              onClick={() => !active && setPage(id)}
               title={label}
               aria-label={label}
+              aria-current={active ? "page" : undefined}
               className={cx(
                 "relative flex items-center justify-center gap-2.5 rounded-lg px-2 py-2.5 text-[13px] transition-colors xl:justify-start xl:px-3 xl:py-2",
-                page === id ? "bg-accent-soft font-medium text-ink" : "text-muted hover:bg-card hover:text-ink",
+                active ? "bg-accent-soft font-medium text-ink" : "text-muted hover:bg-card hover:text-ink",
               )}
             >
-              <Icon size={18} className={page === id ? "text-accent" : ""} />
+              <Icon size={18} className={active ? "text-accent" : ""} />
               <span className="hidden xl:inline">{label}</span>
               {id === "home" && session && (
                 <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-ok xl:static xl:ml-auto" title="Seans sürüyor" />
               )}
             </button>
-          ))}
+            );
+          })}
         </nav>
         <div className="mx-3 mb-3 hidden items-center gap-1.5 rounded-lg bg-card/60 px-3 py-2 text-[11px] text-faint xl:flex">
           <LockKeyhole size={12} /> Yerel ve şifreli
         </div>
+        <button
+          onClick={() => setGuideOpen(true)}
+          title="Kullanım rehberi / User guide"
+          aria-label="Kullanım rehberi"
+          className="mx-1.5 mb-2 flex items-center justify-center gap-2.5 rounded-lg px-2 py-2.5 text-[13px] text-muted transition-colors hover:bg-card hover:text-ink xl:mx-2 xl:justify-start xl:px-3 xl:py-2"
+        >
+          <CircleHelp size={18} />
+          <span className="hidden xl:inline">Rehber</span>
+        </button>
         <button
           onClick={() => setPage("settings")}
           title={therapist.name || "Ayarlar"}
@@ -236,7 +275,9 @@ function Shell() {
         </button>
       </aside>
 
-      <main className="min-h-0 min-w-0 flex-1">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <SectionTabs page={page} onPage={setPage} />
+        <div className="min-h-0 flex-1">
         {/* Görüşme başka sayfaya geçilince kopmasın diye Ana Sayfa hep bağlı kalır. */}
         <div className={page === "home" ? "h-full" : "hidden"}>
           <Workspace patientId={patientId} onSelectPatient={setPatientId} onNavigate={setPage} visible={page === "home"} />
@@ -251,7 +292,8 @@ function Shell() {
         {page === "sessions" && <Sessions onOpenPatient={openPatient} />}
         {page === "materials" && <Materials />}
         {page === "tests" && <Tests />}
-        {page === "settings" && <Settings />}
+        {page === "settings" && <Settings onOpenGuide={() => setGuideOpen(true)} />}
+        </div>
       </main>
 
       <MobileNav page={page} onPage={setPage} sessionActive={!!session} />
@@ -288,7 +330,19 @@ function Shell() {
         <WelcomeProfile onDone={() => { setAskProfile(false); notifyDataChanged(); }} />
       )}
 
-      {askRecovery && !askProfile && !locked && (
+      {(guideOpen || (askGuide && !askProfile && !locked)) && (
+        <GuideTour
+          onClose={() => {
+            setGuideOpen(false);
+            if (askGuide) {
+              setAskGuide(false);
+              void api.setSetting("guide_seen", "1").catch(() => {});
+            }
+          }}
+        />
+      )}
+
+      {askRecovery && !askProfile && !locked && !(askGuide || guideOpen) && (
         <RecoveryKeyDialog
           onClose={() => setAskRecovery(false)}
           onConfirmed={() => {
@@ -307,38 +361,39 @@ function MobileNav({ page, onPage, sessionActive }: { page: Page; onPage: (p: Pa
   useBackClose(more, () => setMore(false));
   const main = NAV.filter((n) => ["home", "patients", "groups", "appointments"].includes(n.id));
   const rest = NAV.filter((n) => !["home", "patients", "groups", "appointments"].includes(n.id));
-  const restActive = rest.some((n) => n.id === page);
+  const isActive = (n: (typeof NAV)[number]) => n.pages.some((p) => p.page === page);
+  const restActive = rest.some(isActive);
   return (
     <nav className="relative shrink-0 border-t border-line bg-rail pb-[env(safe-area-inset-bottom)] md:hidden" aria-label="Ana gezinme">
       {more && (
         <>
           <button className="fixed inset-0 z-30 cursor-default" aria-label="Menüyü kapat" onClick={() => setMore(false)} />
           <div className="absolute bottom-full right-2 z-40 mb-2 w-52 overflow-hidden rounded-2xl border border-line bg-panel shadow-2xl">
-            {rest.map(({ id, label, icon: Icon }) => (
+            {rest.map((n) => (
               <button
-                key={id}
+                key={n.id}
                 onClick={() => {
-                  onPage(id);
+                  onPage(n.id);
                   setMore(false);
                 }}
-                className={cx("flex w-full items-center gap-3 px-4 py-3 text-left text-sm", page === id ? "bg-accent-soft text-ink" : "text-muted hover:bg-card")}
+                className={cx("flex w-full items-center gap-3 px-4 py-3 text-left text-sm", isActive(n) ? "bg-accent-soft text-ink" : "text-muted hover:bg-card")}
               >
-                <Icon size={18} className={page === id ? "text-accent" : ""} /> {label}
+                <n.icon size={18} className={isActive(n) ? "text-accent" : ""} /> {n.label}
               </button>
             ))}
           </div>
         </>
       )}
       <div className="flex">
-        {main.map(({ id, label, icon: Icon }) => (
+        {main.map((n) => (
           <button
-            key={id}
-            onClick={() => onPage(id)}
-            className={cx("relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px]", page === id ? "text-accent" : "text-muted")}
+            key={n.id}
+            onClick={() => !isActive(n) && onPage(n.id)}
+            className={cx("relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px]", isActive(n) ? "text-accent" : "text-muted")}
           >
-            <Icon size={20} />
-            {label}
-            {id === "home" && sessionActive && <span className="absolute right-[28%] top-1.5 h-2 w-2 rounded-full bg-ok" />}
+            <n.icon size={20} />
+            {n.label}
+            {n.id === "home" && sessionActive && <span className="absolute right-[28%] top-1.5 h-2 w-2 rounded-full bg-ok" />}
           </button>
         ))}
         <button

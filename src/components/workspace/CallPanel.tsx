@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Check, Copy, Info, Lock, MessageCircle, Mic, MicOff, MonitorUp, MoreVertical, PhoneOff, RefreshCw, ShieldAlert, Signal, Video, VideoOff, Wifi,
-  WifiOff, Waves,
+  WifiOff, Waves, SlidersHorizontal,
 } from "lucide-react";
 import type { Patient } from "../../lib/api";
-import { audioProcessing, type CallStats, type VideoStats } from "../../lib/rtc";
+import { applySink, audioProcessing, type CallStats, type VideoStats } from "../../lib/rtc";
+import DevicePanel from "../DevicePanel";
 import { initials } from "../../lib/format";
 import { useActiveSession } from "../../lib/session";
 import { Avatar, Button, cx, Modal } from "../ui";
@@ -14,8 +15,10 @@ import { copyText } from "../../lib/clipboard";
 import { isTouchDevice } from "../../lib/useIsMobile";
 import { shareViaWhatsApp } from "../../lib/shareLink";
 
-function VideoEl({ stream, muted, mirrored, className }: {
+function VideoEl({ stream, muted, mirrored, className, sinkId }: {
   stream: MediaStream | null;
+  /** Sesin çalınacağı hoparlör (boşsa sistem varsayılanı). */
+  sinkId?: string;
   muted?: boolean;
   mirrored?: boolean;
   className?: string;
@@ -24,6 +27,9 @@ function VideoEl({ stream, muted, mirrored, className }: {
   useEffect(() => {
     if (ref.current) ref.current.srcObject = stream;
   }, [stream]);
+  useEffect(() => {
+    applySink(ref.current, sinkId ?? "");
+  }, [sinkId, stream]);
   return (
     <video
       ref={ref}
@@ -86,6 +92,7 @@ export default function CallPanel({ call, patient }: { call: CallApi; patient: P
   const active = useActiveSession();
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [settings, setSettings] = useState(false);
+  const [devices, setDevices] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const begin = async () => {
@@ -115,7 +122,7 @@ export default function CallPanel({ call, patient }: { call: CallApi; patient: P
       {/* VideoGrid */}
       <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl bg-bg">
         {call.remote ? (
-          <VideoEl stream={call.remote} />
+          <VideoEl stream={call.remote} sinkId={call.outputId} />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
             {patient && <Avatar text={initials(patient.full_name)} size={96} />}
@@ -153,7 +160,7 @@ export default function CallPanel({ call, patient }: { call: CallApi; patient: P
           </div>
         )}
 
-        {!isTouchDevice() && <MicLevel stream={call.local} on={call.micOn} />}
+        {!isTouchDevice() && <MicLevel key={call.inputVersion} stream={call.local} on={call.micOn} />}
 
         {/* Terapist önizlemesi */}
         {call.local && (
@@ -183,6 +190,14 @@ export default function CallPanel({ call, patient }: { call: CallApi; patient: P
           highlight={!!call.screen}
         />
         <button
+          onClick={() => setDevices(true)}
+          title="Ses ve görüntü cihazları"
+          aria-label="Ses ve görüntü cihazları"
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-line bg-card text-ink hover:bg-line"
+        >
+          <SlidersHorizontal size={17} />
+        </button>
+        <button
           onClick={() => setSettings(true)}
           title="Görüşme ayarları"
           aria-label="Görüşme ayarları"
@@ -200,6 +215,17 @@ export default function CallPanel({ call, patient }: { call: CallApi; patient: P
           <PhoneOff size={17} /> Bitir
         </button>
       </div>
+
+      {devices && (
+        <DevicePanel
+          local={call.local}
+          version={call.inputVersion}
+          outputId={call.outputId}
+          onPickInput={call.switchInput}
+          onPickOutput={call.setOutputId}
+          onClose={() => setDevices(false)}
+        />
+      )}
 
       {settings && (
         <Modal title="Görüşme ayarları" onClose={() => setSettings(false)}>

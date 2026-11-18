@@ -1,0 +1,22 @@
+{
+  "tr": {
+    "title": "Hızlı başlangıç",
+    "steps": [
+      ["Danışan ekleyin", "Danışanlar sayfasından kaydı oluşturun"],
+      ["Görüntülü görüşme başlatın", "Davet bağlantısını danışana gönderin"],
+      ["Seansı yürütün", "Not alın, test/ödev verin, birlikte çizin"],
+      ["Güvende kalın", "Yedek alın, kurtarma anahtarını saklayın"]
+    ],
+    "footer": "Veriler yalnızca bu bilgisayarda, şifreli saklanır."
+  },
+  "en": {
+    "title": "Quick start",
+    "steps": [
+      ["Add a client", "Create the record on the Clients page"],
+      ["Start a video session", "Send the invite link to your client"],
+      ["Run the session", "Take notes, send tests/homework, draw together"],
+      ["Stay safe", "Make a backup and keep your recovery key"]
+    ],
+    "footer": "Data stays encrypted on this computer only."
+  }
+}

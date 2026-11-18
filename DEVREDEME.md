@@ -77,7 +77,7 @@ logo/                   Müşterinin logosu (logo.jpeg) ve türetilen kare simge
 |---|---|---|
 | GitHub deposu | `MahmutSibal/mindcare` (main dalı Render'a otomatik yayınlanır) | |
 | Supabase projesi | `tckgvtuvwyvnxabmdjas`, `eu-central-1` | Anonim girişler açık olmalı. Geçişleri SQL Editor'de sırayla çalıştırın. Ücretsiz planda proje 1 hafta kullanılmazsa duraklar (Pro: 25 USD/ay) |
-| Render | `mindcare-gorusme.onrender.com` (GitHub `main` dalına her gönderimde yayınlanır) | Danışan sayfasını (`npm run patient:build` çıktısı, `dist-patient/`) sunar. Render panelindeki derleme ayarlarına bakın |
+| Render | `mavi-ruh.onrender.com` (GitHub `main` dalına her gönderimde yayınlanır) | Danışan sayfasını (`npm run patient:build` çıktısı, `dist-patient/`) sunar. Render panelindeki derleme ayarlarına bakın |
 | Cloudflare TURN | Anahtar kimliği ve API belirteci **uygulama içinde Ayarlar'a** girilir (şifreli veritabanında durur) | Ücretsiz plan: ayda 1000 GB |
 | Gemini API anahtarı | Ayarlar > Yapay zekâ asistanı | `AQ.` ile başlayan yeni biçim sorun değil. Ücretsiz planda Google metni ürün geliştirmede kullanabilir |
 | **Play yükleme anahtarı** | `C:\Users\asus\maviruh-anahtar\maviruh-upload.jks` + `SIFRE-VE-BILGI.txt` | **Kaybolursa Play'e bir daha güncelleme yüklenemez.** Güvenli kanaldan (şifreli USB) aktarın, e-posta/WhatsApp ile göndermeyin. Zip'e girmez |
@@ -125,7 +125,7 @@ olarak kaldı, bilerek (yeniden adlandırma gereksiz risk).
 4. **Play Store süreci:** `YAYIN.md` (hesap, kapalı test, gizlilik, veri güvenliği formu). `patient/public/gizlilik.html` içindeki
    köşeli parantezli kurum bilgileri **doldurulmalı**.
 5. **Windows kurulum dosyası imzasız** (SmartScreen uyarısı verir). Kod imzalama sertifikası gerekir.
-6. **Danışan adresi** `mindcare-gorusme.onrender.com` marka dışı; Render servis adı ya da kliniğin kendi alan adı bağlanmalı.
+6. **Danışan adresi** `mavi-ruh.onrender.com` (eski `mindcare-gorusme` servisi geçiş için açık bırakıldı; kullanım bitince silinebilir). İsterseniz kliniğin kendi alan adı bağlanabilir.
 7. Grup seansında materyal **videosu** desteklenmiyor; iOS yok; danışan sayfası yalnızca Türkçe.
 8. Gelecek vizyonu (müşteri): danışanların profil açıp randevu aldığı klinik uygulaması. Bu, "veri yalnızca terapistte" ilkesini
    değiştirir; ayrı mimari karar gerektirir.

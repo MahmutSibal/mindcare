@@ -1435,7 +1435,7 @@ const SECRET_SETTINGS: &[&str] = &["gemini_api_key", "cf_turn_api_token", "app_l
 const ALLOWED_SETTINGS: &[&str] = &[
     "therapist_name", "therapist_title", "patient_app_url", "invite_ttl_minutes",
     "cf_turn_key_id", "cf_turn_api_token", "turn_url", "turn_username", "turn_credential",
-    "gemini_model", "gemini_api_key", RECOVERY_CONFIRMED, "onboarding_done", "last_backup_at",
+    "gemini_model", "gemini_api_key", RECOVERY_CONFIRMED, "onboarding_done", "last_backup_at", "guide_seen",
 ];
 
 fn setting_allowed(key: &str) -> bool {

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../lib/api";
-import { DEFAULT_PATIENT_APP_URL } from "../../lib/config";
+import { resolvePatientAppUrl } from "../../lib/config";
 import {
   buildIceServers, Call, type CallState, type CallStats, type ChannelMessage, createInvite, getLocalMedia, type Invite,
-  type QualityPreset,
+  openInputTrack, type QualityPreset,
 } from "../../lib/rtc";
 
 /** Terapist tarafı görüşme durumu: yerel medya, davet, bağlantı ve ekran paylaşımı. */
@@ -53,7 +53,7 @@ export function useCall() {
       const media = await ensureLocal();
       const settings = await api.getSettings();
       const ttl = Number(settings.invite_ttl_minutes ?? 30) || 30;
-      const inv = await createInvite(settings.patient_app_url || DEFAULT_PATIENT_APP_URL, ttl);
+      const inv = await createInvite(resolvePatientAppUrl(settings.patient_app_url), ttl);
       // Öncelik Cloudflare TURN (her görüşme için geçici kimlik bilgisi); yoksa elle girilmiş
       // TURN; o da yoksa yalnızca STUN. Cloudflare'e ulaşılamazsa görüşme yine başlar.
       let ice = buildIceServers({
@@ -188,6 +188,24 @@ export function useCall() {
     setState("idle");
   }, [screen, stopVideo]);
 
+  // Cihaz seçimi: mikrofon/kamera değişince yeni iz aynı yerel akışa konur (yeniden bağlanmada da korunur).
+  const [outputId, setOutputId] = useState("");
+  const [inputVersion, setInputVersion] = useState(0);
+  const switchInput = async (kind: "audio" | "video", deviceId: string) => {
+    const stream = localRef.current ?? (await ensureLocal());
+    const track = await openInputTrack(kind, deviceId);
+    track.enabled = kind === "audio" ? micOn : camOn;
+    const old = (kind === "audio" ? stream.getAudioTracks() : stream.getVideoTracks())[0];
+    if (old) {
+      old.stop();
+      stream.removeTrack(old);
+    }
+    stream.addTrack(track);
+    // Ekran ya da video paylaşılırken kamera izi gönderilmez; paylaşım bitince yeni kamera devreye girer.
+    if (!(kind === "video" && (screen || videoRef.current))) callRef.current?.replaceTrack(kind, track);
+    setInputVersion((v) => v + 1);
+  };
+
   const toggleMic = () => {
     const next = !micOn;
     localRef.current?.getAudioTracks().forEach((t) => (t.enabled = next));
@@ -258,6 +276,7 @@ export function useCall() {
   return {
     local, remote, state, stats, invite, micOn, camOn, screen, error, turnWarning, videoShare, videoPaused,
     inCall: callRef.current !== null || (state !== "idle" && state !== "ended" && state !== "failed"),
+    outputId, setOutputId, switchInput, inputVersion,
     start, hangup, toggleMic, toggleCam, shareScreen, stopScreen, sendMessage, sendBuffered, onMessage, ensureLocal,
     showVideo, stopVideo, renewInvite, renewing, quality, setQuality,
     clearError: () => setError(null),

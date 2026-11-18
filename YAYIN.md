@@ -9,7 +9,7 @@ girilecek hazır metinleri içerir.
 |---|---|
 | Android sürüm derlemesi (16 KB sayfa hizalı, arm64) | Hazır |
 | Uygulama verisinin buluta yedeklenmesi | Kapatıldı (veritabanı ve anahtarı yedeklemeye girmez) |
-| Gizlilik politikası sayfası | Hazır: `https://mindcare-gorusme.onrender.com/gizlilik.html` (yayınlanınca). Köşeli parantezli alanlar doldurulmalı |
+| Gizlilik politikası sayfası | Hazır: `https://mavi-ruh.onrender.com/gizlilik.html` (yayınlanınca). Köşeli parantezli alanlar doldurulmalı |
 | Play Store yükleme anahtarı | **Karar bekliyor** (aşağıya bakın) |
 | Uygulama kimliği (applicationId) | **Karar bekliyor**: şu an `com.mindcare.desktop`; ilk yüklemeden sonra değiştirilemez |
 | AAB paketi | Anahtar ve kimlik kararından sonra üretilecek |

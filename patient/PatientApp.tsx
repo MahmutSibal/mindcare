@@ -5,9 +5,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   FileSignature, FileText, Lock, Maximize2, Mic, MicOff, MoreVertical, Pencil, PhoneOff, Smartphone, SwitchCamera,
-  Video, VideoOff,
+  SlidersHorizontal, Video, VideoOff,
 } from "lucide-react";
-import { Call, type CallState, type CallStats, type ChannelMessage, getLocalMedia, joinRoom, type JoinResult } from "../src/lib/rtc";
+import { applySink, Call, type CallState, type CallStats, type ChannelMessage, getLocalMedia, joinRoom, type JoinResult, openInputTrack } from "../src/lib/rtc";
+import DevicePanel from "../src/components/DevicePanel";
 import { Button, cx } from "../src/components/ui";
 import TestForm from "./TestForm";
 import HomeworkView, { type HomeworkMessage } from "./HomeworkView";
@@ -318,6 +319,27 @@ export default function PatientApp() {
     setPhase("left");
   };
 
+  // Ses ve görüntü cihazı seçimi (yan panel).
+  const [devicesOpen, setDevicesOpen] = useState(false);
+  const [outputId, setOutputId] = useState("");
+  const [inputVersion, setInputVersion] = useState(0);
+  const switchInput = async (kind: "audio" | "video", deviceId: string) => {
+    if (!local) return;
+    const track = await openInputTrack(kind, deviceId);
+    track.enabled = kind === "audio" ? micOn : camOn;
+    const old = (kind === "audio" ? local.getAudioTracks() : local.getVideoTracks())[0];
+    if (old) {
+      old.stop();
+      local.removeTrack(old);
+    }
+    local.addTrack(track);
+    callRef.current?.replaceTrack(kind, track);
+    setInputVersion((v) => v + 1);
+  };
+  useEffect(() => {
+    applySink(remoteVideo.current, outputId);
+  }, [outputId, remote]);
+
   const toggle = (kind: "audio" | "video") => {
     const tracks = kind === "audio" ? local?.getAudioTracks() : local?.getVideoTracks();
     const next = kind === "audio" ? !micOn : !camOn;
@@ -344,7 +366,7 @@ export default function PatientApp() {
     setError(null);
     const open = async (mode: "user" | "environment", exact: boolean) =>
       (await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: exact ? { exact: mode } : mode, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } },
+        video: { facingMode: exact ? { exact: mode } : mode, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30, max: 30 } },
       })).getVideoTracks()[0];
     const next: "user" | "environment" = facing === "user" ? "environment" : "user";
     const old = local.getVideoTracks()[0];
@@ -391,6 +413,17 @@ export default function PatientApp() {
             {camOn ? <VideoEl key={facing} stream={local} muted mirrored={facing === "user"} /> : <div className="flex h-full items-center justify-center text-faint"><VideoOff /></div>}
           </div>
           <ConnectionBadge state={state} stats={stats} />
+          {devicesOpen && (
+            <DevicePanel
+              local={local}
+              version={inputVersion}
+              outputId={outputId}
+              onPickInput={switchInput}
+              onPickOutput={setOutputId}
+              onClose={() => setDevicesOpen(false)}
+              t={t}
+            />
+          )}
           <RecordingNotice
             ask={recAsk}
             active={recActive}
@@ -466,6 +499,15 @@ export default function PatientApp() {
               <div className="absolute bottom-full left-1/2 z-40 mb-2 w-[min(92vw,340px)] -translate-x-1/2 rounded-2xl border border-line bg-panel p-4 shadow-2xl">
                 <UploadSection upload={upload} />
                 <AppointmentRequest getCall={() => callRef.current} />
+                <button
+                  onClick={() => {
+                    setMenu(false);
+                    setDevicesOpen(true);
+                  }}
+                  className="mb-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-line bg-card text-sm text-ink hover:bg-line"
+                >
+                  <SlidersHorizontal size={16} /> {t("Ses ve görüntü")}
+                </button>
                 <div className="mb-3 flex justify-end"><LangSwitch /></div>
                 <QualityPicker value={quality} onChange={setQuality} />
                 <p className="mt-3 text-[11px] leading-relaxed text-faint">

@@ -74,7 +74,6 @@ const EN: Record<string, string> = {
   "Görüşme uçtan uca şifrelenir; siz ayrıca izin vermedikçe kaydedilmez. Katılmak için kamera ve mikrofon izni vermeniz gerekir.":
     "The session is end-to-end encrypted and is not recorded unless you separately give permission. You need to allow camera and microphone access to join.",
   "Kamera ve mikrofonu aç": "Turn on camera and microphone",
-  "Mikrofon": "Microphone",
   "Kamera": "Camera",
   "Kamerayı çevir": "Flip camera",
   "Görüşmenin görüntülü ve sesli olarak çevrim içi yapılmasını, görüşme sırasında terapistimin gönderdiği test ve ödevlere verdiğim yanıtların terapistime iletilmesini kabul ediyorum. Görüşme, ben ayrıca izin vermedikçe kaydedilmez. Görüşme süresince yalnız ve rahat konuşabileceğim bir yerde olacağım.":
@@ -133,6 +132,13 @@ const EN: Record<string, string> = {
   "Beklerken birlikte birkaç nefes alalım.": "Let us take a few breaths together while we wait.",
   "Görüşme şifrelidir; izniniz olmadan kaydedilmez.": "The session is encrypted and is not recorded without your permission.",
   "Görüşme kaydediliyor": "Session is being recorded",
+  "Ses ve görüntü": "Sound and video",
+  "Mikrofon": "Microphone",
+  "Hoparlör / kulaklık": "Speaker / headphones",
+  "Sesi dene": "Test sound",
+  "Cihaz bulunamadı": "No device found",
+  "Bu cihazda hoparlör seçimi desteklenmiyor; sesi sistem ayarlarından seçebilirsiniz.": "Speaker selection is not supported on this device; choose the sound output in your system settings.",
+  "Ses 48 kHz ve yüksek bit hızıyla, görüntü bağlantı elverdiğince Full HD'ye kadar gönderilir. Kulaklık kullanmak yankıyı ve gürültüyü azaltır.": "Audio is sent at 48 kHz and a high bitrate, video up to Full HD as your connection allows. Headphones reduce echo and noise.",
   "Kaydı durdur": "Stop recording",
   "Kayıt izni": "Recording permission",
   "Terapistiniz bu görüşmeyi (görüntü, ses ve varsa ortak çizim) kaydetmek istiyor. Kayıt yalnızca terapistinizin şifreli bilgisayarında saklanır, başka kimseyle paylaşılmaz. İzin vermek zorunda değilsiniz; reddederseniz görüşme aynen devam eder. Kayıt sürerken ekranda gösterge çıkar ve istediğiniz an durdurabilirsiniz.": "Your therapist would like to record this session (video, audio and the shared drawing if used). The recording is stored only on your therapist's encrypted computer and is not shared with anyone else. You do not have to agree; if you decline, the session continues as normal. An indicator is shown while recording and you can stop it at any time.",

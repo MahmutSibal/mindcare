@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../lib/api";
-import { DEFAULT_PATIENT_APP_URL } from "../../lib/config";
+import { resolvePatientAppUrl } from "../../lib/config";
 import {
   addGroupInvite, createGroupRoom, GroupCall, MAX_GROUP_GUESTS, type GroupInvite, type GroupPeer,
 } from "../../lib/groupRtc";
@@ -40,7 +40,7 @@ export function useGroupCall() {
       setCamOn(media.getVideoTracks().some((t) => t.enabled));
       const settings = await api.getSettings();
       const ttl = Math.max(Number(settings.invite_ttl_minutes ?? 30) || 30, 30);
-      const url = settings.patient_app_url || DEFAULT_PATIENT_APP_URL;
+      const url = resolvePatientAppUrl(settings.patient_app_url);
       let ice = buildIceServers({ url: settings.turn_url ?? "", username: settings.turn_username ?? "", credential: settings.turn_credential ?? "" });
       try {
         const cf = await api.generateTurnServers();

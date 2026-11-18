@@ -205,7 +205,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate, visi
     { id: "notes", label: "Notlar", count: notes.length, body: <PrivateNotesHistory notes={notes} inTab /> },
     {
       id: "tests",
-      label: "Çalışmalar",
+      label: "Dosyalar",
       count: results.length + drawings.length + files.length + recordings.length,
       body: (
         <>

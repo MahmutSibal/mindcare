@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Eraser, Pencil, Trash2, Type, Undo2 } from "lucide-react";
+import { Check, Eraser, Pencil, Trash2, Type, Undo2, X } from "lucide-react";
 import { BoardState, COLORS, draw, loadImage, newId, type BoardMessage, type Pt, WIDTHS } from "../lib/board";
 import { cx } from "./ui";
 
@@ -7,6 +7,8 @@ type Tool = "pen" | "eraser" | "text";
 
 /** Çizgi parçaları bu aralıkla karşıya gönderilir (canlı görünsün, kanal da boğulmasın). */
 const SEND_EVERY_MS = 25;
+/** Yazı boyutu, seçili kalınlıkla birlikte değişir (ince / orta / kalın). */
+const TEXT_SIZES = [0.035, 0.05, 0.075];
 
 /**
  * Ortak tuval. Fare, parmak ve kalem aynı "pointer" olaylarıyla çalışır; telefon ve bilgisayar için
@@ -36,6 +38,13 @@ export default function BoardCanvas({ board, rev, sessionId, send, onChange, bac
   const mine = useRef<string[]>([]);
   const active = useRef<{ id: string; color: string; width: number; erase: boolean; pending: Pt[]; last: Pt; timer: ReturnType<typeof setInterval> } | null>(null);
   const raf = useRef(0);
+  const textRef = useRef<HTMLInputElement>(null);
+  // Yazı kutusu açılınca odak verilir (bir sonraki turda, tıklamanın odak değişiminden sonra).
+  useEffect(() => {
+    if (!textAt) return;
+    const t = setTimeout(() => textRef.current?.focus(), 0);
+    return () => clearTimeout(t);
+  }, [textAt]);
   // Görsel bir kez yüklenir ve oturum boyunca korunur; adres sonradan iptal edilse de çizim bozulmaz.
   const [backdrop, setBackdrop] = useState<HTMLImageElement | null>(null);
   useEffect(() => {
@@ -107,6 +116,9 @@ export default function BoardCanvas({ board, rev, sessionId, send, onChange, bac
     if (e.button !== 0 && e.pointerType === "mouse") return;
     const p = point(e.clientX, e.clientY);
     if (tool === "text") {
+      // Varsayılan davranış (odağı tuvale almak) engellenir; yoksa yeni açılan yazı kutusu hemen odağını kaybeder.
+      e.preventDefault();
+      if (textAt && textVal.trim()) commitText();
       setTextAt({ x: p[0], y: p[1] });
       setTextVal("");
       return;
@@ -170,7 +182,7 @@ export default function BoardCanvas({ board, rev, sessionId, send, onChange, bac
     setTextAt(null);
     setTextVal("");
     if (!at || !text) return;
-    const el = { id: newId(), kind: "text" as const, color, size: 0.045, x: Math.min(at.x, 0.9), y: Math.min(at.y, 0.93), text: text.slice(0, 300) };
+    const el = { id: newId(), kind: "text" as const, color, size: TEXT_SIZES[WIDTHS.indexOf(width as (typeof WIDTHS)[number])] ?? 0.05, x: Math.min(at.x, 0.9), y: Math.min(at.y, 0.93), text: text.slice(0, 300) };
     board.addText(el);
     mine.current.push(el.id);
     send({ type: "board_text", sessionId, el });
@@ -307,23 +319,50 @@ export default function BoardCanvas({ board, rev, sessionId, send, onChange, bac
               aria-label="Ortak çizim tuvali"
             />
           {textAt && (
-            <input
-              autoFocus
-              value={textVal}
-              onChange={(e) => setTextVal(e.target.value)}
-              onBlur={commitText}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") commitText();
-                if (e.key === "Escape") {
+            <div
+              className="absolute z-10 flex items-center gap-1 rounded-xl border border-accent bg-panel p-1 shadow-xl"
+              style={{ left: Math.max(4, Math.min(textAt.x * size.w, size.w - 262)), top: Math.max(4, Math.min(textAt.y * size.h - 6, size.h - 50)) }}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <input
+                ref={textRef}
+                value={textVal}
+                onChange={(e) => setTextVal(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitText();
+                  if (e.key === "Escape") {
+                    setTextAt(null);
+                    setTextVal("");
+                  }
+                }}
+                maxLength={300}
+                placeholder="Yazın…"
+                aria-label="Eklenecek yazı"
+                className="w-44 rounded-lg bg-bg px-2.5 py-1.5 text-sm outline-none sm:w-52"
+                style={{ color }}
+              />
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={commitText}
+                aria-label="Yazıyı ekle"
+                title="Ekle (Enter)"
+                className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-strong text-white hover:bg-accent"
+              >
+                <Check size={16} />
+              </button>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
                   setTextAt(null);
                   setTextVal("");
-                }
-              }}
-              maxLength={300}
-              placeholder="Yazın, Enter ile ekleyin"
-              className="absolute z-10 w-44 rounded-md border border-accent bg-bg px-2 py-1 text-sm text-ink outline-none"
-              style={{ left: Math.min(textAt.x * size.w, size.w - 180), top: Math.min(textAt.y * size.h, size.h - 34) }}
-            />
+                }}
+                aria-label="Vazgeç"
+                title="Vazgeç (Esc)"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-line hover:text-ink"
+              >
+                <X size={16} />
+              </button>
+            </div>
           )}
           </div>
         </div>

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { AlertTriangle, ChevronDown, ChevronRight, DatabaseBackup, HardDriveDownload, KeyRound, Save, ShieldCheck } from "lucide-react";
+import { AlertTriangle, DatabaseBackup, HardDriveDownload, KeyRound, Save, ShieldCheck } from "lucide-react";
 import { api, errorText, RECOVERY_CONFIRMED_KEY, type AppStatus } from "../lib/api";
-import { DEFAULT_PATIENT_APP_URL } from "../lib/config";
+import { resolvePatientAppUrl } from "../lib/config";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { APP_VERSION, BRAND_NAME } from "../lib/brand";
 import { fmtDate } from "../lib/format";
@@ -18,7 +18,16 @@ const KEYS = [
 ] as const;
 type Form = Record<(typeof KEYS)[number], string>;
 
-export default function Settings() {
+type SettingsTab = "profile" | "security" | "assistant" | "advanced" | "about";
+const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
+  { id: "profile", label: "Profil" },
+  { id: "security", label: "Güvenlik ve yedek" },
+  { id: "assistant", label: "Asistan" },
+  { id: "advanced", label: "Gelişmiş" },
+  { id: "about", label: "Hakkında" },
+];
+
+export default function Settings({ onOpenGuide }: { onOpenGuide?: () => void }) {
   const [form, setForm] = useState<Form | null>(null);
   const [status, setStatus] = useState<AppStatus | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -29,7 +38,7 @@ export default function Settings() {
   const [geminiKey, setGeminiKey] = useState("");
   const [geminiSet, setGeminiSet] = useState(false);
   const [cfTokenSet, setCfTokenSet] = useState(false);
-  const [advanced, setAdvanced] = useState(false);
+  const [tab, setTab] = useState<SettingsTab>("profile");
   const [upd, setUpd] = useState<{ text: string; update?: Update; busy?: boolean }>({ text: "" });
 
   const checkUpdate = async () => {
@@ -60,7 +69,7 @@ export default function Settings() {
       setForm({
         therapist_name: s.therapist_name ?? "",
         therapist_title: s.therapist_title ?? "",
-        patient_app_url: s.patient_app_url ?? DEFAULT_PATIENT_APP_URL,
+        patient_app_url: resolvePatientAppUrl(s.patient_app_url),
         invite_ttl_minutes: s.invite_ttl_minutes ?? "30",
         cf_turn_key_id: s.cf_turn_key_id ?? "",
         cf_turn_api_token: "",
@@ -180,7 +189,24 @@ export default function Settings() {
         <p className={`mb-4 rounded-lg px-3 py-2 text-sm ${msg.ok ? "bg-ok/10 text-ok" : "bg-danger/10 text-danger"}`}>{msg.text}</p>
       )}
 
+      {/* Ayarlar tek bölümde bir konu gösterir: karışıklık olmasın diye. */}
+      <div className="mb-5 flex max-w-5xl gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="Ayar bölümleri">
+        {SETTINGS_TABS.map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={tab === t.id}
+            onClick={() => setTab(t.id)}
+            className={`shrink-0 rounded-full px-4 py-1.5 text-sm transition-colors ${tab === t.id ? "bg-accent-soft font-medium text-ink ring-1 ring-accent/40" : "text-muted hover:bg-card hover:text-ink"}`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       <div className="grid max-w-5xl grid-cols-1 gap-4 md:grid-cols-2">
+        {tab === "profile" && (
+          <>
         <Card title="Profil">
           <p className="mb-4 text-xs leading-relaxed text-muted">
             Adınız ve unvanınız danışanın görüşme ekranında ve davet mesajında görünür. Başka bir yere gönderilmez.
@@ -190,9 +216,10 @@ export default function Settings() {
             <Field label="Unvan"><input className={inputCls} value={form.therapist_title} onChange={set("therapist_title")} placeholder="Psikiyatrist, Klinik Psikolog…" /></Field>
           </div>
         </Card>
-
-
-
+          </>
+        )}
+        {tab === "security" && (
+          <>
         <Card title="Veri Güvenliği ve Yedekleme">
           <ul className="mb-4 space-y-2 text-sm text-muted">
             <li className="flex items-center gap-2"><ShieldCheck size={16} className="text-ok" /> SQLCipher {status?.cipher_version ?? ""} ile şifreli (AES-256)</li>
@@ -225,9 +252,11 @@ export default function Settings() {
             </Button>
           </div>
         </Card>
-
         <AppLockCard />
-
+          </>
+        )}
+        {tab === "assistant" && (
+          <>
         <Card title="Yapay zekâ asistanı (Gemini)">
           <p className="mb-3 text-xs leading-relaxed text-muted">
             Terapist için meslek içi bir hatırlatma asistanı. Yanıtları kaynaklarıyla verir. Ücretsiz anahtarı
@@ -260,43 +289,11 @@ export default function Settings() {
             {geminiSet && <Button variant="ghost" className="hover:text-danger" onClick={() => void removeGemini()}>Anahtarı sil</Button>}
           </div>
         </Card>
-
-
-        <Card title="Hakkında">
-          <p className="text-sm text-muted">
-            {BRAND_NAME} • sürüm {APP_VERSION}
-          </p>
-          <p className="mt-2 text-xs leading-relaxed text-faint">
-            Danışan verileri yalnızca bu cihazda, şifreli olarak saklanır. Görüşmeler uçtan uca şifrelidir; yalnızca danışanın görüşme sırasında verdiği açık izinle kaydedilebilir.
-          </p>
-          <Button
-            variant="subtle"
-            className="mt-3"
-            onClick={() => void openUrl(`${(form.patient_app_url || DEFAULT_PATIENT_APP_URL).replace(/\/+$/, "")}/gizlilik.html`)}
-          >
-            Gizlilik politikası ve aydınlatma metni
-          </Button>
-          {updatesSupported() && (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Button variant="subtle" onClick={() => void checkUpdate()} disabled={upd.busy}>Güncellemeleri denetle</Button>
-              {upd.update && <Button onClick={() => void doUpdate()} disabled={upd.busy}>Şimdi güncelle</Button>}
-              {upd.text && <span className="text-xs text-muted">{upd.text}</span>}
-            </div>
-          )}
-        </Card>
-
-        <div className="md:col-span-2">
-          <button
-            onClick={() => setAdvanced((v) => !v)}
-            className="flex items-center gap-1.5 text-sm text-muted hover:text-ink"
-            aria-expanded={advanced}
-          >
-            {advanced ? <ChevronDown size={16} /> : <ChevronRight size={16} />} Gelişmiş ayarlar
-          </button>
-          <p className="mt-1 text-xs text-faint">Görüşme bağlantısı ve sunucu ayarları. Sorun yaşamıyorsanız değiştirmenize gerek yok.</p>
-        </div>
-        {advanced && (
+          </>
+        )}
+        {tab === "advanced" && (
           <>
+          <p className="text-xs text-faint md:col-span-2">Görüşme bağlantısı ve sunucu ayarları. Sorun yaşamıyorsanız değiştirmenize gerek yok.</p>
         <Card title="Görüntülü Görüşme">
           <div className="space-y-4">
             <Field label="Danışan web uygulaması adresi" hint="Davet bağlantıları bu adrese yönlenir.">
@@ -342,7 +339,35 @@ export default function Settings() {
         </Card>
           </>
         )}
-
+        {tab === "about" && (
+          <>
+        <Card title="Hakkında">
+          <p className="text-sm text-muted">
+            {BRAND_NAME} • sürüm {APP_VERSION}
+          </p>
+          <p className="mt-2 text-xs leading-relaxed text-faint">
+            Danışan verileri yalnızca bu cihazda, şifreli olarak saklanır. Görüşmeler uçtan uca şifrelidir; yalnızca danışanın görüşme sırasında verdiği açık izinle kaydedilebilir.
+          </p>
+          <Button
+            variant="subtle"
+            className="mt-3"
+            onClick={() => void openUrl(`${resolvePatientAppUrl(form.patient_app_url)}/gizlilik.html`)}
+          >
+            Gizlilik politikası ve aydınlatma metni
+          </Button>
+          {onOpenGuide && (
+            <Button variant="subtle" className="mt-3 ml-2" onClick={onOpenGuide}>Kullanım rehberini aç / Open user guide</Button>
+          )}
+          {updatesSupported() && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Button variant="subtle" onClick={() => void checkUpdate()} disabled={upd.busy}>Güncellemeleri denetle</Button>
+              {upd.update && <Button onClick={() => void doUpdate()} disabled={upd.busy}>Şimdi güncelle</Button>}
+              {upd.text && <span className="text-xs text-muted">{upd.text}</span>}
+            </div>
+          )}
+        </Card>
+          </>
+        )}
       </div>
 
       {confirmRestore && (
