@@ -135,3 +135,9 @@ export function parseYouTube(input: string): { id: string; start: number } | nul
   const start = hms && t ? Number(hms[1] ?? 0) * 3600 + Number(hms[2] ?? 0) * 60 + Number(hms[3] ?? 0) : 0;
   return { id, start: Number.isFinite(start) ? start : 0 };
 }
+
+/** Davet bağlantısına eklenecek karşılama videosu parçası (`&v=<YouTube kimliği>`); geçersizse boş. */
+export function introParam(url?: string | null): string {
+  const yt = url ? parseYouTube(url) : null;
+  return yt ? `&v=${yt.id}` : "";
+}

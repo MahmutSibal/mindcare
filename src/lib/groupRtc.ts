@@ -9,6 +9,7 @@
 //    terapist diğer danışanlara iletir; böylece herkes aynı tuvali görür.
 //  - Bağlantı sayısı arttıkça kişi başına video bit hızı düşürülür (yükleme hızı sınırlıdır).
 
+import { introParam } from "./share";
 import { ensureSignedIn, randomToken, sha256Hex, supabase, buildIceServers, type CallState, type ChannelMessage, parseChannelMessage, type JoinResult } from "./rtc";
 
 // ───────────────────────────── Oda yönetimi ─────────────────────────────
@@ -32,7 +33,7 @@ export async function createGroupRoom(maxGuests = MAX_GROUP_GUESTS): Promise<str
 
 /** Bir üye için tek kullanımlık davet bağlantısı üretir. Ad ve üye kimliği yalnızca bağlantının # kısmındadır. */
 export async function addGroupInvite(
-  patientAppUrl: string, room: string, ttlMinutes: number, member: { id: string; name: string },
+  patientAppUrl: string, room: string, ttlMinutes: number, member: { id: string; name: string }, introVideo?: string,
 ): Promise<GroupInvite> {
   const token = randomToken(32);
   const { data, error } = await supabase().rpc("add_group_invite", {
@@ -41,7 +42,7 @@ export async function addGroupInvite(
   if (error) throw new Error(`Davet oluşturulamadı: ${error.message}`);
   const first = member.name.trim().split(/\s+/)[0] ?? "";
   const link =
-    `${patientAppUrl.replace(/\/+$/, "")}/#g=${room}&t=${token}&n=${encodeURIComponent(first)}&m=${encodeURIComponent(member.id)}`;
+    `${patientAppUrl.replace(/\/+$/, "")}/#g=${room}&t=${token}&n=${encodeURIComponent(first)}&m=${encodeURIComponent(member.id)}${introParam(introVideo)}`;
   return { memberId: member.id, name: member.name, link, expiresAt: new Date(data as string) };
 }
 

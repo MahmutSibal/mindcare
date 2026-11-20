@@ -11,6 +11,8 @@ import { Button, Card, cx, Empty, Modal } from "../ui";
 import { CATEGORY_LABEL, CategoryIcon } from "../category";
 import type { CallApi } from "./useCall";
 import AssistantChat from "../AssistantChat";
+import MirrorPlayer from "./MirrorPlayer";
+import { parseYouTube } from "../../lib/share";
 
 export default function SessionPanel({ call, patient, shared, onClearShared, materials, onOpenBoard, onOpenSettings }: {
   call: CallApi;
@@ -525,6 +527,8 @@ const SHARE_STATUS: Record<SharedMaterial["status"], string> = {
 function PatientScreenPreview({ call, shared, onClearShared }: { call: CallApi; shared: SharedMaterial | null; onClearShared: () => void }) {
   const ref = useRef<HTMLVideoElement>(null);
   const live = call.screen ?? (shared?.status === "video" ? call.videoShare?.stream ?? null : null);
+  // Danışana YouTube bağlantısı gösteriliyorsa terapist de aynı videoyu (sessiz, eşlenmiş) izler.
+  const yt = !live && shared?.material.file_path ? parseYouTube(shared.material.file_path) : null;
   useEffect(() => {
     if (ref.current) ref.current.srcObject = live;
   }, [live]);
@@ -534,6 +538,8 @@ function PatientScreenPreview({ call, shared, onClearShared }: { call: CallApi; 
       <div className="relative aspect-video overflow-hidden rounded-lg border border-line bg-bg">
         {live ? (
           <video ref={ref} autoPlay muted playsInline className="h-full w-full object-contain" />
+        ) : yt ? (
+          <MirrorPlayer key={yt.id} videoId={yt.id} start={yt.start} media={shared?.media} />
         ) : shared?.previewUrl ? (
           <img src={shared.previewUrl} alt={shared.material.title} className="h-full w-full object-contain" />
         ) : shared?.text ? (

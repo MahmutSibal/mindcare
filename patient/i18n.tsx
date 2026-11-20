@@ -75,6 +75,8 @@ const EN: Record<string, string> = {
     "The session is end-to-end encrypted and is not recorded unless you separately give permission. You need to allow camera and microphone access to join.",
   "Kamera ve mikrofonu aç": "Turn on camera and microphone",
   "Kamera": "Camera",
+  "Sesi aç": "Turn sound on",
+  "Karşılama videosu": "Welcome video",
   "Kamerayı çevir": "Flip camera",
   "Görüşmenin görüntülü ve sesli olarak çevrim içi yapılmasını, görüşme sırasında terapistimin gönderdiği test ve ödevlere verdiğim yanıtların terapistime iletilmesini kabul ediyorum. Görüşme, ben ayrıca izin vermedikçe kaydedilmez. Görüşme süresince yalnız ve rahat konuşabileceğim bir yerde olacağım.":
     "I agree to hold the session online by video and audio, and to my answers to tests and homework sent by my therapist during the session being passed to my therapist. The session is not recorded unless I separately give permission. I will be in a place where I can talk alone and comfortably during the session.",

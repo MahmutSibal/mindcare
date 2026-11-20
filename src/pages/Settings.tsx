@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { AlertTriangle, DatabaseBackup, HardDriveDownload, KeyRound, Save, ShieldCheck } from "lucide-react";
+import { parseYouTube } from "../lib/share";
 import { api, errorText, RECOVERY_CONFIRMED_KEY, type AppStatus } from "../lib/api";
 import { resolvePatientAppUrl } from "../lib/config";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -14,7 +15,7 @@ import { Button, Card, Field, inputCls, Modal } from "../components/ui";
 
 const KEYS = [
   "therapist_name", "therapist_title", "patient_app_url", "invite_ttl_minutes",
-  "cf_turn_key_id", "cf_turn_api_token", "turn_url", "turn_username", "turn_credential", "gemini_model",
+  "cf_turn_key_id", "cf_turn_api_token", "turn_url", "turn_username", "turn_credential", "gemini_model", "intro_video_url",
 ] as const;
 type Form = Record<(typeof KEYS)[number], string>;
 
@@ -69,6 +70,7 @@ export default function Settings({ onOpenGuide }: { onOpenGuide?: () => void }) 
       setForm({
         therapist_name: s.therapist_name ?? "",
         therapist_title: s.therapist_title ?? "",
+        intro_video_url: s.intro_video_url ?? "",
         patient_app_url: resolvePatientAppUrl(s.patient_app_url),
         invite_ttl_minutes: s.invite_ttl_minutes ?? "30",
         cf_turn_key_id: s.cf_turn_key_id ?? "",
@@ -91,6 +93,10 @@ export default function Settings({ onOpenGuide }: { onOpenGuide?: () => void }) 
 
   const persist = async (): Promise<boolean> => {
     try {
+      if (form.intro_video_url.trim() && !parseYouTube(form.intro_video_url)) {
+        setMsg({ ok: false, text: "Karşılama videosu için geçerli bir YouTube bağlantısı girin (ya da alanı boş bırakın)." });
+        return false;
+      }
       for (const k of KEYS) {
         // Gizli değer boşsa dokunma: kayıtlı olan korunur.
         if (k === "cf_turn_api_token" && !form[k].trim()) continue;
@@ -215,6 +221,16 @@ export default function Settings({ onOpenGuide }: { onOpenGuide?: () => void }) 
             <Field label="Ad Soyad"><input className={inputCls} value={form.therapist_name} onChange={set("therapist_name")} placeholder="Örn: Ayşe Yılmaz" /></Field>
             <Field label="Unvan"><input className={inputCls} value={form.therapist_title} onChange={set("therapist_title")} placeholder="Psikiyatrist, Klinik Psikolog…" /></Field>
           </div>
+        </Card>
+        <Card title="Karşılama videosu">
+          <p className="mb-4 text-xs leading-relaxed text-muted">
+            Danışan davet bağlantısını açtığında, katılma ekranından önce bu video (en iyisi 10-15 saniye) bir kez oynar.
+            Videoyu YouTube'a "liste dışı" olarak yükleyip bağlantısını buraya yapıştırın. Boş bırakırsanız video gösterilmez.
+            Değişiklik yalnızca sonradan oluşturulan davet bağlantılarında geçerlidir.
+          </p>
+          <Field label="YouTube bağlantısı">
+            <input className={inputCls} value={form.intro_video_url} onChange={set("intro_video_url")} placeholder="https://youtu.be/…" />
+          </Field>
         </Card>
           </>
         )}

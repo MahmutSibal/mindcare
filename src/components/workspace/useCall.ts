@@ -53,7 +53,7 @@ export function useCall() {
       const media = await ensureLocal();
       const settings = await api.getSettings();
       const ttl = Number(settings.invite_ttl_minutes ?? 30) || 30;
-      const inv = await createInvite(resolvePatientAppUrl(settings.patient_app_url), ttl);
+      const inv = await createInvite(resolvePatientAppUrl(settings.patient_app_url), ttl, settings.intro_video_url);
       // Öncelik Cloudflare TURN (her görüşme için geçici kimlik bilgisi); yoksa elle girilmiş
       // TURN; o da yoksa yalnızca STUN. Cloudflare'e ulaşılamazsa görüşme yine başlar.
       let ice = buildIceServers({

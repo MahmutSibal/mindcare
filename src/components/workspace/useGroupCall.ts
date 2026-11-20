@@ -49,7 +49,7 @@ export function useGroupCall() {
         /* TURN yoksa yalnızca doğrudan bağlantı denenir */
       }
       const room = await createGroupRoom(Math.max(members.length, 1));
-      const made = await Promise.all(members.map((m) => addGroupInvite(url, room, ttl, m)));
+      const made = await Promise.all(members.map((m) => addGroupInvite(url, room, ttl, m, settings.intro_video_url)));
       setInvites(made);
       const call = new GroupCall("host", room, media, { name: "Terapist", member: null }, {
         onState: setState,

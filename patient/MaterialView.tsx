@@ -2,7 +2,7 @@
 // Parçalar şifreli veri kanalından gelir, bellekte birleştirilir; hiçbir yere kaydedilmez.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, ExternalLink, FileText, Play, Quote, X } from "lucide-react";
+import { Download, ExternalLink, FileText, Play, Quote, Volume2, X } from "lucide-react";
 import { t } from "./i18n";
 import type { ChannelMessage, MediaState } from "../src/lib/rtc";
 import { fmtBytes, fromBase64, httpsUrl, isPdf, isSafeImage, MAX_FILE_SHARE_BYTES, parseYouTube } from "../src/lib/share";
@@ -158,6 +158,9 @@ function YouTubeEmbed({ id, title, videoId, start, closeBtn, control, onMediaSta
   const frame = useRef<HTMLIFrameElement>(null);
   const info = useRef<MediaReport>({ state: "unstarted", time: 0, duration: 0 });
   const [state, setState] = useState<MediaState>("unstarted");
+  // Sessiz başlar: tarayıcılar dokunuş olmadan sesli oynatmaya izin vermez, sessiz oynatma ise serbesttir.
+  // Böylece terapistin uzaktan oynat/duraklat komutları danışan bir şeye dokunmadan da çalışır.
+  const [muted, setMuted] = useState(true);
 
   const post = useCallback((msg: object) => {
     frame.current?.contentWindow?.postMessage(JSON.stringify({ ...msg, id: "mindcare", channel: "widget" }), YT_ORIGIN);
@@ -212,7 +215,7 @@ function YouTubeEmbed({ id, title, videoId, start, closeBtn, control, onMediaSta
 
   // Adres burada, yalnızca doğrulanmış video kimliğinden kurulur; gelen bağlantı gömülmez.
   const src =
-    `${YT_ORIGIN}/embed/${videoId}?autoplay=1&playsinline=1&rel=0&enablejsapi=1` +
+    `${YT_ORIGIN}/embed/${videoId}?autoplay=1&mute=1&playsinline=1&rel=0&enablejsapi=1` +
     `&origin=${encodeURIComponent(window.location.origin)}${start ? `&start=${start}` : ""}`;
 
   return (
@@ -233,6 +236,18 @@ function YouTubeEmbed({ id, title, videoId, start, closeBtn, control, onMediaSta
         />
         <div className="flex items-center gap-3 text-xs text-white/80">
           <span role="status">{t(MEDIA_TEXT[state])}</span>
+          {muted && (
+            <button
+              onClick={() => {
+                setMuted(false);
+                command("unMute");
+                command("playVideo");
+              }}
+              className="flex items-center gap-1.5 rounded-lg bg-white px-4 py-2 text-sm font-medium text-black"
+            >
+              <Volume2 size={15} /> {t("Sesi aç")}
+            </button>
+          )}
           {state !== "playing" && (
             <button
               onClick={() => command("playVideo")}

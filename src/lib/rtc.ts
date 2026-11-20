@@ -15,6 +15,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { DEFAULT_STUN, SUPABASE_KEY, SUPABASE_URL } from "./config";
 import type { BoardMessage } from "./board";
+import { introParam } from "./share";
 import type { Answers, TestDefinition } from "./tests";
 
 let client: SupabaseClient | null = null;
@@ -62,7 +63,7 @@ export interface Invite {
   link: string;
 }
 
-export async function createInvite(patientAppUrl: string, ttlMinutes: number): Promise<Invite> {
+export async function createInvite(patientAppUrl: string, ttlMinutes: number, introVideo?: string): Promise<Invite> {
   await ensureSignedIn();
   const room = randomToken(16);
   const token = randomToken(32);
@@ -73,7 +74,7 @@ export async function createInvite(patientAppUrl: string, ttlMinutes: number): P
   });
   if (error) throw new Error(`Davet oluşturulamadı: ${error.message}`);
   // Anahtar URL'nin # kısmında: tarayıcı bu kısmı hiçbir sunucuya göndermez.
-  const link = `${patientAppUrl.replace(/\/+$/, "")}/#r=${room}&t=${token}`;
+  const link = `${patientAppUrl.replace(/\/+$/, "")}/#r=${room}&t=${token}${introParam(introVideo)}`;
   return { room, token, expiresAt: new Date(data as string), link };
 }
 
