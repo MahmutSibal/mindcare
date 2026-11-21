@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ExternalLink, FilePlus2, Link2, Quote, Trash2 } from "lucide-react";
 import { httpsUrl, isWebLink, parseYouTube } from "../lib/share";
@@ -17,6 +17,8 @@ function guessCategory(path: string): MaterialCategory {
   return "document";
 }
 
+const isAndroid = /Android/i.test(navigator.userAgent);
+
 export default function Materials() {
   const version = useDataVersion();
   const [list, setList] = useState<Material[]>([]);
@@ -25,7 +27,8 @@ export default function Materials() {
   const [filter, setFilter] = useState<string>(() => takeNewItemOwner() ?? "all");
   const owner = filter !== "all" && filter !== "general" ? filter : "";
   const nameOf = (id: string) => patients.find((p) => p.id === id)?.full_name ?? "Danışan";
-  const [draft, setDraft] = useState<{ title: string; category: MaterialCategory; file_path: string; description: string; patient_id: string } | null>(null);
+  const [draft, setDraft] = useState<{ title: string; category: MaterialCategory; file_path: string; description: string; patient_id: string; bytes?: Uint8Array } | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"file" | "quote" | "link">("file");
 
@@ -36,7 +39,37 @@ export default function Materials() {
 
   const shown = list.filter((m) => (filter === "all" ? true : filter === "general" ? !m.patient_id : m.patient_id === filter));
 
+  // Telefonda sistemin dosya seçicisi: dosya yolu yoktur, içerik doğrudan okunup veritabanına kaydedilir.
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    setError(null);
+    if (f.type.startsWith("video/")) {
+      setError("Videolar telefona eklenemez (çok büyük). YouTube bağlantısı olarak ekleyin.");
+      return;
+    }
+    if (f.size > 25 * 1024 * 1024) {
+      setError("Dosya 25 MB'tan büyük. Büyük dosyaları ekran paylaşımıyla gösterin.");
+      return;
+    }
+    const bytes = new Uint8Array(await f.arrayBuffer());
+    setMode("file");
+    setDraft({
+      title: f.name.replace(/\.[^.]+$/, ""),
+      category: f.type.startsWith("image/") ? "image" : "document",
+      file_path: f.name,
+      description: "",
+      patient_id: owner,
+      bytes,
+    });
+  };
+
   const pick = async () => {
+    if (isAndroid) {
+      fileInput.current?.click();
+      return;
+    }
     const path = await open({ multiple: false, directory: false, title: "Materyal seçin" });
     if (typeof path !== "string") return;
     const name = path.split(/[\\/]/).pop() ?? "";
@@ -58,7 +91,14 @@ export default function Materials() {
       input = { ...draft, file_path: url, category: parseYouTube(url) ? "video" : "document" };
     }
     try {
-      await api.createMaterial(input);
+      if (input.bytes && (input.category === "image" || input.category === "document")) {
+        await api.addMaterialFile(
+          { title: input.title, name: input.file_path, category: input.category, description: input.description, patient_id: input.patient_id },
+          input.bytes,
+        );
+      } else {
+        await api.createMaterial(input);
+      }
       setDraft(null);
       notifyDataChanged();
     } catch (err) {
@@ -77,6 +117,13 @@ export default function Materials() {
 
   return (
     <div className="h-full overflow-y-auto p-4 md:p-8">
+      <input
+        ref={fileInput}
+        type="file"
+        className="hidden"
+        accept="image/*,application/pdf,.pdf,.txt,.doc,.docx,.ppt,.pptx,.xls,.xlsx"
+        onChange={(e) => void onFile(e)}
+      />
       <PageHeader title="Materyaller" subtitle="Seanslarda kullandığınız dosyalar. Dosyalar yerinde kalır; burada yalnızca kayıtları tutulur.">
         <Button variant="subtle" onClick={() => { setMode("link"); setDraft({ title: "", category: "video", file_path: "", description: "", patient_id: owner }); }}>
           <Link2 size={16} /> Bağlantı Ekle
@@ -114,7 +161,7 @@ export default function Materials() {
                 <div className="min-w-0">
                   <div className="truncate font-medium">{m.title}</div>
                   <div className="text-xs text-muted">
-                    {isWebLink(m.file_path) ? (parseYouTube(m.file_path) ? "YouTube videosu" : "Bağlantı") : CATEGORY_LABEL[m.category]} • {fmtDate(m.created_at, true)} • {m.patient_id ? nameOf(m.patient_id) : "Genel"}
+                    {isWebLink(m.file_path) ? (parseYouTube(m.file_path) ? "YouTube videosu" : "Bağlantı") : CATEGORY_LABEL[m.category]} • {fmtDate(m.created_at, true)} • {m.patient_id ? nameOf(m.patient_id) : "Genel"}{!m.available && " • dosya bu cihazda yok"}
                   </div>
                 </div>
               </div>

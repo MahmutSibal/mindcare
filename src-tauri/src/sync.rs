@@ -44,7 +44,11 @@ pub const SYNC_TABLES: &[(&str, &[&str])] = &[
     ("group_sessions", &["id"]),
     ("group_member_notes", &["group_session_id", "patient_id"]),
     ("ledger", &["id"]),
+    ("materials", &["id"]),
 ];
+
+/// Eşitlemeden sonra listeye eklenen tablolar: eski kurulumlarda mevcut satırları ayrıca tohumlanır.
+const LATE_TABLES: &[&str] = &["materials"];
 
 /// Milisaniye cinsinden şimdiki an (SQLite içinde).
 const NOW_MS: &str = "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)";
@@ -75,16 +79,25 @@ pub fn install(conn: &Connection) -> AppResult<()> {
     }
     conn.execute_batch(&sql)?;
 
-    let seeded: Option<String> = conn
-        .query_row("SELECT value FROM sync_meta WHERE key = 'seeded'", [], |r| r.get(0))
-        .ok();
-    if seeded.is_none() {
-        let mut seed = String::new();
-        for (t, pk) in SYNC_TABLES {
+    // Mevcut kayıtlar tablo başına bir kez günlüğe yazılır (ilk eşitleme için). Eski sürümde tek bir
+    // 'seeded' bayrağı vardı: o zaman listede olan tablolar zaten tohumlanmış sayılır.
+    let legacy = meta_get(conn, "seeded").is_some();
+    let mut seed = String::new();
+    for (t, pk) in SYNC_TABLES {
+        let key = format!("seeded:{t}");
+        if meta_get(conn, &key).is_some() {
+            continue;
+        }
+        if !(legacy && !LATE_TABLES.contains(t)) {
             let pk = pk_expr(t, pk);
             seed.push_str(&format!("INSERT INTO sync_log (tbl, pk, op, ts) SELECT '{t}', {pk}, 'u', {NOW_MS} FROM {t};\n"));
         }
+        seed.push_str(&format!("INSERT INTO sync_meta (key, value) VALUES ('{key}', '1');\n"));
+    }
+    if !legacy {
         seed.push_str("INSERT INTO sync_meta (key, value) VALUES ('seeded', '1');");
+    }
+    if !seed.is_empty() {
         conn.execute_batch(&seed)?;
     }
     Ok(())
@@ -473,7 +486,7 @@ pub fn pairing_code(c: &Connection) -> AppResult<String> {
 fn reseed(c: &Connection) -> AppResult<()> {
     c.execute_batch(
         "DELETE FROM sync_log; DELETE FROM sync_state;
-         DELETE FROM sync_meta WHERE key IN ('seeded', 'pull_seq', 'last_sync_at');",
+         DELETE FROM sync_meta WHERE key IN ('seeded', 'pull_seq', 'last_sync_at') OR key LIKE 'seeded:%';",
     )?;
     install(c)
 }
@@ -683,7 +696,7 @@ mod tests {
         let c = open("seed.db");
         c.execute_batch("INSERT INTO patients (id, full_name) VALUES ('p', 'X'); INSERT INTO settings (key, value) VALUES ('k', 'v');")
             .unwrap();
-        c.execute_batch("DELETE FROM sync_meta WHERE key = 'seeded'; DELETE FROM sync_log;").unwrap();
+        c.execute_batch("DELETE FROM sync_meta WHERE key = 'seeded' OR key LIKE 'seeded:%'; DELETE FROM sync_log;").unwrap();
         install(&c).unwrap();
         install(&c).unwrap(); // ikinci çağrı yeniden tohumlamaz
         assert_eq!(log(&c), [("patients".to_string(), "p".to_string(), "u".to_string())]);
@@ -910,5 +923,43 @@ mod tests {
         enable(&a).unwrap();
         let k2 = keys_of(&a).unwrap();
         assert_eq!(prepare_push(&a, &k2, 50, 1_000_000).unwrap().items.len(), 1);
+    }
+
+    #[test]
+    fn material_files_travel_with_their_content() {
+        let (mut a, mut b, ka, kb) = pair("material");
+        let mut srv = FakeServer::default();
+        let pdf: Vec<u8> = (0..=255u8).cycle().take(300_000).collect();
+        a.execute(
+            "INSERT INTO materials (id, title, category, file_path, data) VALUES ('m1', 'Belge', 'document', 'belge.pdf', ?1)",
+            [&pdf],
+        )
+        .unwrap();
+        // Dosyası yalnızca eski cihazda olan video: kayıt gider, içerik yok.
+        a.execute("INSERT INTO materials (id, title, category, file_path) VALUES ('m2', 'Video', 'video', 'C:/videolar/a.mp4')", []).unwrap();
+        round(&mut a, &ka, &mut srv);
+        round(&mut b, &kb, &mut srv);
+        let (title, got): (String, Option<Vec<u8>>) =
+            b.query_row("SELECT title, data FROM materials WHERE id = 'm1'", [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+        assert_eq!(title, "Belge");
+        assert_eq!(got.as_deref(), Some(pdf.as_slice()));
+        let none: Option<Vec<u8>> = b.query_row("SELECT data FROM materials WHERE id = 'm2'", [], |r| r.get(0)).unwrap();
+        assert!(none.is_none());
+    }
+
+    #[test]
+    fn existing_materials_are_seeded_after_upgrade_without_reseeding_old_tables() {
+        let c = open("lateseed.db");
+        c.execute_batch(
+            "INSERT INTO patients (id, full_name) VALUES ('p', 'X');
+             INSERT INTO materials (id, title, category, file_path) VALUES ('m', 'M', 'document', 'a.pdf');
+             DELETE FROM sync_log;
+             DELETE FROM sync_meta WHERE key LIKE 'seeded:%';",
+        )
+        .unwrap();
+        // Eski sürümden gelmiş gibi: tek 'seeded' bayrağı var, tablo başına bayrak yok.
+        install(&c).unwrap();
+        let l = log(&c);
+        assert_eq!(l, [("materials".to_string(), "m".to_string(), "u".to_string())]);
     }
 }

@@ -229,7 +229,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate, visi
   const drawOnFile = async (f: PatientFileMeta) => {
     try {
       const bytes = new Uint8Array(await api.getPatientFile(f.id));
-      await drawOnMaterial({ id: `file:${f.id}`, title: f.name, category: "image", file_path: f.name, description: null, created_at: f.created_at, patient_id: null }, bytes);
+      await drawOnMaterial({ id: `file:${f.id}`, title: f.name, category: "image", file_path: f.name, description: null, created_at: f.created_at, patient_id: null, available: true }, bytes);
     } catch (e) {
       setShareError(errorText(e));
     }
@@ -664,14 +664,14 @@ export function MaterialLibrary({ materials, scope, onShow, onDraw, onAll, conne
               </div>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm">{m.title}</div>
-                <div className="text-xs text-muted">{CATEGORY_LABEL[m.category]}</div>
+                <div className="text-xs text-muted">{CATEGORY_LABEL[m.category]}{!m.available && " • dosya bu cihazda yok"}</div>
               </div>
               <Button
                 variant="outline"
                 className="px-3 py-1 text-xs"
                 onClick={() => onShow(m)}
-                disabled={!connected}
-                title={connected ? "Danışanın ekranında göster" : "Görüşme bağlanınca kullanılabilir"}
+                disabled={!connected || !m.available}
+                title={!m.available ? "Dosya bu cihazda yok" : connected ? "Danışanın ekranında göster" : "Görüşme bağlanınca kullanılabilir"}
               >
                 Göster
               </Button>
@@ -680,7 +680,7 @@ export function MaterialLibrary({ materials, scope, onShow, onDraw, onAll, conne
                   variant="ghost"
                   className="px-2 py-1 text-xs"
                   onClick={() => onDraw(m)}
-                  disabled={!connected}
+                  disabled={!connected || !m.available}
                   title={connected ? "Görseli gösterip üzerine birlikte çizin" : "Görüşme bağlanınca kullanılabilir"}
                 >
                   <Pencil size={13} /> Çiz

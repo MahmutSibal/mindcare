@@ -296,6 +296,12 @@ const MIGRATIONS: &[&str] = &[
     CREATE INDEX idx_materials_patient ON materials(patient_id);
     CREATE INDEX idx_tests_patient ON tests(patient_id);
     "#,
+    // 14 — Materyal dosyasının kendisi şifreli veritabanında durur (görsel ve belgeler; en çok 25 MB).
+    // Böylece materyaller telefon ↔ bilgisayar eşitlemesine girer ve telefonda dosya yolu gerekmez.
+    // Videolar yol olarak kalır (çok büyük); `data` boş olan kayıtlar eskisi gibi dosya yolundan okunur.
+    r#"
+    ALTER TABLE materials ADD COLUMN data BLOB;
+    "#,
 ];
 
 fn apply_key(conn: &Connection, key: &Zeroizing<String>) -> AppResult<()> {

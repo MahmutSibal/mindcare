@@ -155,6 +155,8 @@ export interface Material {
   created_at: string;
   /** Boşsa genel kütüphane; doluysa yalnızca bu danışana özel. */
   patient_id: string | null;
+  /** Dosya bu cihazda açılabilir mi (başka cihazdan eşitlenen video gibi kayıtlarda yoktur). */
+  available: boolean;
 }
 
 export interface Test {
@@ -284,6 +286,20 @@ export const api = {
   listMaterials: () => invoke<Material[]>("list_materials"),
   createMaterial: (input: { title: string; category: MaterialCategory; file_path: string; description?: string; patient_id?: string }) =>
     invoke<string>("create_material", { input }),
+  /** Telefonda ve bilgisayarda: seçilen görsel/belgenin içeriği ham bayt olarak veritabanına kaydedilir. */
+  addMaterialFile: (
+    input: { title: string; name: string; category: "image" | "document"; description?: string; patient_id?: string },
+    bytes: Uint8Array,
+  ) =>
+    invoke<string>("add_material_file", bytes, {
+      headers: {
+        "x-title": encodeURIComponent(input.title),
+        "x-name": encodeURIComponent(input.name),
+        "x-category": input.category,
+        "x-description": encodeURIComponent(input.description ?? ""),
+        "x-patient-id": input.patient_id ?? "",
+      },
+    }),
   deleteMaterial: (id: string) => invoke<void>("delete_material", { id }),
   /** Kütüphanedeki materyal dosyasının ham içeriği. */
   readMaterial: (id: string) => invoke<ArrayBuffer>("read_material", { id }),

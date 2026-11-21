@@ -40,6 +40,8 @@ fn init_database(path: &Path) -> AppResult<Connection> {
     };
     let mut conn = db::open_encrypted(path, &key)?;
     db::migrate(&mut conn)?;
+    // Eski materyallerin dosya içeriği bir kez veritabanına alınır (eşitleme ve taşınabilirlik için).
+    commands::backfill_material_data(&conn);
     Ok(conn)
 }
 
@@ -117,6 +119,7 @@ pub fn run() {
             commands::delete_appointment,
             commands::list_materials,
             commands::create_material,
+            commands::add_material_file,
             commands::delete_material,
             commands::read_material,
             commands::open_material,

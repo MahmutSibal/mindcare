@@ -1048,6 +1048,8 @@ pub struct Material {
     created_at: String,
     /// Boşsa genel kütüphane; doluysa yalnızca bu danışana özel.
     patient_id: Option<String>,
+    /// Dosya bu cihazda açılabilir mi (içerik veritabanında, bağlantı/alıntı ya da yol hâlâ geçerli).
+    available: bool,
 }
 
 #[derive(Deserialize)]
@@ -1063,7 +1065,7 @@ pub struct MaterialInput {
 pub fn list_materials(state: State<AppState>) -> AppResult<Vec<Material>> {
     with_conn(&state, |c| {
         let mut st = c.prepare(
-            "SELECT id, title, category, file_path, description, created_at, patient_id
+            "SELECT id, title, category, file_path, description, created_at, patient_id, (data IS NOT NULL)
              FROM materials ORDER BY created_at DESC",
         )?;
         let rows = st
@@ -1076,10 +1078,85 @@ pub fn list_materials(state: State<AppState>) -> AppResult<Vec<Material>> {
                     description: r.get(4)?,
                     created_at: r.get(5)?,
                     patient_id: r.get(6)?,
+                    available: {
+                        let path: String = r.get(3)?;
+                        let has_data: bool = r.get(7)?;
+                        has_data
+                            || path.is_empty()
+                            || path.starts_with("http://")
+                            || path.starts_with("https://")
+                            || std::path::Path::new(&path).is_file()
+                    },
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(rows)
+    })
+}
+
+/// Veritabanına gömülecek en büyük materyal dosyası (görsel ve belgeler).
+pub const MAX_MATERIAL_DB_BYTES: u64 = 25 * 1024 * 1024;
+
+/// Görsel/belge dosyasını veritabanına gömmek için okur (video, büyük ya da okunamayan dosya için `None`).
+pub(crate) fn embeddable_file(category: &str, path: &str) -> Option<Vec<u8>> {
+    if !matches!(category, "image" | "document") || path.is_empty() {
+        return None;
+    }
+    let p = std::path::Path::new(path);
+    let meta = std::fs::metadata(p).ok()?;
+    if !meta.is_file() || meta.len() > MAX_MATERIAL_DB_BYTES {
+        return None;
+    }
+    std::fs::read(p).ok()
+}
+
+/// Dosya yolu olan eski materyallerin içeriğini (görsel/belge) bir kez veritabanına alır; eşitlemeye girsin diye.
+pub(crate) fn backfill_material_data(c: &Connection) {
+    let rows: Vec<(String, String, String)> = match c.prepare("SELECT id, category, file_path FROM materials WHERE data IS NULL") {
+        Ok(mut st) => st
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .map(|it| it.filter_map(Result::ok).collect())
+            .unwrap_or_default(),
+        Err(_) => return,
+    };
+    for (id, category, path) in rows {
+        if let Some(bytes) = embeddable_file(&category, &path) {
+            let _ = c.execute("UPDATE materials SET data = ?2 WHERE id = ?1", params![id, bytes]);
+        }
+    }
+}
+
+/// Telefon ve bilgisayarda aynı yoldan: seçilen dosyanın içeriği ham bayt olarak gelir (JSON şişmesi
+/// olmasın); bilgiler üst bilgilerde: `x-title`, `x-name`, `x-category` (image/document),
+/// `x-description` (isteğe bağlı), `x-patient-id` (isteğe bağlı). Hepsi %-kodlu.
+#[tauri::command]
+pub fn add_material_file(state: State<AppState>, request: tauri::ipc::Request<'_>) -> AppResult<String> {
+    let bytes = match request.body() {
+        tauri::ipc::InvokeBody::Raw(b) => b.as_slice(),
+        _ => return Err(AppError::Invalid("Dosya içeriği alınamadı.".into())),
+    };
+    if bytes.is_empty() {
+        return Err(AppError::Invalid("Dosya boş.".into()));
+    }
+    if bytes.len() as u64 > MAX_MATERIAL_DB_BYTES {
+        return Err(AppError::Invalid("Dosya 25 MB'tan büyük. Büyük dosyaları ekran paylaşımıyla gösterin.".into()));
+    }
+    let header = |k: &str| request.headers().get(k).and_then(|v| v.to_str().ok()).map(|v| percent_decode(v));
+    let title = non_empty(&header("x-title").unwrap_or_default(), "Başlık")?;
+    let name = sanitize_file_name(&header("x-name").unwrap_or_default());
+    let category = header("x-category").unwrap_or_default();
+    if !matches!(category.as_str(), "image" | "document") {
+        return Err(AppError::Invalid("Yalnızca görsel ve belge eklenebilir.".into()));
+    }
+    let description = header("x-description").filter(|s| !s.trim().is_empty());
+    let patient_id = header("x-patient-id").filter(|s| !s.trim().is_empty());
+    with_conn(&state, |c| {
+        let id = new_id();
+        c.execute(
+            "INSERT INTO materials (id, title, category, file_path, description, patient_id, data) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![id, title, category, name, description, patient_id, bytes],
+        )?;
+        Ok(id)
     })
 }
 
@@ -1095,11 +1172,13 @@ pub fn create_material(state: State<AppState>, input: MaterialInput) -> AppResul
     } else {
         non_empty(&input.file_path, "Dosya")?
     };
+    // Görsel ve belgeler (en çok 25 MB) veritabanına da alınır: eşitlenir, dosya sonradan taşınsa da kaybolmaz.
+    let data = embeddable_file(&input.category, &path);
     with_conn(&state, |c| {
         let id = new_id();
         c.execute(
-            "INSERT INTO materials (id, title, category, file_path, description, patient_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![id, title, input.category, path, opt(&input.description), opt(&input.patient_id)],
+            "INSERT INTO materials (id, title, category, file_path, description, patient_id, data) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![id, title, input.category, path, opt(&input.description), opt(&input.patient_id), data],
         )?;
         Ok(id)
     })
@@ -1111,11 +1190,14 @@ pub const MAX_MATERIAL_BYTES: u64 = 1024 * 1024 * 1024;
 
 #[tauri::command]
 pub fn read_material(state: State<AppState>, id: String) -> AppResult<tauri::ipc::Response> {
-    let path: String = with_conn(&state, |c| {
-        c.query_row("SELECT file_path FROM materials WHERE id = ?1", [&id], |r| r.get(0))
+    let (path, data): (String, Option<Vec<u8>>) = with_conn(&state, |c| {
+        c.query_row("SELECT file_path, data FROM materials WHERE id = ?1", [&id], |r| Ok((r.get(0)?, r.get(1)?)))
             .optional()?
             .ok_or_else(|| AppError::Invalid("Materyal bulunamadı.".into()))
     })?;
+    if let Some(d) = data {
+        return Ok(tauri::ipc::Response::new(d));
+    }
     if path.is_empty() {
         return Err(AppError::Invalid("Bu materyalin dosyası yok.".into()));
     }
@@ -1131,14 +1213,24 @@ pub fn read_material(state: State<AppState>, id: String) -> AppResult<tauri::ipc
 #[tauri::command]
 pub fn open_material(app: tauri::AppHandle, state: State<AppState>, id: String) -> AppResult<()> {
     use tauri_plugin_opener::OpenerExt;
-    let path: String = with_conn(&state, |c| {
-        c.query_row("SELECT file_path FROM materials WHERE id = ?1", [&id], |r| r.get(0))
+    let (path, data): (String, Option<Vec<u8>>) = with_conn(&state, |c| {
+        c.query_row("SELECT file_path, data FROM materials WHERE id = ?1", [&id], |r| Ok((r.get(0)?, r.get(1)?)))
             .optional()?
             .ok_or_else(|| AppError::Invalid("Materyal bulunamadı.".into()))
     })?;
-    if path.is_empty() || !std::path::Path::new(&path).is_file() {
-        return Err(AppError::Invalid("Materyal dosyası bulunamadı.".into()));
-    }
+    let path = if !path.is_empty() && std::path::Path::new(&path).is_file() {
+        path
+    } else if let Some(d) = data {
+        // Dosya bu cihazda yok ama içeriği veritabanında (örn. başka cihazdan eşitlendi): geçici kopyadan açılır.
+        let dir = std::env::temp_dir().join("mavi-ruh-materyal");
+        std::fs::create_dir_all(&dir)?;
+        let name = sanitize_file_name(std::path::Path::new(&path).file_name().and_then(|n| n.to_str()).unwrap_or("materyal"));
+        let tmp = dir.join(format!("{}-{}", &id[..id.len().min(8)], name));
+        std::fs::write(&tmp, d)?;
+        tmp.to_string_lossy().into_owned()
+    } else {
+        return Err(AppError::Invalid("Materyal dosyası bu cihazda yok.".into()));
+    };
     app.opener().open_path(path, None::<&str>).map_err(|e| AppError::Invalid(e.to_string()))
 }
 

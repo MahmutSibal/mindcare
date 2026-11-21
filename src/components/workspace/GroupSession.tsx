@@ -385,7 +385,7 @@ export function GroupSessionView({ group, call, onClose, onNavigate, visible = t
   const drawOnFile = async (f: PatientFileMeta) => {
     try {
       const bytes = new Uint8Array(await api.getPatientFile(f.id));
-      await drawOnMaterial({ id: `file:${f.id}`, title: f.name, category: "image", file_path: f.name, description: null, created_at: f.created_at, patient_id: null }, bytes);
+      await drawOnMaterial({ id: `file:${f.id}`, title: f.name, category: "image", file_path: f.name, description: null, created_at: f.created_at, patient_id: null, available: true }, bytes);
     } catch (e) {
       setError(errorText(e));
     }
