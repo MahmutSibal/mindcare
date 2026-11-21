@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  CalendarCheck2, ChevronDown, ChevronRight, ClipboardList, FileCheck2, Pencil, PencilLine, Phone, ShieldAlert, UserPlus, Users,
+  ChevronDown, ChevronRight, ClipboardList, FileCheck2, Pencil, PencilLine, Phone, ShieldAlert, UserPlus, Users,
 } from "lucide-react";
 import { CATEGORY_LABEL, CategoryIcon } from "../components/category";
-import { api, type DrawingMeta, type Homework, type Material, type Note, type Patient, type PatientFileMeta, type RecordingMeta, type Session, type Substance, type TestResult } from "../lib/api";
+import { api, type DrawingMeta, type Homework, type Material, type Note, type Patient, type PatientFileMeta, type RecordingMeta, type Substance, type TestResult } from "../lib/api";
 import ClinicalTab from "../components/workspace/ClinicalTab";
 import { PatientFiles, ReceivedFilesToast, useIncomingFiles } from "../components/workspace/patientFiles";
 import { BoardPanel, BoardStartDialog, DrawingsList } from "../components/workspace/BoardPanel";
@@ -11,11 +11,10 @@ import { RecordingControl, RecordingsList } from "../components/workspace/Record
 import { useBoard } from "../lib/useBoard";
 import { openPdf, type PdfDoc } from "../lib/pdfView";
 import { newId } from "../lib/board";
-import { age, fmtDate, fmtDateTime, initials, minutes, plainText } from "../lib/format";
+import { age, fmtDate, fmtDateTime, initials, plainText } from "../lib/format";
 import { notifyDataChanged, useActiveSession, useDataVersion } from "../lib/session";
 import { HomeworkCard, useHomeworkDeliveryReceipts } from "../components/workspace/Homework";
 import { forPatient, setNewItemOwner } from "../lib/scope";
-import DurationEditButton from "../components/SessionDuration";
 import { hideMaterial, showMaterial as shareMaterial, type SharedMaterial } from "../components/workspace/materialShare";
 import { errorText } from "../lib/api";
 import { maxScore, parseAnswers, parseDefinition } from "../lib/tests";
@@ -41,7 +40,6 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate, visi
   const version = useDataVersion();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [patient, setPatient] = useState<Patient | null>(null);
-  const [sessions, setSessions] = useState<Session[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [results, setResults] = useState<TestResult[]>([]);
   const [homework, setHomework] = useState<Homework[]>([]);
@@ -122,9 +120,8 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate, visi
       setPatient(null);
       return;
     }
-    const [p, s, n, r, h, sub, dr, fl, rc] = await Promise.all([
+    const [p, n, r, h, sub, dr, fl, rc] = await Promise.all([
       api.getPatient(patientId),
-      api.listSessions(patientId),
       api.listNotes(patientId),
       api.listTestResults(patientId),
       api.listHomework(patientId),
@@ -134,7 +131,6 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate, visi
       api.listRecordings(patientId),
     ]);
     setPatient(p);
-    setSessions(s);
     setNotes(n);
     setResults(r);
     setHomework(h);
@@ -280,7 +276,6 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate, visi
         />
       ),
     },
-    { id: "sessions", label: "Seanslar", count: sessions.filter((s) => s.status === "completed").length, body: <SessionHistory sessions={sessions} onAll={() => onNavigate("sessions")} inTab /> },
   ];
 
   return (
@@ -488,33 +483,6 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-// ───────────────────────────── Seans geçmişi ─────────────────────────────
-
-function SessionHistory({ sessions, onAll, inTab }: { sessions: Session[]; onAll: () => void; inTab?: boolean }) {
-  const done = sessions.filter((s) => s.status === "completed");
-  return (
-    <Card bare={inTab} title="Seans Geçmişi" action={<LinkButton onClick={onAll}>Tümünü Gör <ChevronRight size={14} /></LinkButton>}>
-      {done.length === 0 ? (
-        <Empty text="Henüz tamamlanmış seans yok." />
-      ) : (
-        <ul className="space-y-1">
-          {(inTab ? done : done.slice(0, 4)).map((s, i) => (
-            <li key={s.id} className="grid grid-cols-[20px_1fr_1fr_auto] items-center gap-2 rounded-md px-1 py-1.5 text-[13px]">
-              <CalendarCheck2 size={15} className="text-accent" />
-              <span className={i === 0 ? "text-accent" : "text-muted"}>{fmtDate(s.session_date)}</span>
-              <span className={i === 0 ? "text-accent" : "text-muted"}>{s.session_number}. Seans</span>
-              <span className="flex items-center gap-1 text-muted">
-                {minutes(s.duration_seconds)}
-                <DurationEditButton session={s} />
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Card>
-  );
-}
-
 // ───────────────────────────── Notlar ─────────────────────────────
 
 function PrivateNotesHistory({ notes, inTab }: { notes: Note[]; inTab?: boolean }) {
@@ -697,7 +665,7 @@ export function MaterialLibrary({ materials, scope, onShow, onDraw, onAll, conne
 
 // ───────────────────────────── Sekmeli kart ─────────────────────────────
 
-type HistoryTab = "clinical" | "notes" | "tests" | "homework" | "sessions";
+type HistoryTab = "clinical" | "notes" | "tests" | "homework";
 
 /** Danışan geçmişi tek kartta: sekmeler ve kaydırılabilir içerik; kalan yüksekliği doldurur. */
 function TabbedCard({ tabs, request }: {

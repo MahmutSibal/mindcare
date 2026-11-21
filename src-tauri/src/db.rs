@@ -698,6 +698,29 @@ mod tests {
     }
 
     #[test]
+    fn deleting_a_session_removes_its_note_and_detaches_the_rest() {
+        let p = tmp("sessdel.db");
+        let mut c = open_encrypted(&p, &key('g')).unwrap();
+        migrate(&mut c).unwrap();
+        c.execute_batch(
+            "INSERT INTO patients (id, full_name) VALUES ('p', 'X');
+             INSERT INTO sessions (id, patient_id, session_number, session_date) VALUES ('s1', 'p', 1, '2026-01-01'), ('s2', 'p', 2, '2026-01-08');
+             INSERT INTO private_notes (id, session_id, note_content) VALUES ('n1', 's1', 'a'), ('n2', 's2', 'b');
+             INSERT INTO test_results (id, patient_id, session_id, test_title, definition_json, answers_json) VALUES ('r1', 'p', 's1', 'T', '{}', '{}');
+             INSERT INTO homework (id, patient_id, session_id, title) VALUES ('h1', 'p', 's1', 'Ödev');",
+        )
+        .unwrap();
+        c.execute("DELETE FROM sessions WHERE id = 's1'", []).unwrap();
+        let n: i64 = c.query_row("SELECT count(*) FROM private_notes", [], |r| r.get(0)).unwrap();
+        assert_eq!(n, 1); // yalnızca s2'nin notu kaldı
+        // Bağlı kayıtlar silinmez, seanssız kalır (kullanıcı isterse ayrıca silinir).
+        let sid: Option<String> = c.query_row("SELECT session_id FROM test_results WHERE id = 'r1'", [], |r| r.get(0)).unwrap();
+        assert!(sid.is_none());
+        let sid: Option<String> = c.query_row("SELECT session_id FROM homework WHERE id = 'h1'", [], |r| r.get(0)).unwrap();
+        assert!(sid.is_none());
+    }
+
+    #[test]
     fn foreign_keys_cascade() {
         let p = tmp("fk.db");
         let mut c = open_encrypted(&p, &key('e')).unwrap();

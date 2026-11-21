@@ -7,6 +7,8 @@ interface ActiveSession {
   elapsed: number;
   running: boolean;
   targetSeconds: number;
+  /** Planlanan seans süresi (dakika); seans başlamadan önce ya da sürerken değiştirilebilir, hatırlanır. */
+  setTargetMinutes: (minutes: number) => void;
   start: (patientId: string, targetMinutes?: number) => Promise<Session>;
   pause: () => void;
   resume: () => void;
@@ -15,11 +17,24 @@ interface ActiveSession {
 
 const Ctx = createContext<ActiveSession | null>(null);
 
+const TARGET_KEY = "mavi-ruh-seans-suresi";
+const MIN_TARGET = 5;
+const MAX_TARGET = 480;
+
+function loadTargetMinutes(): number {
+  try {
+    const v = Number(localStorage.getItem(TARGET_KEY));
+    return v >= MIN_TARGET && v <= MAX_TARGET ? v : 50;
+  } catch {
+    return 50;
+  }
+}
+
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [running, setRunning] = useState(false);
-  const [targetSeconds, setTarget] = useState(50 * 60);
+  const [targetSeconds, setTarget] = useState(() => loadTargetMinutes() * 60);
   const elapsedRef = useRef(0);
   elapsedRef.current = elapsed;
 
@@ -38,14 +53,25 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(t);
   }, [session]);
 
-  const start = useCallback(async (patientId: string, targetMinutes = 50) => {
+  const setTargetMinutes = useCallback((minutes: number) => {
+    const v = Math.min(MAX_TARGET, Math.max(MIN_TARGET, Math.round(minutes)));
+    setTarget(v * 60);
+    try {
+      localStorage.setItem(TARGET_KEY, String(v));
+    } catch {
+      /* hatırlanmazsa bir sonraki açılışta 50 dk olur */
+    }
+  }, []);
+
+  // Süre verilmezse seçili (hatırlanan) süre kullanılır.
+  const start = useCallback(async (patientId: string, targetMinutes?: number) => {
     const s = await api.startSession(patientId);
     setSession(s);
     setElapsed(0);
-    setTarget(targetMinutes * 60);
+    if (targetMinutes) setTargetMinutes(targetMinutes);
     setRunning(true);
     return s;
-  }, []);
+  }, [setTargetMinutes]);
 
   const finish = useCallback(async () => {
     if (!session) return;
@@ -62,6 +88,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         elapsed,
         running,
         targetSeconds,
+        setTargetMinutes,
         start,
         pause: () => setRunning(false),
         resume: () => session && setRunning(true),

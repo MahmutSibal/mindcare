@@ -8,7 +8,7 @@ import { notifyDataChanged, useActiveSession, useDataVersion } from "../../lib/s
 import { maxScore, parseAnswers, parseDefinition } from "../../lib/tests";
 import { EditorContent, Toolbar, useNotesEditor } from "../NotesEditor";
 import { HomeworkDialog } from "./Homework";
-import { Button, Card, cx, Empty, Modal } from "../ui";
+import { Button, Card, cx, Empty, Field, inputCls, Modal } from "../ui";
 import { CATEGORY_LABEL, CategoryIcon } from "../category";
 import type { CallApi } from "./useCall";
 import AssistantChat from "../AssistantChat";
@@ -66,6 +66,7 @@ export default function SessionPanel({ call, patient, shared, onClearShared, mat
 export function SessionTimer({ patient, call }: { patient: Patient | null; call: CallApi }) {
   const a = useActiveSession();
   const [error, setError] = useState<string | null>(null);
+  const [pickingTarget, setPickingTarget] = useState(false);
   const pct = Math.min(100, (a.elapsed / a.targetSeconds) * 100);
   const over = a.elapsed > a.targetSeconds;
   // Son 5 dakikada terapisti seansı toparlaması için uyar.
@@ -102,7 +103,13 @@ export function SessionTimer({ patient, call }: { patient: Patient | null; call:
         )}
         <span className="text-lg font-semibold tabular-nums">
           <span className={over ? "text-warn" : ""}>{clock(a.elapsed)}</span>
-          <span className="text-sm font-normal text-muted"> / {clock(a.targetSeconds)}</span>
+          <button
+            onClick={() => setPickingTarget(true)}
+            className="ml-1 rounded-md px-1 text-sm font-normal text-muted underline decoration-dotted underline-offset-4 hover:bg-card hover:text-ink"
+            title="Planlanan seans süresini ayarla"
+          >
+            / {clock(a.targetSeconds)}
+          </button>
         </span>
         {a.session ? (
           <div className="flex gap-1">
@@ -127,7 +134,54 @@ export function SessionTimer({ patient, call }: { patient: Patient | null; call:
         <div className={cx("h-full transition-all", over ? "bg-warn" : "bg-accent")} style={{ width: `${pct}%` }} />
       </div>
       {error && <p className="px-3 py-1.5 text-xs text-danger">{error}</p>}
+      {pickingTarget && <TargetDialog minutes={Math.round(a.targetSeconds / 60)} started={!!a.session} onPick={a.setTargetMinutes} onClose={() => setPickingTarget(false)} />}
     </section>
+  );
+}
+
+const TARGET_PRESETS = [30, 45, 50, 60, 90];
+
+/** Planlanan seans süresini seçtirir: hazır süreler ya da elle dakika. */
+function TargetDialog({ minutes, started, onPick, onClose }: { minutes: number; started: boolean; onPick: (m: number) => void; onClose: () => void }) {
+  const [custom, setCustom] = useState(String(minutes));
+  const apply = (m: number) => {
+    if (!Number.isFinite(m) || m < 5 || m > 480) return;
+    onPick(m);
+    onClose();
+  };
+  return (
+    <Modal title="Seans süresi" onClose={onClose} width="max-w-sm">
+      <p className="mb-3 text-sm text-muted">
+        {started ? "Süren seansın planlanan süresini değiştirirsiniz; sayaç kaldığı yerden devam eder." : "Seans başlamadan önce planlanan süreyi seçin. Sonraki seanslar için hatırlanır."}
+      </p>
+      <div className="mb-4 flex flex-wrap gap-2">
+        {TARGET_PRESETS.map((m) => (
+          <button
+            key={m}
+            onClick={() => apply(m)}
+            className={cx(
+              "rounded-lg border px-3 py-1.5 text-sm",
+              m === minutes ? "border-accent bg-accent-soft font-medium text-accent-strong" : "border-line text-ink hover:bg-card",
+            )}
+          >
+            {m} dk
+          </button>
+        ))}
+      </div>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          apply(Number(custom.replace(",", ".")));
+        }}
+        className="flex items-end gap-2"
+      >
+        <Field label="Başka süre (dakika)">
+          <input type="number" min={5} max={480} step={5} className={`${inputCls} w-32`} value={custom} onChange={(e) => setCustom(e.target.value)} />
+        </Field>
+        <Button type="submit">Uygula</Button>
+      </form>
+      <p className="mt-2 text-xs text-faint">5 ile 480 dakika arası. Gerçek süre seans bitince sayaçtan kaydedilir; sonradan Seanslar sayfasından düzeltilebilir.</p>
+    </Modal>
   );
 }
 

@@ -244,6 +244,10 @@ export const api = {
   listNotes: (patientId: string) => invoke<Note[]>("list_notes", { patientId }),
   saveNote: (sessionId: string, content: string) => invoke<string>("save_note", { sessionId, content }),
   getSessionNote: (sessionId: string) => invoke<string | null>("get_session_note", { sessionId }),
+  deleteSessionNote: (sessionId: string) => invoke<void>("delete_session_note", { sessionId }),
+  deleteTestResult: (id: string) => invoke<void>("delete_test_result", { id }),
+  /** `withItems`: seansa bağlı test sonuçları, ödevler, çizimler, dosyalar ve kayıtlar da silinsin. */
+  deleteSession: (id: string, withItems: boolean) => invoke<void>("delete_session", { id, withItems }),
 
   listAppointments: (patientId?: string) =>
     invoke<Appointment[]>("list_appointments", { patientId: patientId ?? null }),

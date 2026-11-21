@@ -946,6 +946,45 @@ pub fn save_note(state: State<AppState>, session_id: String, content: String) ->
     })
 }
 
+/// Seansın notunu siler.
+#[tauri::command]
+pub fn delete_session_note(state: State<AppState>, session_id: String) -> AppResult<()> {
+    with_conn(&state, |c| {
+        c.execute("DELETE FROM private_notes WHERE session_id = ?1", [session_id])?;
+        Ok(())
+    })
+}
+
+/// Tek bir test sonucunu siler.
+#[tauri::command]
+pub fn delete_test_result(state: State<AppState>, id: String) -> AppResult<()> {
+    with_conn(&state, |c| {
+        c.execute("DELETE FROM test_results WHERE id = ?1", [id])?;
+        Ok(())
+    })
+}
+
+/// Seansı siler; seansın notu onunla birlikte gider. `with_items` doğruysa seansa bağlı test sonuçları,
+/// ödevler, çizimler, danışan dosyaları ve görüşme kayıtları da silinir; değilse danışan dosyasında
+/// (seanssız olarak) kalırlar.
+#[tauri::command]
+pub fn delete_session(state: State<AppState>, id: String, with_items: bool) -> AppResult<()> {
+    with_conn(&state, |c| {
+        let tx = c.transaction()?;
+        if with_items {
+            for table in ["test_results", "homework", "drawings", "patient_files", "recordings"] {
+                tx.execute(&format!("DELETE FROM {table} WHERE session_id = ?1"), [&id])?;
+            }
+        }
+        let n = tx.execute("DELETE FROM sessions WHERE id = ?1", [&id])?;
+        if n == 0 {
+            return Err(AppError::Invalid("Seans bulunamadı.".into()));
+        }
+        tx.commit()?;
+        Ok(())
+    })
+}
+
 #[tauri::command]
 pub fn get_session_note(state: State<AppState>, session_id: String) -> AppResult<Option<String>> {
     with_conn(&state, |c| {
@@ -1141,7 +1180,7 @@ pub fn add_material_file(state: State<AppState>, request: tauri::ipc::Request<'_
     if bytes.len() as u64 > MAX_MATERIAL_DB_BYTES {
         return Err(AppError::Invalid("Dosya 25 MB'tan büyük. Büyük dosyaları ekran paylaşımıyla gösterin.".into()));
     }
-    let header = |k: &str| request.headers().get(k).and_then(|v| v.to_str().ok()).map(|v| percent_decode(v));
+    let header = |k: &str| request.headers().get(k).and_then(|v| v.to_str().ok()).map(percent_decode);
     let title = non_empty(&header("x-title").unwrap_or_default(), "Başlık")?;
     let name = sanitize_file_name(&header("x-name").unwrap_or_default());
     let category = header("x-category").unwrap_or_default();

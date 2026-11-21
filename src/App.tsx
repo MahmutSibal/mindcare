@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useBackClose, useBackGuard } from "./lib/backStack";
-import { CalendarDays, CircleHelp, FolderOpen, Home, LockKeyhole, Menu, Settings as SettingsIcon, Users, UsersRound } from "lucide-react";
+import { CalendarDays, CircleHelp, FolderOpen, History, Home, LockKeyhole, Menu, Settings as SettingsIcon, Users, UsersRound } from "lucide-react";
 import { api, errorText, RECOVERY_CONFIRMED_KEY, type Appointment, type AppStatus } from "./lib/api";
 import { BRAND_NAME } from "./lib/brand";
 import BrandMark from "./components/BrandMark";
@@ -23,12 +23,13 @@ import GuideTour from "./components/GuideTour";
 
 export type Page = "home" | "groups" | "patients" | "appointments" | "billing" | "sessions" | "materials" | "tests" | "settings";
 
-/** Yan menü 6 bölümdür; birden çok sayfası olan bölümlerde sayfalar üstte sekme olarak görünür. */
+/** Yan menü 7 bölümdür; birden çok sayfası olan bölümlerde sayfalar üstte sekme olarak görünür. */
 const NAV: { id: Page; label: string; icon: typeof Home; pages: { page: Page; label: string }[] }[] = [
   { id: "home", label: "Ana Sayfa", icon: Home, pages: [{ page: "home", label: "Ana Sayfa" }] },
   { id: "patients", label: "Danışanlar", icon: Users, pages: [{ page: "patients", label: "Danışanlar" }, { page: "billing", label: "Ücretler" }] },
   { id: "groups", label: "Gruplar", icon: UsersRound, pages: [{ page: "groups", label: "Gruplar" }] },
-  { id: "appointments", label: "Takvim", icon: CalendarDays, pages: [{ page: "appointments", label: "Randevular" }, { page: "sessions", label: "Geçmiş seanslar" }] },
+  { id: "appointments", label: "Takvim", icon: CalendarDays, pages: [{ page: "appointments", label: "Randevular" }] },
+  { id: "sessions", label: "Seanslar", icon: History, pages: [{ page: "sessions", label: "Seanslar" }] },
   { id: "materials", label: "Kütüphane", icon: FolderOpen, pages: [{ page: "materials", label: "Materyaller" }, { page: "tests", label: "Testler" }] },
   { id: "settings", label: "Ayarlar", icon: SettingsIcon, pages: [{ page: "settings", label: "Ayarlar" }] },
 ];
