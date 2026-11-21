@@ -8,7 +8,7 @@ $texts = Get-Content (Join-Path $PSScriptRoot "installer-art.json") -Raw -Encodi
 $logo = [System.Drawing.Image]::FromFile((Join-Path $root "logo\mavi-ruh-simge-1024.png"))
 
 function C($hex) { [System.Drawing.ColorTranslator]::FromHtml($hex) }
-$BG = C "#0f1b1d"; $PANEL = C "#152629"; $CARD = C "#1c3135"; $ACCENT = C "#4fb3a5"; $INK = C "#e6f0ee"; $MUTED = C "#9bb3b0"
+$BG = C "#2a1030"; $PANEL = C "#43084c"; $CARD = C "#5a1a66"; $ACCENT = C "#e0c3ec"; $INK = C "#ffffff"; $MUTED = C "#d8c6de"
 
 function New-Canvas($w, $h) {
   $bmp = New-Object System.Drawing.Bitmap $w, $h, ([System.Drawing.Imaging.PixelFormat]::Format24bppRgb)

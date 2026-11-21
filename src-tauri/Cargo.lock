@@ -2269,7 +2269,7 @@ checksum = "d5848f5a9e8117cf94f2f90faac24a87ff81600ff8628c1e3deaab572e76bfa1"
 
 [[package]]
 name = "mindcare"
-version = "1.0.7"
+version = "1.0.8"
 dependencies = [
  "base64 0.23.1",
  "chacha20poly1305",
