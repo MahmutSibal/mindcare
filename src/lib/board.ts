@@ -23,7 +23,7 @@ export type BoardMessage =
   // Yeniden bağlanınca iki taraf da tam durumunu gönderir; alıcı birleştirir. `removed`: geri alınan/silinen kimlikler.
   | { type: "board_sync"; sessionId: string; elements: Element[]; removed: string[] };
 
-export const COLORS = ["#e6f0ee", "#4fb3a5", "#e5675f", "#e8b04b", "#6aa8f0", "#b58cf0", "#5cc28a", "#101a1c"] as const;
+export const COLORS = ["#f4ecf7", "#4fb3a5", "#e5675f", "#e8b04b", "#6aa8f0", "#d08be8", "#5cc28a", "#1b0a20"] as const;
 export const WIDTHS = [2, 5, 10] as const;
 
 const MAX_PTS_PER_STROKE = 6000;

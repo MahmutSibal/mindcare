@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ExternalLink, FilePlus2, Link2, Quote, Trash2 } from "lucide-react";
 import { httpsUrl, isWebLink, parseYouTube } from "../lib/share";
-import { api, errorText, type Material, type MaterialCategory } from "../lib/api";
+import { api, errorText, type Material, type MaterialCategory, type Patient } from "../lib/api";
+import { takeNewItemOwner } from "../lib/scope";
 import { fmtDate } from "../lib/format";
 import { notifyDataChanged, useDataVersion } from "../lib/session";
 import PageHeader from "../components/PageHeader";
@@ -19,20 +20,28 @@ function guessCategory(path: string): MaterialCategory {
 export default function Materials() {
   const version = useDataVersion();
   const [list, setList] = useState<Material[]>([]);
-  const [draft, setDraft] = useState<{ title: string; category: MaterialCategory; file_path: string; description: string } | null>(null);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  // Danışan profilinden gelindiyse o danışan seçili açılır; yeni eklenenler de ona özel olur.
+  const [filter, setFilter] = useState<string>(() => takeNewItemOwner() ?? "all");
+  const owner = filter !== "all" && filter !== "general" ? filter : "";
+  const nameOf = (id: string) => patients.find((p) => p.id === id)?.full_name ?? "Danışan";
+  const [draft, setDraft] = useState<{ title: string; category: MaterialCategory; file_path: string; description: string; patient_id: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"file" | "quote" | "link">("file");
 
   useEffect(() => {
     api.listMaterials().then(setList);
+    api.listPatients().then(setPatients).catch(() => {});
   }, [version]);
+
+  const shown = list.filter((m) => (filter === "all" ? true : filter === "general" ? !m.patient_id : m.patient_id === filter));
 
   const pick = async () => {
     const path = await open({ multiple: false, directory: false, title: "Materyal seçin" });
     if (typeof path !== "string") return;
     const name = path.split(/[\\/]/).pop() ?? "";
     setMode("file");
-    setDraft({ title: name.replace(/\.[^.]+$/, ""), category: guessCategory(path), file_path: path, description: "" });
+    setDraft({ title: name.replace(/\.[^.]+$/, ""), category: guessCategory(path), file_path: path, description: "", patient_id: owner });
   };
 
   const save = async (e: React.FormEvent) => {
@@ -69,10 +78,10 @@ export default function Materials() {
   return (
     <div className="h-full overflow-y-auto p-4 md:p-8">
       <PageHeader title="Materyaller" subtitle="Seanslarda kullandığınız dosyalar. Dosyalar yerinde kalır; burada yalnızca kayıtları tutulur.">
-        <Button variant="subtle" onClick={() => { setMode("link"); setDraft({ title: "", category: "video", file_path: "", description: "" }); }}>
+        <Button variant="subtle" onClick={() => { setMode("link"); setDraft({ title: "", category: "video", file_path: "", description: "", patient_id: owner }); }}>
           <Link2 size={16} /> Bağlantı Ekle
         </Button>
-        <Button variant="subtle" onClick={() => { setMode("quote"); setDraft({ title: "", category: "quote", file_path: "", description: "" }); }}>
+        <Button variant="subtle" onClick={() => { setMode("quote"); setDraft({ title: "", category: "quote", file_path: "", description: "", patient_id: owner }); }}>
           <Quote size={16} /> Alıntı Yaz
         </Button>
         <Button onClick={pick}><FilePlus2 size={16} /> Materyal Ekle</Button>
@@ -82,12 +91,21 @@ export default function Materials() {
         sesiyle yayınlanır (MP4 veya WebM önerilir), alıntılar metin olarak görünür. YouTube bağlantıları danışanın ekranında
         doğrudan oynatılır.
       </p>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <label htmlFor="materyal-filtre" className="text-xs text-muted">Göster:</label>
+        <select id="materyal-filtre" className={`${inputCls} max-w-xs`} value={filter} onChange={(e) => setFilter(e.target.value)}>
+          <option value="all">Tümü</option>
+          <option value="general">Genel kütüphane (herkes için)</option>
+          {patients.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+        </select>
+        {owner && <span className="text-xs text-faint">Eklediğiniz yeni materyaller yalnızca {nameOf(owner)} için olur.</span>}
+      </div>
       {error && <p className="mb-4 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
-      {list.length === 0 ? (
-        <Empty text="Henüz materyal eklenmedi." />
+      {shown.length === 0 ? (
+        <Empty text={filter === "all" ? "Henüz materyal eklenmedi." : "Bu görünümde materyal yok."} />
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))] gap-3">
-          {list.map((m) => (
+          {shown.map((m) => (
             <div key={m.id} className="flex flex-col rounded-xl border border-line bg-panel p-4">
               <div className="flex items-start gap-3">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
@@ -96,7 +114,7 @@ export default function Materials() {
                 <div className="min-w-0">
                   <div className="truncate font-medium">{m.title}</div>
                   <div className="text-xs text-muted">
-                    {isWebLink(m.file_path) ? (parseYouTube(m.file_path) ? "YouTube videosu" : "Bağlantı") : CATEGORY_LABEL[m.category]} • {fmtDate(m.created_at, true)}
+                    {isWebLink(m.file_path) ? (parseYouTube(m.file_path) ? "YouTube videosu" : "Bağlantı") : CATEGORY_LABEL[m.category]} • {fmtDate(m.created_at, true)} • {m.patient_id ? nameOf(m.patient_id) : "Genel"}
                   </div>
                 </div>
               </div>
@@ -120,6 +138,12 @@ export default function Materials() {
           <form onSubmit={save} className="space-y-4">
             <Field label="Başlık">
               <input className={inputCls} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} required autoFocus />
+            </Field>
+            <Field label="Kimin için?" hint="Danışana özel materyal yalnızca o danışanın profilinde görünür.">
+              <select className={inputCls} value={draft.patient_id} onChange={(e) => setDraft({ ...draft, patient_id: e.target.value })}>
+                <option value="">Genel (herkes için)</option>
+                {patients.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+              </select>
             </Field>
             {mode === "link" && (
               <Field label="Bağlantı" hint="YouTube bağlantısı danışanın ekranında oynatılır. Belirli bir yerden başlatmak için YouTube'da Paylaş → 'Başlangıç zamanı' ile kopyalayın.">

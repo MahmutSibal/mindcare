@@ -14,6 +14,8 @@ import { newId } from "../lib/board";
 import { age, fmtDate, fmtDateTime, initials, minutes, plainText } from "../lib/format";
 import { notifyDataChanged, useActiveSession, useDataVersion } from "../lib/session";
 import { HomeworkCard, useHomeworkDeliveryReceipts } from "../components/workspace/Homework";
+import { forPatient, setNewItemOwner } from "../lib/scope";
+import DurationEditButton from "../components/SessionDuration";
 import { hideMaterial, showMaterial as shareMaterial, type SharedMaterial } from "../components/workspace/materialShare";
 import { errorText } from "../lib/api";
 import { maxScore, parseAnswers, parseDefinition } from "../lib/tests";
@@ -47,6 +49,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate, visi
   const [drawings, setDrawings] = useState<DrawingMeta[]>([]);
   const [recordings, setRecordings] = useState<RecordingMeta[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
+  const [includeGeneral, setIncludeGeneral] = useState(false);
   const [shared, setShared] = useState<SharedMaterial | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   const call = useCall();
@@ -226,7 +229,7 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate, visi
   const drawOnFile = async (f: PatientFileMeta) => {
     try {
       const bytes = new Uint8Array(await api.getPatientFile(f.id));
-      await drawOnMaterial({ id: `file:${f.id}`, title: f.name, category: "image", file_path: f.name, description: null, created_at: f.created_at }, bytes);
+      await drawOnMaterial({ id: `file:${f.id}`, title: f.name, category: "image", file_path: f.name, description: null, created_at: f.created_at, patient_id: null }, bytes);
     } catch (e) {
       setShareError(errorText(e));
     }
@@ -339,10 +342,18 @@ export default function Workspace({ patientId, onSelectPatient, onNavigate, visi
         onClearShared={clearShared}
         materials={
           <MaterialLibrary
-            materials={materials}
+            materials={forPatient(materials, patientId, includeGeneral)}
+            scope={
+              patient
+                ? { name: patient.full_name, includeGeneral, generalCount: materials.filter((m) => !m.patient_id).length, onToggle: () => setIncludeGeneral((v) => !v) }
+                : undefined
+            }
             onShow={(m) => void (isPdfMaterial(m) ? startPdf(m) : showMaterial(m))}
             onDraw={(m) => void drawOnMaterial(m)}
-            onAll={() => onNavigate("materials")}
+            onAll={() => {
+              setNewItemOwner(patientId ?? null);
+              onNavigate("materials");
+            }}
             connected={call.state === "connected"}
             error={shareError}
           />
@@ -492,7 +503,10 @@ function SessionHistory({ sessions, onAll, inTab }: { sessions: Session[]; onAll
               <CalendarCheck2 size={15} className="text-accent" />
               <span className={i === 0 ? "text-accent" : "text-muted"}>{fmtDate(s.session_date)}</span>
               <span className={i === 0 ? "text-accent" : "text-muted"}>{s.session_number}. Seans</span>
-              <span className="text-muted">{minutes(s.duration_seconds)}</span>
+              <span className="flex items-center gap-1 text-muted">
+                {minutes(s.duration_seconds)}
+                <DurationEditButton session={s} />
+              </span>
             </li>
           ))}
         </ul>
@@ -620,8 +634,10 @@ function TestResultView({ result, onClose }: { result: TestResult; onClose: () =
 
 // ───────────────────────────── Materyaller ─────────────────────────────
 
-export function MaterialLibrary({ materials, onShow, onDraw, onAll, connected, error }: {
+export function MaterialLibrary({ materials, scope, onShow, onDraw, onAll, connected, error }: {
   materials: Material[];
+  /** Danışan profilinde: yalnızca bu danışana özel olanlar gösterilir; genel kütüphane isteğe bağlı eklenir. */
+  scope?: { name: string; includeGeneral: boolean; generalCount: number; onToggle: () => void };
   onShow: (m: Material) => void;
   /** Görselin üzerine ortak çizim açar. */
   onDraw: (m: Material) => void;
@@ -630,9 +646,15 @@ export function MaterialLibrary({ materials, onShow, onDraw, onAll, connected, e
   error: string | null;
 }) {
   return (
-    <Card bare action={<LinkButton onClick={onAll}>Kütüphaneyi yönet <ChevronRight size={14} /></LinkButton>}>
+    <Card bare action={<LinkButton onClick={onAll}>{scope ? "Bu danışana materyal ekle / yönet" : "Kütüphaneyi yönet"} <ChevronRight size={14} /></LinkButton>}>
+      {scope && (
+        <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-lg bg-card/50 px-2.5 py-1.5 text-xs text-muted">
+          <input type="checkbox" className="h-3.5 w-3.5 accent-[var(--color-accent)]" checked={scope.includeGeneral} onChange={scope.onToggle} />
+          <span>Genel kütüphaneyi de göster ({scope.generalCount})</span>
+        </label>
+      )}
       {materials.length === 0 ? (
-        <Empty text="Materyal yok. Materyaller sayfasından ekleyin." />
+        <Empty text={scope ? `${scope.name} için özel materyal yok. "Bu danışana materyal ekle" ile ekleyin ya da genel kütüphaneyi açın.` : "Materyal yok. Materyaller sayfasından ekleyin."} />
       ) : (
         <ul className="space-y-1.5">
           {materials.map((m) => (

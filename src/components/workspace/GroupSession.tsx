@@ -362,7 +362,7 @@ export function GroupSessionView({ group, call, onClose, onNavigate, visible = t
   const material = useGroupMaterial(adapter);
 
   useEffect(() => {
-    api.listMaterials().then(setMaterials).catch(() => {});
+    api.listMaterials().then((l) => setMaterials(l.filter((m) => !m.patient_id))).catch(() => {});
   }, [version]);
 
   // Ortak çizim: herkes için tek tuval; gösterilen görsel arka plan olabilir.
@@ -385,7 +385,7 @@ export function GroupSessionView({ group, call, onClose, onNavigate, visible = t
   const drawOnFile = async (f: PatientFileMeta) => {
     try {
       const bytes = new Uint8Array(await api.getPatientFile(f.id));
-      await drawOnMaterial({ id: `file:${f.id}`, title: f.name, category: "image", file_path: f.name, description: null, created_at: f.created_at }, bytes);
+      await drawOnMaterial({ id: `file:${f.id}`, title: f.name, category: "image", file_path: f.name, description: null, created_at: f.created_at, patient_id: null }, bytes);
     } catch (e) {
       setError(errorText(e));
     }

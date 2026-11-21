@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ClipboardCheck, Clock3, FileSignature, MonitorX, Pause, Pencil, Play, Send, Sparkles, Square, Undo2 } from "lucide-react";
+import { forPatient } from "../../lib/scope";
 import { api, errorText, type Patient, type Test, type TestResult } from "../../lib/api";
 import type { SharedMaterial } from "./materialShare";
 import { clock } from "../../lib/format";
@@ -469,7 +470,7 @@ function QuickTools({ call, patient, materials, onOpenBoard }: {
       </>
       )}
       </div>
-      {picking && <TestPicker onClose={() => setPicking(false)} onSend={send} />}
+      {picking && <TestPicker patientId={patient?.id ?? null} onClose={() => setPicking(false)} onSend={send} />}
       {givingHomework && patient && (
         <HomeworkDialog patient={patient} sessionId={homeworkSession} call={call} onClose={() => setGivingHomework(false)} />
       )}
@@ -477,15 +478,25 @@ function QuickTools({ call, patient, materials, onOpenBoard }: {
   );
 }
 
-export function TestPicker({ onClose, onSend }: { onClose: () => void; onSend: (t: Test) => void }) {
-  const [tests, setTests] = useState<Test[] | null>(null);
+/** `patientId` verilirse yalnızca o danışana özel testler (genel kütüphane isteğe bağlı); verilmezse yalnızca genel kütüphane. */
+export function TestPicker({ onClose, onSend, patientId }: { onClose: () => void; onSend: (t: Test) => void; patientId?: string | null }) {
+  const [all, setAll] = useState<Test[] | null>(null);
+  const [general, setGeneral] = useState(false);
   useEffect(() => {
-    api.listTests().then(setTests);
+    api.listTests().then(setAll);
   }, []);
+  const tests = all === null ? null : forPatient(all, patientId, general);
+  const generalCount = all?.filter((t) => !t.patient_id).length ?? 0;
   return (
     <Modal title="Danışana test gönder" onClose={onClose}>
+      {patientId && all !== null && (
+        <label className="mb-3 flex cursor-pointer items-center gap-2 rounded-lg bg-card/50 px-3 py-2 text-xs text-muted">
+          <input type="checkbox" className="h-3.5 w-3.5 accent-[var(--color-accent)]" checked={general} onChange={(e) => setGeneral(e.target.checked)} />
+          <span>Genel kütüphanedeki testleri de göster ({generalCount})</span>
+        </label>
+      )}
       {tests === null ? null : tests.length === 0 ? (
-        <Empty text="Henüz test yok. Sol menüdeki Testler sayfasından oluşturabilirsiniz." />
+        <Empty text={patientId ? "Bu danışana özel test yok. Testler sayfasından bu danışan için oluşturabilir ya da genel kütüphaneyi açabilirsiniz." : "Henüz test yok. Sol menüdeki Testler sayfasından oluşturabilirsiniz."} />
       ) : (
         <ul className="space-y-2">
           {tests.map((t) => {

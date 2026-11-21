@@ -6,6 +6,7 @@ mod error;
 mod extras;
 mod keystore;
 mod recovery;
+mod sync;
 mod turn;
 
 use std::path::{Path, PathBuf};
@@ -138,6 +139,15 @@ pub fn run() {
             commands::confirm_recovery_key,
             commands::unlock_with_recovery_key,
             commands::restore_with_recovery_key,
+            sync::sync_status,
+            sync::sync_enable,
+            sync::sync_pairing_code,
+            sync::sync_join,
+            sync::sync_disable,
+            sync::sync_credentials,
+            sync::sync_prepare_push,
+            sync::sync_commit_push,
+            sync::sync_apply,
             extras::verify_app_pin,
             extras::set_app_pin,
             extras::clear_app_pin,

@@ -4,24 +4,28 @@
 @source "./";
 @source "../patient";
 
-/* Sakin turkuaz palet (müşterinin ilk tasarımındaki koyu petrol/turkuaz tonlar). */
+/* Mavi Ruh paleti: beyaz yüzeyler, müşterinin moru (#43084C) vurgu olarak. */
 @theme {
-  --color-bg: #0f1b1d;
-  --color-rail: #0c1618;
-  --color-panel: #152629;
-  --color-card: #1c3135;
-  --color-line: #27403f;
-  --color-ink: #e6f0ee;
-  --color-muted: #9bb3b0;
-  --color-faint: #6b8582;
-  --color-accent: #4fb3a5;
-  --color-accent-strong: #2f9a8c;
-  --color-accent-soft: #173b38;
-  --color-ok: #5cc28a;
-  --color-warn: #e8b04b;
-  --color-danger: #e5675f;
+  --color-bg: #ffffff;
+  --color-rail: #ffffff;
+  --color-panel: #f8f5fa;
+  --color-card: #f1eaf5;
+  --color-line: #e3d8e9;
+  --color-ink: #2a1030;
+  --color-muted: #6b5873;
+  --color-faint: #85758d;
+  --color-accent: #7b2d8e;
+  --color-accent-strong: #43084c;
+  --color-accent-soft: #efe3f3;
+  --color-ok: #2e8b5e;
+  --color-warn: #b7791f;
+  --color-danger: #c93c3c;
 
   --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+}
+
+html {
+  color-scheme: light;
 }
 
 html,
@@ -59,7 +63,7 @@ select,
   height: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #34354d;
+  background: #cdbfd6;
   border-radius: 8px;
 }
 ::-webkit-scrollbar-track {
@@ -108,5 +112,5 @@ select,
 
 input[type="date"]::-webkit-calendar-picker-indicator,
 input[type="datetime-local"]::-webkit-calendar-picker-indicator {
-  filter: invert(0.8);
+  filter: none;
 }

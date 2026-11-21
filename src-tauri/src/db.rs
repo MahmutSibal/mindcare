@@ -263,6 +263,39 @@ const MIGRATIONS: &[&str] = &[
         FOREIGN KEY (recording_id) REFERENCES recordings(id) ON DELETE CASCADE
     );
     "#,
+    // 11 — Cihazlar arası eşitleme: değişiklik günlüğü ve üst veri (tetikleyiciler sync.rs içinde kurulur).
+    // `applying`: 1 iken tetikleyiciler susar (uzaktan gelen değişiklikler uygulanırken).
+    r#"
+    CREATE TABLE sync_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    INSERT INTO sync_meta (key, value) VALUES ('applying', '0');
+    CREATE TABLE sync_log (
+        seq INTEGER PRIMARY KEY AUTOINCREMENT,
+        tbl TEXT NOT NULL,
+        pk TEXT NOT NULL,
+        op TEXT NOT NULL CHECK (op IN ('u','d')),
+        ts INTEGER NOT NULL,
+        pushed INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX idx_sync_log_pending ON sync_log(pushed, seq);
+    "#,
+    // 12 — Eşitleme: uzaktan uygulanan son değişikliğin zaman damgası (eski bir değişiklik yenisini ezmesin).
+    r#"
+    CREATE TABLE sync_state (
+        tbl TEXT NOT NULL,
+        pk TEXT NOT NULL,
+        ts INTEGER NOT NULL,
+        device TEXT NOT NULL,
+        PRIMARY KEY (tbl, pk)
+    );
+    "#,
+    // 13 — Danışana özel materyal ve testler. `patient_id` boşsa herkese ortak "genel kütüphane"dir;
+    // doluysa yalnızca o danışanın profilinde görünür (danışan silinirse bunlar da silinir).
+    r#"
+    ALTER TABLE materials ADD COLUMN patient_id TEXT REFERENCES patients(id) ON DELETE CASCADE;
+    ALTER TABLE tests ADD COLUMN patient_id TEXT REFERENCES patients(id) ON DELETE CASCADE;
+    CREATE INDEX idx_materials_patient ON materials(patient_id);
+    CREATE INDEX idx_tests_patient ON tests(patient_id);
+    "#,
 ];
 
 fn apply_key(conn: &Connection, key: &Zeroizing<String>) -> AppResult<()> {
@@ -310,6 +343,7 @@ pub fn migrate(conn: &mut Connection) -> AppResult<()> {
         tx.pragma_update(None, "user_version", (i + 1) as i64)?;
         tx.commit()?;
     }
+    crate::sync::install(conn)?;
     Ok(())
 }
 
@@ -625,6 +659,36 @@ mod tests {
         c.execute("DELETE FROM patients WHERE id = 'p'", []).unwrap();
         let n: i64 = c.query_row("SELECT count(*) FROM homework", [], |r| r.get(0)).unwrap();
         assert_eq!(n, 0);
+    }
+
+    #[test]
+    fn patient_specific_materials_and_tests_follow_their_patient() {
+        let p = tmp("owner.db");
+        let mut c = open_encrypted(&p, &key('f')).unwrap();
+        migrate(&mut c).unwrap();
+        c.execute_batch(
+            "INSERT INTO patients (id, full_name) VALUES ('mert', 'Mert'), ('ali', 'Ali');
+             INSERT INTO materials (id, title, category, file_path, patient_id) VALUES
+               ('m-genel', 'Genel', 'document', 'a.pdf', NULL),
+               ('m-mert', 'Mert için', 'document', 'b.pdf', 'mert'),
+               ('m-ali', 'Ali için', 'document', 'c.pdf', 'ali');
+             INSERT INTO tests (id, title, definition_json, patient_id) VALUES
+               ('t-genel', 'Genel', '{}', NULL),
+               ('t-mert', 'Mert için', '{}', 'mert');",
+        )
+        .unwrap();
+        let ids = |sql: &str| -> Vec<String> {
+            let mut st = c.prepare(sql).unwrap();
+            st.query_map([], |r| r.get(0)).unwrap().map(|x| x.unwrap()).collect()
+        };
+        assert_eq!(ids("SELECT id FROM materials WHERE patient_id = 'mert'"), ["m-mert"]);
+        assert_eq!(ids("SELECT id FROM materials WHERE patient_id IS NULL"), ["m-genel"]);
+        // Danışan silinince yalnızca ona özel olanlar gider; genel kütüphane ve başkalarınınkiler kalır.
+        c.execute("DELETE FROM patients WHERE id = 'mert'", []).unwrap();
+        assert_eq!(ids("SELECT id FROM materials ORDER BY id"), ["m-ali", "m-genel"]);
+        assert_eq!(ids("SELECT id FROM tests"), ["t-genel"]);
+        // Var olmayan danışana özel materyal eklenemez.
+        assert!(c.execute("INSERT INTO materials (id, title, category, file_path, patient_id) VALUES ('x', 'x', 'document', 'x', 'yok')", []).is_err());
     }
 
     #[test]

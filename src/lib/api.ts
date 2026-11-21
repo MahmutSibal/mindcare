@@ -153,6 +153,8 @@ export interface Material {
   file_path: string;
   description: string | null;
   created_at: string;
+  /** Boşsa genel kütüphane; doluysa yalnızca bu danışana özel. */
+  patient_id: string | null;
 }
 
 export interface Test {
@@ -162,6 +164,8 @@ export interface Test {
   definition_json: string;
   created_at: string;
   updated_at: string | null;
+  /** Boşsa genel kütüphane; doluysa yalnızca bu danışana özel. */
+  patient_id: string | null;
 }
 
 export interface TestResult {
@@ -278,7 +282,7 @@ export const api = {
   checkAssistant: () => invoke<void>("check_assistant"),
 
   listMaterials: () => invoke<Material[]>("list_materials"),
-  createMaterial: (input: { title: string; category: MaterialCategory; file_path: string; description?: string }) =>
+  createMaterial: (input: { title: string; category: MaterialCategory; file_path: string; description?: string; patient_id?: string }) =>
     invoke<string>("create_material", { input }),
   deleteMaterial: (id: string) => invoke<void>("delete_material", { id }),
   /** Kütüphanedeki materyal dosyasının ham içeriği. */
@@ -286,7 +290,7 @@ export const api = {
   openMaterial: (id: string) => invoke<void>("open_material", { id }),
 
   listTests: () => invoke<Test[]>("list_tests"),
-  saveTest: (id: string | null, input: { title: string; instructions?: string; definition_json: string }) =>
+  saveTest: (id: string | null, input: { title: string; instructions?: string; definition_json: string; patient_id?: string }) =>
     invoke<string>("save_test", { id, input }),
   deleteTest: (id: string) => invoke<void>("delete_test", { id }),
   saveTestResult: (input: {

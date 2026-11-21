@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, ClipboardList, ClipboardPaste, PencilLine, Plus, Trash2 } from "lucide-react";
-import { api, errorText, type Test } from "../lib/api";
+import { api, errorText, type Patient, type Test } from "../lib/api";
+import { takeNewItemOwner } from "../lib/scope";
 import { fmtDate } from "../lib/format";
 import { notifyDataChanged, useDataVersion } from "../lib/session";
 import {
@@ -15,10 +16,18 @@ export default function Tests() {
   const [list, setList] = useState<Test[]>([]);
   const [editing, setEditing] = useState<Test | "new" | null>(null);
   const [deleting, setDeleting] = useState<Test | null>(null);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  // Danışan profilinden gelindiyse o danışan seçili açılır; yeni testler de ona özel olur.
+  const [filter, setFilter] = useState<string>(() => takeNewItemOwner() ?? "all");
+  const owner = filter !== "all" && filter !== "general" ? filter : "";
+  const nameOf = (id: string) => patients.find((p) => p.id === id)?.full_name ?? "Danışan";
 
   useEffect(() => {
     api.listTests().then(setList);
+    api.listPatients().then(setPatients).catch(() => {});
   }, [version]);
+
+  const shown = list.filter((t) => (filter === "all" ? true : filter === "general" ? !t.patient_id : t.patient_id === filter));
 
   return (
     <div className="h-full overflow-y-auto p-4 md:p-8">
@@ -29,11 +38,20 @@ export default function Tests() {
         <Button onClick={() => setEditing("new")}><Plus size={16} /> Test Oluştur</Button>
       </PageHeader>
 
-      {list.length === 0 ? (
-        <Empty icon={<ClipboardList size={28} />} text="Henüz test oluşturulmadı." />
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <label htmlFor="test-filtre" className="text-xs text-muted">Göster:</label>
+        <select id="test-filtre" className={`${inputCls} max-w-xs`} value={filter} onChange={(e) => setFilter(e.target.value)}>
+          <option value="all">Tümü</option>
+          <option value="general">Genel kütüphane (herkes için)</option>
+          {patients.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+        </select>
+        {owner && <span className="text-xs text-faint">Oluşturduğunuz yeni testler yalnızca {nameOf(owner)} için olur.</span>}
+      </div>
+      {shown.length === 0 ? (
+        <Empty icon={<ClipboardList size={28} />} text={filter === "all" ? "Henüz test oluşturulmadı." : "Bu görünümde test yok."} />
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-3">
-          {list.map((t) => {
+          {shown.map((t) => {
             const def = parseDefinition(t.definition_json);
             const max = maxScore(def);
             return (
@@ -45,7 +63,7 @@ export default function Tests() {
                   <div className="min-w-0">
                     <div className="truncate font-medium">{t.title}</div>
                     <div className="text-xs text-muted">
-                      {def.questions.length} soru{max !== null && ` • en yüksek puan ${max}`}
+                      {def.questions.length} soru{max !== null && ` • en yüksek puan ${max}`} • {t.patient_id ? nameOf(t.patient_id) : "Genel"}
                     </div>
                   </div>
                 </div>
@@ -67,7 +85,7 @@ export default function Tests() {
         </div>
       )}
 
-      {editing && <TestEditor test={editing === "new" ? null : editing} onClose={() => setEditing(null)} />}
+      {editing && <TestEditor test={editing === "new" ? null : editing} patients={patients} defaultOwner={owner} onClose={() => setEditing(null)} />}
       {deleting && (
         <Modal title="Testi sil" onClose={() => setDeleting(null)}>
           <p className="text-sm text-muted">
@@ -95,11 +113,12 @@ export default function Tests() {
 
 // ───────────────────────────── Test düzenleyici ─────────────────────────────
 
-function TestEditor({ test, onClose }: { test: Test | null; onClose: () => void }) {
+function TestEditor({ test, patients, defaultOwner, onClose }: { test: Test | null; patients: Patient[]; defaultOwner: string; onClose: () => void }) {
   const initial: TestDefinition = test
     ? parseDefinition(test.definition_json)
     : { options: FREQUENCY_SCALE, questions: [{ id: newQuestionId(), text: "", kind: "scale" }] };
   const [title, setTitle] = useState(test?.title ?? "");
+  const [ownerId, setOwnerId] = useState(test ? (test.patient_id ?? "") : defaultOwner);
   const [instructions, setInstructions] = useState(test?.instructions ?? "");
   const [options, setOptions] = useState<TestOption[]>(initial.options);
   const [questions, setQuestions] = useState<TestQuestion[]>(initial.questions);
@@ -132,6 +151,7 @@ function TestEditor({ test, onClose }: { test: Test | null; onClose: () => void 
         title,
         instructions,
         definition_json: JSON.stringify(definition),
+        patient_id: ownerId,
       });
       notifyDataChanged();
       onClose();
@@ -145,6 +165,12 @@ function TestEditor({ test, onClose }: { test: Test | null; onClose: () => void 
       <div className="space-y-4">
         <Field label="Test adı">
           <input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} autoFocus placeholder="Örn. Haftalık duygu durum değerlendirmesi" />
+        </Field>
+        <Field label="Kimin için?" hint="Danışana özel test yalnızca o danışanın profilinde görünür.">
+          <select className={inputCls} value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
+            <option value="">Genel (herkes için)</option>
+            {patients.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+          </select>
         </Field>
         <Field label="Danışana yönerge" hint="Testin başında danışana gösterilir.">
           <textarea

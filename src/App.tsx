@@ -18,6 +18,7 @@ import Settings from "./pages/Settings";
 import Billing from "./pages/Billing";
 import AppLock from "./components/AppLock";
 import UpdateBanner from "./components/UpdateBanner";
+import { useSyncLoop } from "./lib/sync";
 import GuideTour from "./components/GuideTour";
 
 export type Page = "home" | "groups" | "patients" | "appointments" | "billing" | "sessions" | "materials" | "tests" | "settings";
@@ -154,6 +155,7 @@ function Shell() {
     setTimeout(() => setBackHint(false), 2500);
   });
   const { session } = useActiveSession();
+  useSyncLoop(!!session); // eşitleme açıksa arka planda çalışır; görüşme sürerken beklemeye alınır
   const sessionRef = useRef(session);
   sessionRef.current = session;
   const version = useDataVersion();
@@ -275,7 +277,7 @@ function Shell() {
         </button>
       </aside>
 
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col border-t-[3px] border-accent-strong">
         <SectionTabs page={page} onPage={setPage} />
         <div className="min-h-0 flex-1">
         {/* Görüşme başka sayfaya geçilince kopmasın diye Ana Sayfa hep bağlı kalır. */}

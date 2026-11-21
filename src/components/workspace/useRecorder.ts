@@ -10,8 +10,8 @@ import type { BoardApi } from "../../lib/useBoard";
 
 const W = 960;
 const H = 540;
-const BG = "#0f1b1d";
-const BOARD_BG = "#152629";
+const BG = "#1b0a20";
+const BOARD_BG = "#2a1030";
 const ASK_TIMEOUT_MS = 60_000;
 
 export type RecStatus = "idle" | "asking" | "recording" | "saving";

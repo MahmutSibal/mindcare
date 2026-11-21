@@ -11,6 +11,7 @@ import { notifyDataChanged } from "../lib/session";
 import { checkForUpdate, installUpdate, updatesSupported, type Update } from "../lib/updater";
 import PageHeader from "../components/PageHeader";
 import { RecoveryKeyDialog, RestoreWithRecoveryKey } from "../components/RecoveryKey";
+import SyncCard from "../components/SyncCard";
 import { Button, Card, Field, inputCls, Modal } from "../components/ui";
 
 const KEYS = [
@@ -269,6 +270,7 @@ export default function Settings({ onOpenGuide }: { onOpenGuide?: () => void }) 
           </div>
         </Card>
         <AppLockCard />
+        <SyncCard />
           </>
         )}
         {tab === "assistant" && (

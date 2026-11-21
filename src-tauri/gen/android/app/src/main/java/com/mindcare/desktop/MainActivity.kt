@@ -13,10 +13,10 @@ class MainActivity : TauriActivity() {
     super.onCreate(savedInstanceState)
     // Android 15 ve sonrası uygulamayı durum çubuğunun altına kadar uzatır. İçerik, sistem çubukları
     // ve çentik kadar içeriden başlasın; klavye açıkken de altta kalmasın.
-    window.decorView.setBackgroundColor(0xFF0C1618.toInt())
+    window.decorView.setBackgroundColor(0xFFFFFFFF.toInt())
     WindowCompat.getInsetsController(window, window.decorView).apply {
-      isAppearanceLightStatusBars = false
-      isAppearanceLightNavigationBars = false
+      isAppearanceLightStatusBars = true
+      isAppearanceLightNavigationBars = true
     }
     val root = findViewById<View>(android.R.id.content)
     ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->

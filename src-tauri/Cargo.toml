@@ -31,6 +31,11 @@ uuid = { version = "1", features = ["v4"] }
 # Windows'ta native-tls, işletim sisteminin TLS katmanını kullanır, OpenSSL gerektirmez).
 reqwest = { version = "0.13", default-features = false, features = ["native-tls"] }
 thiserror = "2"
+# Cihazlar arası eşitleme: kayıtlar cihazda şifrelenip gönderilir (sunucu içeriği göremez).
+chacha20poly1305 = "0.10"
+hkdf = "0.12"
+hmac = "0.12"
+base64 = "0.23"
 
 # Anahtar, işletim sisteminin güvenli deposunda tutulur (Windows Credential Manager vb.).
 # Android'de bu depo yoktur; orada anahtar uygulamaya özel dizinde saklanır (bkz. keystore.rs).

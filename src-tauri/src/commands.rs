@@ -860,10 +860,13 @@ pub fn finish_session(state: State<AppState>, id: String, duration_seconds: i64)
 #[tauri::command]
 pub fn update_session_duration(state: State<AppState>, id: String, duration_seconds: i64) -> AppResult<()> {
     with_conn(&state, |c| {
-        c.execute(
+        let n = c.execute(
             "UPDATE sessions SET duration_seconds = ?2 WHERE id = ?1",
-            params![id, duration_seconds.max(0)],
+            params![id, duration_seconds.clamp(0, 24 * 3600)],
         )?;
+        if n == 0 {
+            return Err(AppError::Invalid("Seans bulunamadı.".into()));
+        }
         Ok(())
     })
 }
@@ -1043,6 +1046,8 @@ pub struct Material {
     file_path: String,
     description: Option<String>,
     created_at: String,
+    /// Boşsa genel kütüphane; doluysa yalnızca bu danışana özel.
+    patient_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -1051,13 +1056,14 @@ pub struct MaterialInput {
     category: String,
     file_path: String,
     description: Option<String>,
+    patient_id: Option<String>,
 }
 
 #[tauri::command]
 pub fn list_materials(state: State<AppState>) -> AppResult<Vec<Material>> {
     with_conn(&state, |c| {
         let mut st = c.prepare(
-            "SELECT id, title, category, file_path, description, created_at
+            "SELECT id, title, category, file_path, description, created_at, patient_id
              FROM materials ORDER BY created_at DESC",
         )?;
         let rows = st
@@ -1069,6 +1075,7 @@ pub fn list_materials(state: State<AppState>) -> AppResult<Vec<Material>> {
                     file_path: r.get(3)?,
                     description: r.get(4)?,
                     created_at: r.get(5)?,
+                    patient_id: r.get(6)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -1091,8 +1098,8 @@ pub fn create_material(state: State<AppState>, input: MaterialInput) -> AppResul
     with_conn(&state, |c| {
         let id = new_id();
         c.execute(
-            "INSERT INTO materials (id, title, category, file_path, description) VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![id, title, input.category, path, opt(&input.description)],
+            "INSERT INTO materials (id, title, category, file_path, description, patient_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![id, title, input.category, path, opt(&input.description), opt(&input.patient_id)],
         )?;
         Ok(id)
     })
@@ -1153,6 +1160,8 @@ pub struct Test {
     definition_json: String,
     created_at: String,
     updated_at: Option<String>,
+    /// Boşsa genel kütüphane; doluysa yalnızca bu danışana özel.
+    patient_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -1160,13 +1169,14 @@ pub struct TestInput {
     title: String,
     instructions: Option<String>,
     definition_json: String,
+    patient_id: Option<String>,
 }
 
 #[tauri::command]
 pub fn list_tests(state: State<AppState>) -> AppResult<Vec<Test>> {
     with_conn(&state, |c| {
         let mut st = c.prepare(
-            "SELECT id, title, instructions, definition_json, created_at, updated_at
+            "SELECT id, title, instructions, definition_json, created_at, updated_at, patient_id
              FROM tests ORDER BY title COLLATE NOCASE",
         )?;
         let rows = st
@@ -1178,6 +1188,7 @@ pub fn list_tests(state: State<AppState>) -> AppResult<Vec<Test>> {
                     definition_json: r.get(3)?,
                     created_at: r.get(4)?,
                     updated_at: r.get(5)?,
+                    patient_id: r.get(6)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -1193,9 +1204,9 @@ pub fn save_test(state: State<AppState>, id: Option<String>, input: TestInput) -
     with_conn(&state, |c| match id {
         Some(id) => {
             let n = c.execute(
-                "UPDATE tests SET title = ?2, instructions = ?3, definition_json = ?4,
+                "UPDATE tests SET title = ?2, instructions = ?3, definition_json = ?4, patient_id = ?5,
                     updated_at = CURRENT_TIMESTAMP WHERE id = ?1",
-                params![id, title, opt(&input.instructions), input.definition_json],
+                params![id, title, opt(&input.instructions), input.definition_json, opt(&input.patient_id)],
             )?;
             if n == 0 {
                 return Err(AppError::Invalid("Test bulunamadı.".into()));
@@ -1205,8 +1216,8 @@ pub fn save_test(state: State<AppState>, id: Option<String>, input: TestInput) -
         None => {
             let id = new_id();
             c.execute(
-                "INSERT INTO tests (id, title, instructions, definition_json) VALUES (?1, ?2, ?3, ?4)",
-                params![id, title, opt(&input.instructions), input.definition_json],
+                "INSERT INTO tests (id, title, instructions, definition_json, patient_id) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![id, title, opt(&input.instructions), input.definition_json, opt(&input.patient_id)],
             )?;
             Ok(id)
         }

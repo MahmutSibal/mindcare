@@ -8,7 +8,7 @@ import type { BoardApi } from "../../lib/useBoard";
 import BoardCanvas from "../BoardCanvas";
 import { Button, Empty, Field, inputCls, Modal } from "../ui";
 
-const BACKGROUND = "#152629";
+const BACKGROUND = "#2a1030";
 
 const SUGGESTIONS = [
   "Bir ev, bir ağaç ve bir insan çizin.",

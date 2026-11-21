@@ -3,6 +3,7 @@ import { api, type Session, type SessionStatus } from "../lib/api";
 import { fmtDate, fmtTime, minutes } from "../lib/format";
 import { useDataVersion } from "../lib/session";
 import PageHeader, { Table } from "../components/PageHeader";
+import DurationEditButton from "../components/SessionDuration";
 import { Badge, Empty } from "../components/ui";
 
 const STATUS: Record<SessionStatus, { label: string; tone: "accent" | "ok" | "muted" | "warn" }> = {
@@ -37,7 +38,12 @@ export default function Sessions({ onOpenPatient }: { onOpenPatient: (id: string
               <td className="px-4 py-3 tabular-nums text-muted">{fmtTime(s.session_date)}</td>
               <td className="px-4 py-3 font-medium">{s.patient_name}</td>
               <td className="px-4 py-3">{s.session_number}. Seans</td>
-              <td className="px-4 py-3 text-muted">{minutes(s.duration_seconds)}</td>
+              <td className="px-4 py-3 text-muted">
+                <span className="inline-flex items-center gap-1">
+                  {minutes(s.duration_seconds)}
+                  <DurationEditButton session={s} />
+                </span>
+              </td>
               <td className="px-4 py-3"><Badge tone={STATUS[s.status].tone}>{STATUS[s.status].label}</Badge></td>
             </tr>
           ))}

@@ -14,7 +14,7 @@ const TEXT_SIZES = [0.035, 0.05, 0.075];
  * Ortak tuval. Fare, parmak ve kalem aynı "pointer" olaylarıyla çalışır; telefon ve bilgisayar için
  * ayrı kod yoktur. Çizim oranlı koordinatlarla tutulur, 4:3 alana sığdırılır.
  */
-export default function BoardCanvas({ board, rev, sessionId, send, onChange, background = "#152629", backdropUrl = null, aspect = 4 / 3 }: {
+export default function BoardCanvas({ board, rev, sessionId, send, onChange, background = "#2a1030", backdropUrl = null, aspect = 4 / 3 }: {
   board: BoardState;
   /** Uzaktan gelen değişikliklerde artar; tuval yeniden çizilir. */
   rev: number;
